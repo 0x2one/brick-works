@@ -27,16 +27,16 @@ function AppLayout(): React.JSX.Element {
         collapsed={collapsed}
         collapsedWidth={48}
         onCollapse={setCollapsed}
-        className="!bg-gray-50 !border-r !border-gray-200"
+        className="sidebar"
         trigger={
-          <div className="!h-12 !flex !items-center !justify-center !bg-gray-50 !text-gray-400 hover:!text-gray-600 !border-t !border-gray-200 !cursor-pointer !w-full">
+          <div className="sidebar-trigger">
             {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
           </div>
         }
       >
-        <div className="flex h-16 items-center justify-center gap-2.5 border-b border-gray-200">
+        <div className="sidebar-header">
           <BuildOutlined className="text-xl" style={{ color: 'var(--accent)' }} />
-          {!collapsed && <span className="font-bold text-base text-gray-800">{t('appName')}</span>}
+          {!collapsed && <span className="sidebar-title">{t('appName')}</span>}
         </div>
         <Menu
           mode="inline"
@@ -45,9 +45,9 @@ function AppLayout(): React.JSX.Element {
           className="!bg-transparent !border-e-0"
         />
       </Sider>
-      <Layout className="!bg-white">
+      <Layout className="layout-right">
         <TitleBar />
-        <Content className="p-6 overflow-auto !bg-white">
+        <Content className="p-6 overflow-auto content-area">
           <Outlet />
         </Content>
       </Layout>

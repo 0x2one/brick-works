@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next'
 import { Switch, Radio } from 'antd'
 import type { RadioChangeEvent } from 'antd'
-import { SettingOutlined, GlobalOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { SettingOutlined, GlobalOutlined, InfoCircleOutlined, LaptopOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons'
 import i18n from '../i18n'
+import { useTheme, type ThemeMode } from '../theme/ThemeProvider'
 
 function LanguageRadio(): React.JSX.Element {
   const currentLang = i18n.language.startsWith('zh') ? 'zh' : 'en'
@@ -15,6 +16,25 @@ function LanguageRadio(): React.JSX.Element {
       <Radio value="en">English</Radio>
       <Radio value="zh">中文</Radio>
     </Radio.Group>
+  )
+}
+
+function ThemeRadio(): React.JSX.Element {
+  const { t } = useTranslation()
+  const { mode, setMode } = useTheme()
+
+  const changeTheme = (e: RadioChangeEvent): void => {
+    setMode(e.target.value as ThemeMode)
+  }
+
+  return (
+    <div style={{ padding: '8px 16px' }}>
+      <Radio.Group value={mode} onChange={changeTheme} optionType="button" buttonStyle="solid" className="settings-radio">
+        <Radio value="system"><LaptopOutlined /> {t('themeSystem')}</Radio>
+        <Radio value="light"><SunOutlined /> {t('themeLight')}</Radio>
+        <Radio value="dark"><MoonOutlined /> {t('themeDark')}</Radio>
+      </Radio.Group>
+    </div>
   )
 }
 
@@ -48,6 +68,16 @@ function Settings(): React.JSX.Element {
         </section>
 
         <section className="settings-group" style={{ animationDelay: '160ms' }}>
+          <div className="settings-group-head">
+            <span className="settings-group-icon"><SunOutlined /></span>
+            <h3 className="settings-group-title">{t('theme')}</h3>
+          </div>
+          <div className="settings-group-body">
+            <ThemeRadio />
+          </div>
+        </section>
+
+        <section className="settings-group" style={{ animationDelay: '240ms' }}>
           <div className="settings-group-head">
             <span className="settings-group-icon"><InfoCircleOutlined /></span>
             <h3 className="settings-group-title">About</h3>

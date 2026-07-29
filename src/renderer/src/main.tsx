@@ -3,11 +3,11 @@ import './i18n'
 
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ConfigProvider } from 'antd'
 import { HashRouter } from 'react-router-dom'
 import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
 import i18n from './i18n'
+import ThemeProvider from './theme/ThemeProvider'
 import App from './App'
 
 const locales: Record<string, typeof enUS> = { en: enUS, zh: zhCN }
@@ -27,14 +27,11 @@ function Root(): React.JSX.Element {
 
   return (
     <StrictMode>
-      <ConfigProvider
-        locale={locale}
-        theme={{ token: { colorPrimary: '#c8674b' } }}
-      >
+      <ThemeProvider locale={locale}>
         <HashRouter>
           <App />
         </HashRouter>
-      </ConfigProvider>
+      </ThemeProvider>
     </StrictMode>
   )
 }

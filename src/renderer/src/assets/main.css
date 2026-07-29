@@ -7,14 +7,36 @@
   --text-primary: #2a2520;
   --text-secondary: #8a7e72;
   --accent: #c8674b;
-  --accent-hover: #b8553a;
+  --title-bar-bg: #fff;
+  --title-bar-color: #595959;
+  --title-bar-hover-bg: rgba(0, 0, 0, 0.06);
+  --title-bar-hover-color: #000;
+  --sidebar-bg: #fff;
+  --sidebar-text: #374151;
+  --content-bg: #fff;
+}
+
+[data-theme='dark'] {
+  --bg-warm: #1a1a1a;
+  --surface: #242424;
+  --border-subtle: #333;
+  --text-primary: #e0e0e0;
+  --text-secondary: #888;
+  --accent: #c8674b;
+  --title-bar-bg: #1f1f1f;
+  --title-bar-color: #999;
+  --title-bar-hover-bg: rgba(255, 255, 255, 0.08);
+  --title-bar-hover-color: #fff;
+  --sidebar-bg: #1a1a1a;
+  --sidebar-text: #ccc;
+  --content-bg: #1a1a1a;
 }
 
 .title-bar {
   display: flex;
   height: 40px;
   align-items: center;
-  background: #fff;
+  background: var(--title-bar-bg);
   flex-shrink: 0;
 }
 
@@ -37,7 +59,7 @@
   height: 100%;
   border: none;
   background: transparent;
-  color: #595959;
+  color: var(--title-bar-color);
   font-size: 12px;
   cursor: pointer;
   transition: background 0.15s;
@@ -48,13 +70,60 @@
 }
 
 .title-bar-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #000;
+  background: var(--title-bar-hover-bg);
+  color: var(--title-bar-hover-color);
 }
 
 .title-bar-close:hover {
   background: #e81123;
   color: #fff;
+}
+
+/* ── Layout ── */
+
+.sidebar {
+  background: var(--sidebar-bg) !important;
+  border-right: 1px solid var(--border-subtle) !important;
+}
+
+.sidebar-trigger {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 48px !important;
+  background: var(--sidebar-bg) !important;
+  color: var(--sidebar-text) !important;
+  border-top: 1px solid var(--border-subtle) !important;
+  border-right: 1px solid var(--border-subtle) !important;
+  cursor: pointer !important;
+  width: 100% !important;
+}
+
+.sidebar-trigger:hover {
+  color: var(--text-primary) !important;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 64px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sidebar-title {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--sidebar-text);
+}
+
+.content-area {
+  background: var(--content-bg);
+}
+
+.layout-right {
+  background: var(--content-bg);
 }
 
 /* ── Settings Page ── */

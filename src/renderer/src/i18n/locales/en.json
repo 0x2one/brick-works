@@ -15,5 +15,9 @@
   "settings": "Settings",
   "preferences": "Preferences",
   "autoSave": "Auto save",
-  "language": "Language"
+  "language": "Language",
+  "theme": "Theme",
+  "themeSystem": "System",
+  "themeLight": "Light",
+  "themeDark": "Dark"
 }

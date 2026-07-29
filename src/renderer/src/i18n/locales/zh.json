@@ -15,5 +15,9 @@
   "settings": "设置",
   "preferences": "偏好设置",
   "autoSave": "自动保存",
-  "language": "语言"
+  "language": "语言",
+  "theme": "主题",
+  "themeSystem": "跟随系统",
+  "themeLight": "日间",
+  "themeDark": "夜间"
 }
