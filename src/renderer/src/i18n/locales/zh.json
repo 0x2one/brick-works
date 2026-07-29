@@ -1,0 +1,8 @@
+{
+  "title": "使用 <react>React</react> 和 <ts>TypeScript</ts> 构建 Electron 应用",
+  "poweredBy": "由 electron-vite 驱动",
+  "tip": "请按 <code>F12</code> 打开开发者工具",
+  "documentation": "文档",
+  "sendIpc": "发送 IPC",
+  "switchLang": "English"
+}

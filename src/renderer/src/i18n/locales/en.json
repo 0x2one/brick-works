@@ -1,0 +1,8 @@
+{
+  "title": "Build an Electron app with <react>React</react> and <ts>TypeScript</ts>",
+  "poweredBy": "Powered by electron-vite",
+  "tip": "Please try pressing <code>F12</code> to open the devTool",
+  "documentation": "Documentation",
+  "sendIpc": "Send IPC",
+  "switchLang": "中文"
+}
