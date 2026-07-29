@@ -35,7 +35,7 @@ function AppLayout(): React.JSX.Element {
         }
       >
         <div className="flex h-16 items-center justify-center gap-2.5 border-b border-gray-200">
-          <BuildOutlined className="text-xl text-blue-600" />
+          <BuildOutlined className="text-xl" style={{ color: 'var(--accent)' }} />
           {!collapsed && <span className="font-bold text-base text-gray-800">{t('appName')}</span>}
         </div>
         <Menu

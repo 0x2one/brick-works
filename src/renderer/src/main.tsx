@@ -27,7 +27,10 @@ function Root(): React.JSX.Element {
 
   return (
     <StrictMode>
-      <ConfigProvider locale={locale}>
+      <ConfigProvider
+        locale={locale}
+        theme={{ token: { colorPrimary: '#c8674b' } }}
+      >
         <HashRouter>
           <App />
         </HashRouter>

@@ -64,25 +64,6 @@
   padding: 8px 0;
 }
 
-.settings-header {
-  margin-bottom: 28px;
-  animation: fadeUp 0.4s ease both;
-}
-
-.settings-heading {
-  margin: 0 0 4px;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1.2;
-}
-
-.settings-subtitle {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
 .settings-groups {
   display: flex;
   flex-direction: column;
@@ -156,38 +137,12 @@
   padding: 8px 16px;
 }
 
-.settings-radio .ant-radio-button-wrapper {
-  border-color: var(--border-subtle);
-  color: var(--text-secondary);
-  font-size: 13px;
-  transition: all 0.2s;
-}
-
 .settings-radio .ant-radio-button-wrapper:first-child {
   border-radius: 6px 0 0 6px;
 }
 
 .settings-radio .ant-radio-button-wrapper:last-child {
   border-radius: 0 6px 6px 0;
-}
-
-.settings-radio .ant-radio-button-wrapper-checked {
-  border-color: var(--accent) !important;
-  color: #fff !important;
-  background: var(--accent) !important;
-}
-
-.settings-radio .ant-radio-button-wrapper-checked::before {
-  background-color: var(--accent) !important;
-}
-
-/* antd Switch override */
-.settings-group-body .ant-switch {
-  background: #d4ccc4;
-}
-
-.settings-group-body .ant-switch.ant-switch-checked {
-  background: var(--accent);
 }
 
 /* ── Animations ── */
