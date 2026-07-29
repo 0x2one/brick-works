@@ -1,12 +1,21 @@
 @import 'tailwindcss';
 
+:root {
+  --bg-warm: #f3f0eb;
+  --surface: #faf8f5;
+  --border-subtle: #e5ddd4;
+  --text-primary: #2a2520;
+  --text-secondary: #8a7e72;
+  --accent: #c8674b;
+  --accent-hover: #b8553a;
+}
+
 .title-bar {
   display: flex;
   height: 40px;
   align-items: center;
   background: #fff;
   flex-shrink: 0;
-
 }
 
 .title-bar-drag {
@@ -46,4 +55,150 @@
 .title-bar-close:hover {
   background: #e81123;
   color: #fff;
+}
+
+/* ── Settings Page ── */
+
+.settings-page {
+  max-width: 600px;
+  padding: 8px 0;
+}
+
+.settings-header {
+  margin-bottom: 28px;
+  animation: fadeUp 0.4s ease both;
+}
+
+.settings-heading {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.settings-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.settings-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-group {
+  animation: fadeUp 0.4s ease both;
+}
+
+.settings-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-left: 2px;
+}
+
+.settings-group-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+}
+
+.settings-group-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.settings-group-body {
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 4px 0;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.settings-label {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.settings-value {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* antd Radio override */
+.settings-radio.ant-radio-group {
+  display: flex;
+  padding: 8px 16px;
+}
+
+.settings-radio .ant-radio-button-wrapper {
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.settings-radio .ant-radio-button-wrapper:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.settings-radio .ant-radio-button-wrapper:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.settings-radio .ant-radio-button-wrapper-checked {
+  border-color: var(--accent) !important;
+  color: #fff !important;
+  background: var(--accent) !important;
+}
+
+.settings-radio .ant-radio-button-wrapper-checked::before {
+  background-color: var(--accent) !important;
+}
+
+/* antd Switch override */
+.settings-group-body .ant-switch {
+  background: #d4ccc4;
+}
+
+.settings-group-body .ant-switch.ant-switch-checked {
+  background: var(--accent);
+}
+
+/* ── Animations ── */
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

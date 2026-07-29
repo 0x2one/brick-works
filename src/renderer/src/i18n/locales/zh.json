@@ -4,5 +4,16 @@
   "tip": "请按 <code>F12</code> 打开开发者工具",
   "documentation": "文档",
   "sendIpc": "发送 IPC",
-  "switchLang": "English"
+  "switchLang": "English",
+  "appName": "积木工坊",
+  "home": "首页",
+  "about": "关于",
+  "homeTitle": "首页",
+  "homeDesc": "欢迎使用 BrickWorks！",
+  "aboutTitle": "关于",
+  "aboutDesc": "这是一个使用 React、TypeScript 和 Ant Design 构建的 Electron 应用。",
+  "settings": "设置",
+  "preferences": "偏好设置",
+  "autoSave": "自动保存",
+  "language": "语言"
 }

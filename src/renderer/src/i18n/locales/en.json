@@ -4,5 +4,16 @@
   "tip": "Please try pressing <code>F12</code> to open the devTool",
   "documentation": "Documentation",
   "sendIpc": "Send IPC",
-  "switchLang": "中文"
+  "switchLang": "中文",
+  "appName": "BrickWorks",
+  "home": "Home",
+  "about": "About",
+  "homeTitle": "Home",
+  "homeDesc": "Welcome to BrickWorks!",
+  "aboutTitle": "About",
+  "aboutDesc": "This is an Electron application built with React, TypeScript, and Ant Design.",
+  "settings": "Settings",
+  "preferences": "Preferences",
+  "autoSave": "Auto save",
+  "language": "Language"
 }

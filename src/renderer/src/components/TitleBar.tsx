@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
-import { MinusOutlined, CompressOutlined, BorderOutlined, CloseOutlined } from '@ant-design/icons'
+import { Modal } from 'antd'
+import { useTranslation } from 'react-i18next'
+import { MinusOutlined, CompressOutlined, BorderOutlined, CloseOutlined, SettingOutlined } from '@ant-design/icons'
+import Settings from '../pages/Settings'
 
 function TitleBar(): React.JSX.Element {
+  const { t } = useTranslation()
   const [maximized, setMaximized] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => {
     window.api.windowControls.isMaximized().then(setMaximized)
@@ -14,6 +19,9 @@ function TitleBar(): React.JSX.Element {
     <div className="title-bar">
       <div className="title-bar-drag" />
       <div className="title-bar-controls">
+        <button className="title-bar-btn" onClick={() => setSettingsOpen(true)} title={t('settings')}>
+          <SettingOutlined />
+        </button>
         <button className="title-bar-btn" onClick={() => window.api.windowControls.minimize()} title="Minimize">
           <MinusOutlined />
         </button>
@@ -24,6 +32,15 @@ function TitleBar(): React.JSX.Element {
           <CloseOutlined />
         </button>
       </div>
+      <Modal
+        title={t('settings')}
+        open={settingsOpen}
+        onCancel={() => setSettingsOpen(false)}
+        footer={null}
+        width={480}
+      >
+        <Settings />
+      </Modal>
     </div>
   )
 }

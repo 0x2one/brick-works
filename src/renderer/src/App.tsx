@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Layout, Menu } from 'antd'
 import { NavLink, useLocation, Outlet } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { HomeOutlined, InfoCircleOutlined, BuildOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import TitleBar from './components/TitleBar'
 import Home from './pages/Home'
@@ -9,14 +10,15 @@ import About from './pages/About'
 
 const { Sider, Content } = Layout
 
-const menuItems = [
-  { key: '/', icon: <HomeOutlined />, label: <NavLink to="/">Home</NavLink> },
-  { key: '/about', icon: <InfoCircleOutlined />, label: <NavLink to="/about">About</NavLink> },
-]
-
 function AppLayout(): React.JSX.Element {
+  const { t } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
+
+  const menuItems = [
+    { key: '/', icon: <HomeOutlined />, label: <NavLink to="/">{t('home')}</NavLink> },
+    { key: '/about', icon: <InfoCircleOutlined />, label: <NavLink to="/about">{t('about')}</NavLink> },
+  ]
 
   return (
     <Layout className="h-screen">
@@ -34,7 +36,7 @@ function AppLayout(): React.JSX.Element {
       >
         <div className="flex h-16 items-center justify-center gap-2.5 border-b border-gray-200">
           <BuildOutlined className="text-xl text-blue-600" />
-          {!collapsed && <span className="font-bold text-base text-gray-800">BrickWorks</span>}
+          {!collapsed && <span className="font-bold text-base text-gray-800">{t('appName')}</span>}
         </div>
         <Menu
           mode="inline"
