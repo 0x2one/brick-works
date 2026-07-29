@@ -4,6 +4,7 @@ import './i18n'
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ConfigProvider } from 'antd'
+import { HashRouter } from 'react-router-dom'
 import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
 import i18n from './i18n'
@@ -27,7 +28,9 @@ function Root(): React.JSX.Element {
   return (
     <StrictMode>
       <ConfigProvider locale={locale}>
-        <App />
+        <HashRouter>
+          <App />
+        </HashRouter>
       </ConfigProvider>
     </StrictMode>
   )

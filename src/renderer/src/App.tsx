@@ -1,12 +1,67 @@
-import { Button } from 'antd'
+import { useState } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { Layout, Menu } from 'antd'
+import { NavLink, useLocation, Outlet } from 'react-router-dom'
+import { HomeOutlined, InfoCircleOutlined, BuildOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import TitleBar from './components/TitleBar'
+import Home from './pages/Home'
+import About from './pages/About'
+
+const { Sider, Content } = Layout
+
+const menuItems = [
+  { key: '/', icon: <HomeOutlined />, label: <NavLink to="/">Home</NavLink> },
+  { key: '/about', icon: <InfoCircleOutlined />, label: <NavLink to="/about">About</NavLink> },
+]
+
+function AppLayout(): React.JSX.Element {
+  const [collapsed, setCollapsed] = useState(false)
+  const location = useLocation()
+
+  return (
+    <Layout className="h-screen">
+      <Sider
+        collapsible
+        collapsed={collapsed}
+        collapsedWidth={48}
+        onCollapse={setCollapsed}
+        className="!bg-gray-50 !border-r !border-gray-200"
+        trigger={
+          <div className="!h-12 !flex !items-center !justify-center !bg-gray-50 !text-gray-400 hover:!text-gray-600 !border-t !border-gray-200 !cursor-pointer !w-full">
+            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          </div>
+        }
+      >
+        <div className="flex h-16 items-center justify-center gap-2.5 border-b border-gray-200">
+          <BuildOutlined className="text-xl text-blue-600" />
+          {!collapsed && <span className="font-bold text-base text-gray-800">BrickWorks</span>}
+        </div>
+        <Menu
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          items={menuItems}
+          className="!bg-transparent !border-e-0"
+        />
+      </Sider>
+      <Layout className="!bg-white">
+        <TitleBar />
+        <Content className="p-6 overflow-auto !bg-white">
+          <Outlet />
+        </Content>
+      </Layout>
+    </Layout>
+  )
+}
 
 function App(): React.JSX.Element {
   return (
-    <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#1b1b1f]">
-      <Button type="primary">Antd Primary</Button>
-      <Button>Antd Default</Button>
-      <div className="text-white text-lg font-bold">TailwindCSS</div>
-    </div>
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<Home />} />
+        <Route path="/about" element={<About />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }
 

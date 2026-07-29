@@ -1,1 +1,49 @@
 @import 'tailwindcss';
+
+.title-bar {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  background: #fff;
+  flex-shrink: 0;
+
+}
+
+.title-bar-drag {
+  flex: 1;
+  height: 100%;
+  -webkit-app-region: drag;
+}
+
+.title-bar-controls {
+  display: flex;
+  height: 100%;
+}
+
+.title-bar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: #595959;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.title-bar-btn svg path {
+  stroke-width: 1.8;
+}
+
+.title-bar-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #000;
+}
+
+.title-bar-close:hover {
+  background: #e81123;
+  color: #fff;
+}
