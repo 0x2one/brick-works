@@ -1,6 +1,6 @@
 import { useTranslation, Trans } from 'react-i18next'
 import Versions from './components/Versions'
-import electronLogo from './assets/electron.svg'
+import logo from './assets/logo.svg'
 
 function App(): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -14,7 +14,7 @@ function App(): React.JSX.Element {
 
   return (
     <>
-      <img alt="logo" className="logo" src={electronLogo} />
+      <img alt="logo" className="logo" src={logo} />
       <div className="creator">{t('poweredBy')}</div>
       <div className="text">
         <Trans

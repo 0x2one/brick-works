@@ -1,0 +1,43 @@
+<svg viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="b1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="b2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+    <linearGradient id="b3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#dc2626"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+    <linearGradient id="sparkle" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bg)" stroke="#334155" stroke-width="1"/>
+
+  <g filter="url(#shadow)">
+    <rect x="20" y="72" width="60" height="22" rx="6" fill="url(#b1)"/>
+    <rect x="20" y="72" width="60" height="22" rx="6" fill="url(#b1)" opacity="0.4"/>
+    <line x1="20" y1="82" x2="80" y2="82" stroke="#d97706" stroke-width="0.8" opacity="0.4"/>
+
+    <rect x="40" y="48" width="60" height="22" rx="6" fill="url(#b2)"/>
+    <line x1="40" y1="58" x2="100" y2="58" stroke="#c2410c" stroke-width="0.8" opacity="0.4"/>
+
+    <rect x="60" y="24" width="60" height="22" rx="6" fill="url(#b3)"/>
+    <line x1="60" y1="34" x2="120" y2="34" stroke="#b91c1c" stroke-width="0.8" opacity="0.4"/>
+  </g>
+
+  <path d="M96 18L98.5 23L104 25.5L98.5 28L96 33L93.5 28L88 25.5L93.5 23L96 18Z" fill="url(#sparkle)"/>
+</svg>
