@@ -35,7 +35,7 @@ function DevToolDetail(): React.JSX.Element {
   const ToolComponent = toolComponents[tool.id]
 
   const breadcrumb = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 mb-3">
       <Button
         type="text"
         icon={<ArrowLeftOutlined />}
