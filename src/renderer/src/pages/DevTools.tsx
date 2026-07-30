@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Typography, Input, Row, Col, Card, Tag, Space } from 'antd'
+import { Input } from 'antd'
 import { HeartOutlined, HeartFilled } from '@ant-design/icons'
 import { devTools, useDevToolStats } from '../data/devTools'
 
@@ -89,59 +89,53 @@ function DevTools(): React.JSX.Element {
         />
       </div>
 
-      <Row gutter={[16, 16]}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredTools.map(tool => {
           const s = stats[tool.id]
           return (
-            <Col key={tool.id} xs={24} sm={12} lg={8} xl={6}>
-              <Card
-                hoverable
-                className="h-full"
-                onClick={() => handleCardClick(tool.id, tool.route)}
-              >
-                <div className="flex flex-col h-full">
-                  <div className="flex items-start justify-between mb-2">
-                    <Typography.Title level={4} className="!mb-0">
-                      {t(tool.nameKey)}
-                    </Typography.Title>
-                    <span
-                      onClick={e => { e.stopPropagation(); toggleFavorite(tool.id) }}
-                      className="cursor-pointer text-lg shrink-0 ml-2"
-                    >
-                      {s?.favorited
-                        ? <HeartFilled className="text-red-500" />
-                        : <HeartOutlined />}
-                    </span>
-                  </div>
+            <div
+              key={tool.id}
+              className="tool-card"
+              onClick={() => handleCardClick(tool.id, tool.route)}
+            >
+              <div className="flex items-start justify-between mb-2 gap-2">
+                <span className="font-semibold text-[15px] leading-snug text-[var(--text-primary)]">
+                  {t(tool.nameKey)}
+                </span>
+                <span
+                  onClick={e => { e.stopPropagation(); toggleFavorite(tool.id) }}
+                  className="cursor-pointer shrink-0 mt-0.5 leading-none"
+                  style={{ color: s?.favorited ? 'var(--accent)' : 'var(--text-secondary)', fontSize: 15 }}
+                >
+                  {s?.favorited ? <HeartFilled /> : <HeartOutlined />}
+                </span>
+              </div>
 
-                  <Typography.Paragraph
-                    className="!mb-3"
-                    ellipsis={{ rows: 2 }}
-                    style={{ minHeight: 44 }}
+              <p className="text-sm leading-relaxed text-[var(--text-secondary)] mb-3 line-clamp-2">
+                {t(tool.descKey)}
+              </p>
+
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {tool.tags.map(tag => (
+                  <span
+                    key={tag}
+                    className="px-2 py-0.5 text-xs rounded-md bg-[var(--border-subtle)] text-[var(--text-secondary)]"
                   >
-                    {t(tool.descKey)}
-                  </Typography.Paragraph>
+                    {tag}
+                  </span>
+                ))}
+              </div>
 
-                  <div className="mb-3">
-                    <Space size={4} wrap>
-                      {tool.tags.map(tag => (
-                        <Tag key={tag}>{tag}</Tag>
-                      ))}
-                    </Space>
-                  </div>
-
-                  <div className="mt-auto text-xs text-gray-400 flex gap-3">
-                    {s?.lastUsedAt && (
-                      <span>{t('lastUsed')}: {new Date(s.lastUsedAt).toLocaleDateString()}</span>
-                    )}
-                    <span>{t('useCount')}: {s?.useCount ?? 0}</span>
-                  </div>
-                </div>
-              </Card>
-            </Col>
+              <div className="mt-auto pt-3 border-t border-[var(--border-subtle)] flex gap-3 text-xs text-[var(--text-secondary)]">
+                {s?.lastUsedAt && (
+                  <span>{t('lastUsed')}: {new Date(s.lastUsedAt).toLocaleDateString()}</span>
+                )}
+                <span>{t('useCount')}: {s?.useCount ?? 0}</span>
+              </div>
+            </div>
           )
         })}
-      </Row>
+      </div>
     </div>
   )
 }
