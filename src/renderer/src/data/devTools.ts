@@ -37,6 +37,13 @@ export const devTools: DevToolItem[] = [
     tags: ['工具', '编码'],
     route: '/dev-tools/codec-converter',
   },
+  {
+    id: 'timestamp-converter',
+    nameKey: 'devToolTimestamp',
+    descKey: 'devToolTimestampDesc',
+    tags: ['工具', '时间'],
+    route: '/dev-tools/timestamp-converter',
+  },
 ]
 
 export interface DevToolStats {

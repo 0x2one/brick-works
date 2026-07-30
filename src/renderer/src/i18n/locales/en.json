@@ -120,5 +120,22 @@
   "codecJwtDecode": "JWT Decode",
   "codecCookie": "Cookie Format",
   "codecGzipDecompress": "Gzip Decompress",
-  "codecUnescape": "Unescape"
+  "codecUnescape": "Unescape",
+  "devToolTimestamp": "Timestamp Converter",
+  "devToolTimestampDesc": "Convert between localized date/time text and Unix timestamps.",
+  "timestampModeTimeToTs": "Time → Timestamp",
+  "timestampModeTsToTime": "Timestamp → Time",
+  "timestampDateTime": "Date & Time",
+  "timestampTimezone": "Timezone",
+  "timestampUnit": "Unit",
+  "timestampSeconds": "Seconds",
+  "timestampMilliseconds": "Milliseconds",
+  "timestampResult": "Result",
+  "timestampWorldClocks": "World Clocks",
+  "timestampAddClock": "Add Clock",
+  "timestampLocal": "Local",
+  "timestampPlaceholder": "2025-07-30 12:34:56",
+  "timestampNoResult": "Enter a value to see the result",
+  "timestampUnixTimestamp": "Unix Timestamp",
+  "timestampNow": "Now"
 }

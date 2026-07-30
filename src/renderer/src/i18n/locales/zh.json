@@ -120,5 +120,22 @@
   "codecJwtDecode": "JWT解码",
   "codecCookie": "Cookie格式化",
   "codecGzipDecompress": "Gzip解压",
-  "codecUnescape": "字符串去转义"
+  "codecUnescape": "字符串去转义",
+  "devToolTimestamp": "时间戳转换",
+  "devToolTimestampDesc": "本地化时间与时间戳之间的相互转换，支持秒/毫秒、世界时区切换、各时区时钟展示。",
+  "timestampModeTimeToTs": "时间 → 时间戳",
+  "timestampModeTsToTime": "时间戳 → 时间",
+  "timestampDateTime": "日期时间",
+  "timestampTimezone": "时区",
+  "timestampUnit": "单位",
+  "timestampSeconds": "秒",
+  "timestampMilliseconds": "毫秒",
+  "timestampResult": "结果",
+  "timestampWorldClocks": "世界时钟",
+  "timestampAddClock": "添加时钟",
+  "timestampLocal": "本地",
+  "timestampNoResult": "输入值后查看结果",
+  "timestampPlaceholder": "2025-07-30 12:34:56",
+  "timestampUnixTimestamp": "Unix 时间戳",
+  "timestampNow": "此刻"
 }
