@@ -16,6 +16,13 @@ export const devTools: DevToolItem[] = [
     tags: ['工具', '安全'],
     route: '/dev-tools/random-password',
   },
+  {
+    id: 'image-to-base64',
+    nameKey: 'devToolImageToBase64',
+    descKey: 'devToolImageToBase64Desc',
+    tags: ['工具', '图片'],
+    route: '/dev-tools/image-to-base64',
+  },
 ]
 
 export interface DevToolStats {

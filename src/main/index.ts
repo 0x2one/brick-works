@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, nativeImage } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, nativeImage, net } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import iconPng from '../../resources/icon.png?asset'
@@ -57,6 +57,19 @@ ipcMain.handle('window:maximize', () => {
 
 ipcMain.handle('window:close', () => {
   mainWindow?.close()
+})
+
+ipcMain.handle('fetch:image', async (_event, url: string): Promise<string | null> => {
+  try {
+    const response = await net.fetch(url)
+    if (!response.ok) return null
+    const buffer = Buffer.from(await response.arrayBuffer())
+    const contentType = response.headers.get('content-type') || 'image/png'
+    const base64 = buffer.toString('base64')
+    return `data:${contentType};base64,${base64}`
+  } catch {
+    return null
+  }
 })
 
 ipcMain.handle('window:isMaximized', () => {
