@@ -389,100 +389,103 @@ function MemoSticky(): React.JSX.Element {
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div className="flex-1 overflow-y-auto">
           {filteredNotes.length === 0 ? (
-            <div className="flex h-full items-center justify-center">
+            <div className="flex h-full items-center justify-center px-4 py-3">
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                 {t('memoStickyNoNotes')}
               </p>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
-              {filteredNotes.map((note) => (
-                <NoteCard
-                  key={note.id}
-                  note={note}
-                  tag={tagMap.get(note.tagId ?? '')}
-                  selected={selectedNoteId === note.id}
-                  batchMode={batchMode}
-                  batchSelected={batchSelected.has(note.id)}
-                  onClick={() => setSelectedNoteId(note.id === selectedNoteId ? null : note.id)}
-                  onToggleBatch={() => toggleBatchSelect(note.id)}
-                />
-              ))}
+            <div className="flex min-h-full">
+              <div className="flex-1 px-4 py-3">
+                <div className="flex flex-col gap-3">
+                  {filteredNotes.map((note) => (
+                    <NoteCard
+                      key={note.id}
+                      note={note}
+                      tag={tagMap.get(note.tagId ?? '')}
+                      selected={selectedNoteId === note.id}
+                      batchMode={batchMode}
+                      batchSelected={batchSelected.has(note.id)}
+                      onClick={() => setSelectedNoteId(note.id === selectedNoteId ? null : note.id)}
+                      onToggleBatch={() => toggleBatchSelect(note.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="sticky top-0 flex h-fit flex-col items-center gap-1 px-2 py-3 shrink-0">
+                <Tooltip title={t('memoStickyCopySuccess')} placement="left">
+                  <button
+                    className="sticky-toolbar-btn"
+                    disabled={!selectedNote}
+                    onClick={() => selectedNote && copyNote(selectedNote)}
+                  >
+                    <CopyOutlined />
+                  </button>
+                </Tooltip>
+                <Tooltip title={t('memoStickyNewNote')} placement="left">
+                  <button className="sticky-toolbar-btn" onClick={() => openNoteModal()}>
+                    <PlusOutlined />
+                  </button>
+                </Tooltip>
+                <Tooltip title={t('memoStickyEditNote')} placement="left">
+                  <button
+                    className="sticky-toolbar-btn"
+                    disabled={!selectedNote}
+                    onClick={() => selectedNote && openNoteModal(selectedNote)}
+                  >
+                    <EditOutlined />
+                  </button>
+                </Tooltip>
+                <Tooltip title={t('memoStickyDeleteNote')} placement="left">
+                  <button
+                    className="sticky-toolbar-btn"
+                    disabled={!selectedNote}
+                    onClick={() => {
+                      if (!selectedNote) return
+                      Modal.confirm({
+                        title: t('memoStickyDeleteNote'),
+                        content: t('memoStickyDeleteNoteConfirm'),
+                        okButtonProps: { danger: true },
+                        onOk: () => deleteNote(selectedNote)
+                      })
+                    }}
+                  >
+                    <DeleteOutlined />
+                  </button>
+                </Tooltip>
+                <div className="my-1 w-5 border-t border-[var(--border-subtle)]" />
+                <Tooltip
+                  title={batchMode ? t('memoStickyBatchDone') : t('memoStickyBatchMode')}
+                  placement="left"
+                >
+                  <button
+                    className={`sticky-toolbar-btn ${batchMode ? 'active' : ''}`}
+                    onClick={() => {
+                      if (batchMode) {
+                        setBatchMode(false)
+                        setBatchSelected(new Set())
+                      } else {
+                        setBatchMode(true)
+                        setBatchSelected(new Set())
+                      }
+                    }}
+                  >
+                    {batchMode ? <CheckOutlined /> : <FormOutlined />}
+                  </button>
+                </Tooltip>
+                {batchMode && batchSelected.size > 0 && (
+                  <Tooltip title={t('memoStickyDeleteNote')} placement="left">
+                    <button className="sticky-toolbar-btn" onClick={deleteBatch}>
+                      <DeleteOutlined />
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
             </div>
           )}
         </div>
-      </div>
-
-      <div className="flex flex-col items-center gap-1 border-l border-[var(--border-subtle)] px-2 py-3">
-        <Tooltip title={t('memoStickyCopySuccess')} placement="left">
-          <button
-            className="sticky-toolbar-btn"
-            disabled={!selectedNote}
-            onClick={() => selectedNote && copyNote(selectedNote)}
-          >
-            <CopyOutlined />
-          </button>
-        </Tooltip>
-        <Tooltip title={t('memoStickyNewNote')} placement="left">
-          <button className="sticky-toolbar-btn" onClick={() => openNoteModal()}>
-            <PlusOutlined />
-          </button>
-        </Tooltip>
-        <Tooltip title={t('memoStickyEditNote')} placement="left">
-          <button
-            className="sticky-toolbar-btn"
-            disabled={!selectedNote}
-            onClick={() => selectedNote && openNoteModal(selectedNote)}
-          >
-            <EditOutlined />
-          </button>
-        </Tooltip>
-        <Tooltip title={t('memoStickyDeleteNote')} placement="left">
-          <button
-            className="sticky-toolbar-btn"
-            disabled={!selectedNote}
-            onClick={() => {
-              if (!selectedNote) return
-              Modal.confirm({
-                title: t('memoStickyDeleteNote'),
-                content: t('memoStickyDeleteNoteConfirm'),
-                okButtonProps: { danger: true },
-                onOk: () => deleteNote(selectedNote)
-              })
-            }}
-          >
-            <DeleteOutlined />
-          </button>
-        </Tooltip>
-        <div className="my-1 w-5 border-t border-[var(--border-subtle)]" />
-        <Tooltip
-          title={batchMode ? t('memoStickyBatchDone') : t('memoStickyBatchMode')}
-          placement="left"
-        >
-          <button
-            className={`sticky-toolbar-btn ${batchMode ? 'active' : ''}`}
-            onClick={() => {
-              if (batchMode) {
-                setBatchMode(false)
-                setBatchSelected(new Set())
-              } else {
-                setBatchMode(true)
-                setBatchSelected(new Set())
-              }
-            }}
-          >
-            {batchMode ? <CheckOutlined /> : <FormOutlined />}
-          </button>
-        </Tooltip>
-        {batchMode && batchSelected.size > 0 && (
-          <Tooltip title={t('memoStickyDeleteNote')} placement="left">
-            <button className="sticky-toolbar-btn" onClick={deleteBatch}>
-              <DeleteOutlined />
-            </button>
-          </Tooltip>
-        )}
       </div>
 
       <Modal
