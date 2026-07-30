@@ -346,7 +346,7 @@ function MemoSticky(): React.JSX.Element {
   }, [batchSelected])
 
   return (
-    <div className="flex h-full" style={{ background: 'var(--bg-warm)' }}>
+    <div className="flex h-full overflow-hidden rounded-xl" style={{ background: 'var(--bg-warm)' }}>
       <TagSidebar
         tags={tags}
         selectedTagId={selectedTagId}

@@ -357,7 +357,7 @@
 
 .sticky-card {
   background: var(--sticky-card-bg);
-  border-radius: 3px;
+  border-radius: 8px;
   box-shadow:
     0 0 0 1px var(--sticky-card-border),
     0 1px 3px var(--sticky-shadow1),
