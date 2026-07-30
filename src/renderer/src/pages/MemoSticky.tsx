@@ -168,43 +168,45 @@ function NoteCard({
     >
       <div className="flex flex-1 flex-col min-h-0">
         {batchMode && (
-          <div className="shrink-0 px-3 pt-3">
-            <div className="mb-2 flex items-center">
-              <button
-                className={`flex h-5 w-5 items-center justify-center rounded border text-[10px] ${
-                  batchSelected
-                    ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
-                    : 'border-[var(--border-subtle)]'
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleBatch()
-                }}
-              >
-                {batchSelected && <CheckOutlined />}
-              </button>
+          <>
+            <div className="shrink-0">
+              <div className="mb-2 flex items-center px-3">
+                <button
+                  className={`flex h-5 w-5 items-center justify-center rounded border text-[10px] ${
+                    batchSelected
+                      ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                      : 'border-[var(--border-subtle)]'
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onToggleBatch()
+                  }}
+                >
+                  {batchSelected && <CheckOutlined />}
+                </button>
+              </div>
             </div>
-          </div>
+            <div className="shrink-0">
+              <div className="flex items-center gap-2 px-3 pb-1.5">
+                {tag && <span className="sticky-tag-dot shrink-0" style={{ background: tag.color }} />}
+                {note.title && (
+                  <span
+                    className="truncate text-[13px] font-semibold"
+                    style={{ color: 'var(--sticky-text)' }}
+                  >
+                    {note.title}
+                  </span>
+                )}
+              </div>
+            </div>
+          </>
         )}
-        <div className="shrink-0 px-3 pt-3">
-          <div className="flex items-center gap-2 pb-1.5">
-            {tag && <span className="sticky-tag-dot shrink-0" style={{ background: tag.color }} />}
-            {note.title && (
-              <span
-                className="truncate text-[13px] font-semibold"
-                style={{ color: 'var(--sticky-text)' }}
-              >
-                {note.title}
-              </span>
-            )}
-          </div>
-        </div>
         <div className="flex-1 overflow-y-auto min-h-0">
           {note.content ? (
             note.content.split('\n').map((line, i) => (
               <div
                 key={i}
-                className="px-3 py-0.5 text-[12px] leading-[1.6] cursor-pointer rounded-none hover:bg-black/[0.04]"
+                className="py-0.5 text-[12px] leading-[1.6] cursor-pointer rounded-none hover:bg-black/[0.04]"
                 style={{ color: 'var(--sticky-text)' }}
                 onClick={(e) => handleCopyLine(e, line)}
               >
@@ -391,14 +393,14 @@ function MemoSticky(): React.JSX.Element {
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto">
           {filteredNotes.length === 0 ? (
-            <div className="flex h-full items-center justify-center px-4 py-3">
+            <div className="flex h-full items-center justify-center pl-4 py-3">
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                 {t('memoStickyNoNotes')}
               </p>
             </div>
           ) : (
             <div className="flex min-h-full">
-              <div className="flex-1 px-4 py-3">
+              <div className="flex-1 pl-4 py-3">
                 <div className="flex flex-col gap-3">
                   {filteredNotes.map((note) => (
                     <NoteCard
