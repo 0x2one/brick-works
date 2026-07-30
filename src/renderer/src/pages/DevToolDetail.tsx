@@ -53,7 +53,7 @@ function DevToolDetail(): React.JSX.Element {
   )
 
   return (
-    <div className="p-6">
+    <div>
       {ToolComponent ? (
         <ToolComponent breadcrumb={breadcrumb as React.ReactNode} />
       ) : (
