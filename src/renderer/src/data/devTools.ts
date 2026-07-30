@@ -23,6 +23,13 @@ export const devTools: DevToolItem[] = [
     tags: ['工具', '图片'],
     route: '/dev-tools/image-to-base64',
   },
+  {
+    id: 'json-beautify',
+    nameKey: 'devToolJsonBeautify',
+    descKey: 'devToolJsonBeautifyDesc',
+    tags: ['工具', 'JSON'],
+    route: '/dev-tools/json-beautify',
+  },
 ]
 
 export interface DevToolStats {

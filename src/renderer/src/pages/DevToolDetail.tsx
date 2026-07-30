@@ -5,6 +5,7 @@ import { ArrowLeftOutlined } from '@ant-design/icons'
 import { devTools } from '../data/devTools'
 import RandomPassword from './tools/RandomPassword'
 import ImageToBase64 from './tools/ImageToBase64'
+import JsonBeautify from './tools/JsonBeautify'
 
 interface ToolProps {
   breadcrumb?: React.ReactNode
@@ -13,6 +14,7 @@ interface ToolProps {
 const toolComponents: Record<string, React.ComponentType<ToolProps>> = {
   'random-password': RandomPassword,
   'image-to-base64': ImageToBase64,
+  'json-beautify': JsonBeautify,
 }
 
 function DevToolDetail(): React.JSX.Element {
