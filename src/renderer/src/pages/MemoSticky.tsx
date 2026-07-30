@@ -152,7 +152,7 @@ function NoteCard({
 }) {
   const { t } = useTranslation()
 
-  const handleCopyLine = useCallback(
+  const handleCopyPara = useCallback(
     (e: React.MouseEvent, text: string) => {
       e.stopPropagation()
       navigator.clipboard.writeText(text)
@@ -201,24 +201,25 @@ function NoteCard({
             </div>
           </>
         )}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0 min-w-0">
           {note.content ? (
-            note.content.split('\n').map((line, i) => (
-              <div
-                key={i}
-                className="py-0.5 text-[12px] leading-[1.6] cursor-pointer rounded-none hover:bg-black/[0.04]"
-                style={{ color: 'var(--sticky-text)' }}
-                onClick={(e) => handleCopyLine(e, line)}
-              >
-                {line || '\u00A0'}
-              </div>
-            ))
+            <div className="pl-3">
+              {note.content.split('\n').map((para, i) => (
+                <div
+                  key={i}
+                  className="w-fit cursor-pointer rounded text-[12px] leading-[1.6] whitespace-nowrap hover:bg-black/[0.04] first:pt-3 last:pb-3"
+                  style={{ color: 'var(--sticky-text)' }}
+                  onClick={(e) => handleCopyPara(e, para)}
+                >
+                  {para || '\u00A0'}
+                </div>
+              ))}
+            </div>
           ) : (
-            <div className="px-3 py-0.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+            <div className="pl-3 py-0.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
               ...
             </div>
           )}
-          <div className="h-2.5" />
         </div>
       </div>
     </div>
@@ -390,7 +391,7 @@ function MemoSticky(): React.JSX.Element {
         }}
       />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         <div className="flex-1 overflow-y-auto">
           {filteredNotes.length === 0 ? (
             <div className="flex h-full items-center justify-center pl-4 py-3">
@@ -399,8 +400,8 @@ function MemoSticky(): React.JSX.Element {
               </p>
             </div>
           ) : (
-            <div className="flex min-h-full">
-              <div className="flex-1 pl-4 py-3">
+            <div className="flex min-h-full min-w-0 w-full">
+              <div className="flex-1 pl-4 py-3 min-w-0">
                 <div className="flex flex-col gap-3">
                   {filteredNotes.map((note) => (
                     <NoteCard

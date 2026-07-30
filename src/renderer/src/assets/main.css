@@ -361,7 +361,8 @@
   background: var(--sticky-card-bg);
   border-radius: 6px;
   max-height: 220px;
-  overflow: hidden;
+  min-width: 0;
+  overflow-x: auto;
   box-shadow:
     0 0 0 1px var(--sticky-card-border),
     0 1px 3px var(--sticky-shadow1),
