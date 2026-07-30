@@ -8,7 +8,7 @@ import {
   FormOutlined,
   CheckOutlined
 } from '@ant-design/icons'
-import { Modal, Input, Tooltip, message } from 'antd'
+import { Modal, Input, Tooltip, Select, message } from 'antd'
 
 interface Tag {
   id: string
@@ -19,7 +19,6 @@ interface Tag {
 interface Note {
   id: string
   tagId: string | null
-  title: string
   content: string
   createdAt: number
   updatedAt: number
@@ -163,51 +162,19 @@ function NoteCard({
 
   return (
     <div
-      className={`sticky-card w-full cursor-pointer ${selected ? 'selected' : ''}`}
-      onClick={onClick}
+      className={`sticky-card w-full cursor-pointer ${
+        batchMode ? (batchSelected ? 'selected' : '') : selected ? 'selected' : ''
+      }`}
+      onClick={() => (batchMode ? onToggleBatch() : onClick())}
     >
       <div className="flex flex-1 flex-col min-h-0">
-        {batchMode && (
-          <>
-            <div className="shrink-0">
-              <div className="mb-2 flex items-center px-3">
-                <button
-                  className={`flex h-5 w-5 items-center justify-center rounded border text-[10px] ${
-                    batchSelected
-                      ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
-                      : 'border-[var(--border-subtle)]'
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onToggleBatch()
-                  }}
-                >
-                  {batchSelected && <CheckOutlined />}
-                </button>
-              </div>
-            </div>
-            <div className="shrink-0">
-              <div className="flex items-center gap-2 px-3 pb-1.5">
-                {tag && <span className="sticky-tag-dot shrink-0" style={{ background: tag.color }} />}
-                {note.title && (
-                  <span
-                    className="truncate text-[13px] font-semibold"
-                    style={{ color: 'var(--sticky-text)' }}
-                  >
-                    {note.title}
-                  </span>
-                )}
-              </div>
-            </div>
-          </>
-        )}
         <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0 min-w-0">
           {note.content ? (
             <div className="pl-3">
               {note.content.split('\n').map((para, i) => (
                 <div
                   key={i}
-                  className="w-fit cursor-pointer rounded text-[12px] leading-[1.6] whitespace-nowrap hover:bg-black/[0.04] first:pt-3 last:pb-3"
+                  className="w-fit cursor-pointer rounded text-[12px] leading-[1.6] whitespace-nowrap hover:bg-black/[0.04] first:mt-3 last:mb-3"
                   style={{ color: 'var(--sticky-text)' }}
                   onClick={(e) => handleCopyPara(e, para)}
                 >
@@ -234,6 +201,8 @@ function MemoSticky(): React.JSX.Element {
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null)
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [batchMode, setBatchMode] = useState(false)
+
+  const tagMap = new Map(tags.map((t) => [t.id, t]))
   const [batchSelected, setBatchSelected] = useState<Set<string>>(new Set())
 
   const [tagModalOpen, setTagModalOpen] = useState(false)
@@ -243,7 +212,7 @@ function MemoSticky(): React.JSX.Element {
 
   const [noteModalOpen, setNoteModalOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<Note | null>(null)
-  const [noteTitleInput, setNoteTitleInput] = useState('')
+  const [noteTagIdInput, setNoteTagIdInput] = useState<string | null>(null)
   const [noteContentInput, setNoteContentInput] = useState('')
 
   useEffect(() => {
@@ -253,8 +222,7 @@ function MemoSticky(): React.JSX.Element {
     saveToLS(LS_NOTES, notes)
   }, [notes])
 
-  const tagMap = new Map(tags.map((t) => [t.id, t]))
-
+  
   const filteredNotes =
     selectedTagId === null ? notes : notes.filter((n) => n.tagId === selectedTagId)
 
@@ -299,36 +267,36 @@ function MemoSticky(): React.JSX.Element {
 
   const openNoteModal = useCallback((note?: Note) => {
     setEditingNote(note ?? null)
-    setNoteTitleInput(note?.title ?? '')
+    setNoteTagIdInput(note?.tagId ?? selectedTagId)
     setNoteContentInput(note?.content ?? '')
     setNoteModalOpen(true)
-  }, [])
+  }, [selectedTagId])
 
   const closeNoteModal = useCallback(() => {
     setNoteModalOpen(false)
     setEditingNote(null)
-    setNoteTitleInput('')
+    setNoteTagIdInput(null)
     setNoteContentInput('')
   }, [])
 
   const saveNote = useCallback(() => {
-    const title = noteTitleInput.trim()
     const content = noteContentInput.trim()
-    if (!title && !content) {
+    if (!content) {
       closeNoteModal()
       return
     }
     if (editingNote) {
       setNotes((prev) =>
         prev.map((n) =>
-          n.id === editingNote.id ? { ...n, title, content, updatedAt: Date.now() } : n
+          n.id === editingNote.id
+            ? { ...n, tagId: noteTagIdInput, content, updatedAt: Date.now() }
+            : n
         )
       )
     } else {
       const newNote: Note = {
         id: genId(),
-        tagId: selectedTagId,
-        title,
+        tagId: noteTagIdInput,
         content,
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -336,7 +304,7 @@ function MemoSticky(): React.JSX.Element {
       setNotes((prev) => [newNote, ...prev])
     }
     closeNoteModal()
-  }, [noteTitleInput, noteContentInput, editingNote, selectedTagId, closeNoteModal])
+  }, [noteContentInput, noteTagIdInput, editingNote, closeNoteModal])
 
   const deleteNote = useCallback(
     (note: Note) => {
@@ -544,21 +512,26 @@ function MemoSticky(): React.JSX.Element {
         onCancel={closeNoteModal}
         okText={t('memoStickySave')}
         cancelText={t('memoStickyCancel')}
-        width={480}
+        width={720}
       >
         <div className="flex flex-col gap-3 py-2">
-          <Input
-            value={noteTitleInput}
-            onChange={(e) => setNoteTitleInput(e.target.value)}
-            placeholder={t('memoStickyTitlePlaceholder')}
-            onPressEnter={saveNote}
-            autoFocus
+          <Select
+            allowClear
+            showSearch
+            placeholder={t('memoStickySelectTag')}
+            value={noteTagIdInput}
+            onChange={(val) => setNoteTagIdInput(val ?? null)}
+            filterOption={(input, option) =>
+              (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+            }
+            options={tags.map((tag) => ({ label: tag.name, value: tag.id }))}
           />
           <Input.TextArea
             value={noteContentInput}
             onChange={(e) => setNoteContentInput(e.target.value)}
             placeholder={t('memoStickyContentPlaceholder')}
-            rows={6}
+            rows={14}
+            autoFocus
           />
         </div>
       </Modal>
