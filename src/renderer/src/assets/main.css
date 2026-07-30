@@ -244,6 +244,73 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
+/* ── Random Password ── */
+
+/* toggle pill */
+.toggle-pill {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 6px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.toggle-pill:hover {
+  border-color: var(--text-secondary);
+}
+
+.toggle-pill .pill-label {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-secondary);
+  transition: color 0.15s ease;
+}
+
+.toggle-pill:hover .pill-label {
+  color: var(--text-primary);
+}
+
+.toggle-pill .pill-chars {
+  visibility: hidden;
+  margin-top: 3px;
+  margin-bottom: -3px;
+  font-size: 10px;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  opacity: 0;
+  color: inherit;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity 0.15s ease;
+}
+
+.toggle-pill.active .pill-chars {
+  visibility: visible;
+  opacity: 0.75;
+}
+
+.toggle-pill.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle-pill.active .pill-label {
+  color: #fff;
+}
+
+.toggle-pill.active .pill-chars {
+  display: block;
+  color: rgba(255, 255, 255, 0.8);
+}
+
 /* ── Animations ── */
 
 @keyframes fadeUp {

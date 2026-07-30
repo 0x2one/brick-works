@@ -5,7 +5,11 @@ import { ArrowLeftOutlined } from '@ant-design/icons'
 import { devTools } from '../data/devTools'
 import RandomPassword from './tools/RandomPassword'
 
-const toolComponents: Record<string, React.ComponentType> = {
+interface ToolProps {
+  breadcrumb?: React.ReactNode
+}
+
+const toolComponents: Record<string, React.ComponentType<ToolProps>> = {
   'random-password': RandomPassword,
 }
 
@@ -26,27 +30,30 @@ function DevToolDetail(): React.JSX.Element {
 
   const ToolComponent = toolComponents[tool.id]
 
+  const breadcrumb = (
+    <div className="flex items-center gap-2">
+      <Button
+        type="text"
+        icon={<ArrowLeftOutlined />}
+        onClick={() => navigate('/dev-tools')}
+      >
+        {t('back')}
+      </Button>
+      <Breadcrumb
+        items={[
+          { title: <a onClick={() => navigate('/dev-tools')}>{t('devTools')}</a> },
+          { title: t(tool.nameKey) },
+        ]}
+      />
+    </div>
+  )
+
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4">
-        <Button
-          type="text"
-          icon={<ArrowLeftOutlined />}
-          onClick={() => navigate('/dev-tools')}
-        >
-          {t('back')}
-        </Button>
-        <Breadcrumb
-          items={[
-            { title: <a onClick={() => navigate('/dev-tools')}>{t('devTools')}</a> },
-            { title: t(tool.nameKey) },
-          ]}
-        />
-      </div>
-
-      {ToolComponent ? <ToolComponent /> : (
-        <Typography.Text type="secondary">{t('toolNotImplemented')}</Typography.Text>
-      )}
+      {ToolComponent
+        ? <ToolComponent breadcrumb={breadcrumb as React.ReactNode} />
+        : <Typography.Text type="secondary">{t('toolNotImplemented')}</Typography.Text>
+      }
     </div>
   )
 }

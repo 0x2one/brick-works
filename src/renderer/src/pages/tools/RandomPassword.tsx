@@ -1,96 +1,213 @@
-import { useState } from 'react'
+import { useState, useCallback, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Typography, InputNumber, Switch, Button, Input, message, Space, Card } from 'antd'
-import { CopyOutlined, ReloadOutlined } from '@ant-design/icons'
+import { InputNumber, message } from 'antd'
+import { CopyOutlined, ReloadOutlined, CheckOutlined } from '@ant-design/icons'
 
-function generatePassword(length: number, upper: boolean, lower: boolean, digits: boolean, symbols: boolean): string {
-  const chars = [
-    upper && 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-    lower && 'abcdefghijklmnopqrstuvwxyz',
-    digits && '0123456789',
-    symbols && '!@#$%^&*()_+-=[]{}|;:,.<>?',
-  ].filter(Boolean).join('')
+const DIGITS = '0123456789'
+const LOWER = 'abcdefghijklmnopqrstuvwxyz'
+const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+const SPECIALS = "~!@#$%^&*()[{]}-_=+|;:'\",<.>/?`"
 
-  if (!chars) return ''
-
-  let password = ''
-  for (let i = 0; i < length; i++) {
-    password += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return password
+interface CharSet {
+  key: string
+  label: string
+  chars: string
+  active: boolean
 }
 
-function RandomPassword(): React.JSX.Element {
+function generateBatch(length: number, count: number, sets: CharSet[]): string[] {
+  const pool = sets.filter(s => s.active).map(s => s.chars).join('')
+  if (!pool) return []
+
+  const results: string[] = []
+  for (let n = 0; n < count; n++) {
+    const buf = new Uint32Array(length)
+    crypto.getRandomValues(buf)
+    let pw = ''
+    for (let i = 0; i < length; i++) {
+      pw += pool[buf[i] % pool.length]
+    }
+    results.push(pw)
+  }
+  return results
+}
+
+const LABEL_CLS = 'block text-[11px] font-semibold uppercase tracking-widest text-[var(--text-secondary)] mb-1.5'
+
+function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
   const { t } = useTranslation()
   const [length, setLength] = useState(16)
-  const [useUpper, setUseUpper] = useState(true)
-  const [useLower, setUseLower] = useState(true)
-  const [useDigits, setUseDigits] = useState(true)
-  const [useSymbols, setUseSymbols] = useState(true)
-  const [password, setPassword] = useState('')
+  const [count, setCount] = useState(5)
+  const [sets, setSets] = useState<CharSet[]>([
+    { key: 'digits', label: t('digitsLabel'), chars: DIGITS, active: true },
+    { key: 'lower', label: t('lowerLabel'), chars: LOWER, active: true },
+    { key: 'upper', label: t('upperLabel'), chars: UPPER, active: true },
+    { key: 'specials', label: t('specialsLabel'), chars: SPECIALS, active: true },
+  ])
+  const [passwords, setPasswords] = useState<string[]>([])
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
 
-  const handleGenerate = () => {
-    setPassword(generatePassword(length, useUpper, useLower, useDigits, useSymbols))
-  }
+  const toggleSet = useCallback((key: string) => {
+    setSets(prev => prev.map(s => s.key === key ? { ...s, active: !s.active } : s))
+  }, [])
 
-  const handleCopy = async () => {
-    if (!password) return
+  const handleGenerate = useCallback(() => {
+    setPasswords(generateBatch(length, count, sets))
+    setCopiedIdx(null)
+  }, [length, count, sets])
+
+  const handleCopy = useCallback(async (pw: string, idx: number) => {
     try {
-      await navigator.clipboard.writeText(password)
+      await navigator.clipboard.writeText(pw)
+      setCopiedIdx(idx)
       message.success(t('copied'))
+      setTimeout(() => setCopiedIdx(null), 2000)
     } catch {
       message.error(t('copyFailed'))
     }
-  }
+  }, [t])
+
+  const handleCopyAll = useCallback(async () => {
+    if (!passwords.length) return
+    try {
+      await navigator.clipboard.writeText(passwords.join('\n'))
+      message.success(t('copiedAll'))
+    } catch {
+      message.error(t('copyFailed'))
+    }
+  }, [passwords, t])
+
+  const allDisabled = !sets.some(s => s.active)
 
   return (
-    <div className="max-w-xl">
-      <Card>
-        <Space direction="vertical" size="middle" className="w-full">
-          <div className="flex items-center gap-4 flex-wrap">
-            <Typography.Text>{t('passwordLength')}</Typography.Text>
-            <InputNumber min={4} max={128} value={length} onChange={v => setLength(v ?? 16)} />
+    <div className="flex flex-col min-h-0">
+      {/* Sticky zone: breadcrumb + controls + results header */}
+      <div className="sticky top-0 z-10 bg-[var(--content-bg)]">
+        {breadcrumb ?? <div className="mb-4" />}
+
+        {/* Config bar — pills left, inputs right */}
+        <div className="flex flex-wrap items-start gap-4 mb-4">
+          {/* Character sets */}
+          <div className="flex-1 min-w-[280px]">
+            <label className={LABEL_CLS}>{t('characterTypes')}</label>
+            <div className="flex flex-wrap gap-2">
+              {sets.map(s => (
+                <button
+                  key={s.key}
+                  onClick={() => toggleSet(s.key)}
+                  className={`toggle-pill ${s.active ? 'active' : ''}`}
+                >
+                  <span className="pill-label">{s.label}</span>
+                  <span className="pill-chars">{s.chars}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex items-center gap-4 flex-wrap">
-            <Space>
-              <Switch checked={useUpper} onChange={setUseUpper} />
-              <Typography.Text>{t('uppercase')}</Typography.Text>
-            </Space>
-            <Space>
-              <Switch checked={useLower} onChange={setUseLower} />
-              <Typography.Text>{t('lowercase')}</Typography.Text>
-            </Space>
-            <Space>
-              <Switch checked={useDigits} onChange={setUseDigits} />
-              <Typography.Text>{t('digits')}</Typography.Text>
-            </Space>
-            <Space>
-              <Switch checked={useSymbols} onChange={setUseSymbols} />
-              <Typography.Text>{t('symbols')}</Typography.Text>
-            </Space>
-          </div>
-
-          <Button type="primary" icon={<ReloadOutlined />} onClick={handleGenerate} size="large">
-            {t('generate')}
-          </Button>
-
-          {password && (
-            <Space direction="vertical" className="w-full">
-              <Input.TextArea
-                value={password}
-                readOnly
-                className="font-mono"
-                rows={3}
-                autoSize={{ minRows: 2, maxRows: 6 }}
+          {/* Length + Count */}
+          <div className="flex gap-3 items-start shrink-0">
+            <div className="w-20">
+              <label className={LABEL_CLS}>{t('passwordLength')}</label>
+              <InputNumber<number>
+                size="large"
+                min={4}
+                max={128}
+                value={length}
+                onChange={v => v != null && setLength(v)}
+                className="!w-full"
               />
-              <Button icon={<CopyOutlined />} onClick={handleCopy}>
-                {t('copy')}
-              </Button>
-            </Space>
-          )}
-        </Space>
-      </Card>
+            </div>
+            <div className="w-20">
+              <label className={LABEL_CLS}>{t('count')}</label>
+              <InputNumber<number>
+                size="large"
+                min={1}
+                max={100}
+                value={count}
+                onChange={v => v != null && setCount(v)}
+                className="!w-full"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Generate */}
+        <button
+          onClick={handleGenerate}
+          disabled={allDisabled}
+          className="
+            w-full py-2.5 px-6 rounded-lg text-sm font-semibold
+            flex items-center justify-center gap-2
+            transition-all duration-150 cursor-pointer border-none
+            bg-[var(--accent)] text-white
+            hover:brightness-110 active:brightness-90
+            disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100
+          "
+        >
+          <ReloadOutlined />
+          {t('generate')}
+        </button>
+
+        {/* Results header (pinned below generate, above rows) */}
+        {passwords.length > 0 && (
+          <div className="mt-6 flex items-center justify-between border-b border-[var(--border-subtle)] pb-2">
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-secondary)]">
+              {t('count')} · {passwords.length}
+            </span>
+            <button
+              onClick={handleCopyAll}
+              className="text-[11px] font-semibold uppercase tracking-widest
+                text-[var(--accent)] hover:brightness-110
+                transition-all duration-150 cursor-pointer border-none bg-transparent"
+            >
+              {t('copyAll')}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Results rows (scroll under sticky zone) */}
+      {passwords.length > 0 && (
+        <div className="border border-[var(--border-subtle)] rounded-lg overflow-hidden bg-[var(--surface)] -mt-[1px]">
+          {passwords.map((pw, idx) => (
+            <div
+              key={idx}
+              className={`
+                flex items-center gap-3 px-4 py-2.5 group
+                ${idx % 2 === 1 ? 'bg-black/[0.02]' : ''}
+              `}
+            >
+              <span className="font-mono text-xs text-[var(--text-secondary)] tabular-nums w-5 shrink-0 text-right leading-none opacity-50">
+                {idx + 1}
+              </span>
+              <span className="flex-1 font-mono text-[15px] leading-snug text-[var(--text-primary)] break-all min-w-0 select-all">
+                {pw}
+              </span>
+              <button
+                onClick={() => handleCopy(pw, idx)}
+                className="shrink-0 flex items-center justify-center w-7 h-7 rounded
+                  text-[var(--text-secondary)] opacity-30 group-hover:opacity-100
+                  hover:opacity-100 hover:bg-[var(--border-subtle)]
+                  transition-all duration-150 cursor-pointer border-none bg-transparent"
+                title={t('copy')}
+              >
+                {copiedIdx === idx
+                  ? <CheckOutlined style={{ color: 'var(--accent)', fontSize: 13 }} />
+                  : <CopyOutlined style={{ fontSize: 13 }} />}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {passwords.length === 0 && (
+        <div className="mt-8 border-2 border-dashed border-[var(--border-subtle)] rounded-lg py-12 text-center">
+          <p className="text-sm text-[var(--text-secondary)] opacity-50 italic">
+            {t('clickGenerate')}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
