@@ -6,6 +6,7 @@ import { devTools } from '../data/devTools'
 import RandomPassword from './tools/RandomPassword'
 import ImageToBase64 from './tools/ImageToBase64'
 import JsonBeautify from './tools/JsonBeautify'
+import CodecConverter from './tools/CodecConverter'
 
 interface ToolProps {
   breadcrumb?: React.ReactNode
@@ -15,6 +16,7 @@ const toolComponents: Record<string, React.ComponentType<ToolProps>> = {
   'random-password': RandomPassword,
   'image-to-base64': ImageToBase64,
   'json-beautify': JsonBeautify,
+  'codec-converter': CodecConverter,
 }
 
 function DevToolDetail(): React.JSX.Element {

@@ -30,6 +30,13 @@ export const devTools: DevToolItem[] = [
     tags: ['工具', 'JSON'],
     route: '/dev-tools/json-beautify',
   },
+  {
+    id: 'codec-converter',
+    nameKey: 'devToolCodec',
+    descKey: 'devToolCodecDesc',
+    tags: ['工具', '编码'],
+    route: '/dev-tools/codec-converter',
+  },
 ]
 
 export interface DevToolStats {
