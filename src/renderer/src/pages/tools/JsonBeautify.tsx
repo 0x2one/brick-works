@@ -4,8 +4,8 @@ import { App } from 'antd'
 import {
   CodeOutlined, CompressOutlined, SnippetsOutlined, DownloadOutlined,
   ColumnWidthOutlined, ColumnHeightOutlined, DeleteOutlined,
-  FolderOpenOutlined, EyeOutlined, EyeInvisibleOutlined,
-  ArrowUpOutlined, ArrowDownOutlined
+  FolderOpenOutlined, EyeOutlined, ArrowUpOutlined, ArrowDownOutlined,
+  CaretRightOutlined, CaretDownOutlined
 } from '@ant-design/icons'
 
 function sortKeysAsc(obj: unknown): unknown {
@@ -46,7 +46,8 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
   const [mode, setMode] = useState<'format' | 'minify'>('format')
   const [layout, setLayout] = useState<'horizontal' | 'vertical'>('horizontal')
   const [sort, setSort] = useState<string>('default')
-  const [folded, setFolded] = useState(false)
+  const [treeMode, setTreeMode] = useState(false)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
 
   const formatJSON = useCallback((text: string, fmtMode: 'format' | 'minify', sortMode: string): void => {
@@ -60,7 +61,8 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
       setOutput(formatted)
       setError(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('jsonParseError'))
+      const msg = e instanceof Error ? e.message : t('jsonParseError')
+      setError(msg.split('\n')[0].trim())
       setOutput('')
     }
   }, [t])
@@ -69,6 +71,7 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
     const pasted = e.clipboardData.getData('text')
     try {
       JSON.parse(pasted.trim())
+      e.preventDefault()
       setInput(pasted)
       formatJSON(pasted, mode, sort)
     } catch { }
@@ -121,17 +124,98 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
     }
   }, [input, mode, formatJSON])
 
-  const toggleFold = useCallback(() => setFolded(v => !v), [])
+  const toggleTree = useCallback(() => setTreeMode(v => !v), [])
 
-  const displayOutput = useMemo(() => {
-    if (!output && !error) return ''
-    if (error) return error
-    if (folded) {
-      const oneLine = output.replace(/\s+/g, ' ')
-      return oneLine.length > 120 ? oneLine.slice(0, 120) + '...' : oneLine
+  const toggleExpand = useCallback((path: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path); else next.add(path)
+      return next
+    })
+  }, [])
+
+  const parsedForTree = useMemo(() => {
+    if (!output) return null
+    try { return JSON.parse(output) } catch { return null }
+  }, [output])
+
+  function renderJsonNode(value: unknown, path: string, depth: number): ReactNode {
+    const isExpanded = expanded.has(path)
+    const indent = { paddingLeft: 16 }
+
+    if (value === null) return <span className="text-gray-400 font-medium">null</span>
+    if (typeof value === 'boolean') return <span className="text-amber-600 font-medium">{String(value)}</span>
+    if (typeof value === 'number') return <span className="text-blue-600 font-medium">{value}</span>
+    if (typeof value === 'string') {
+      const content = value.length > 200 ? value.slice(0, 200) + '...' : value
+      return <span className="text-green-700">"{content}"</span>
     }
-    return output
-  }, [output, error, folded])
+
+    if (Array.isArray(value)) {
+      if (value.length === 0) return <span className="text-[var(--text-secondary)]">[]</span>
+      return (
+        <div>
+          <span
+            onClick={() => toggleExpand(path)}
+            className="cursor-pointer select-none hover:text-[var(--accent)] transition-colors duration-100"
+          >
+            <span className="inline-block w-4 text-xs text-[var(--text-secondary)]">
+              {isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
+            </span>
+            <span className="text-[var(--text-secondary)]">[</span>
+            {!isExpanded && (
+              <span className="text-[var(--text-secondary)] text-xs ml-1">{value.length} items]</span>
+            )}
+          </span>
+          {isExpanded && (
+            <div style={indent} className="border-l border-[var(--border-subtle)] ml-[7px]">
+              {value.map((item, i) => (
+                <div key={i} className="hover:bg-black/[0.02] rounded">
+                  <span className="text-[var(--text-secondary)] text-xs select-none mr-1">{i}:</span>
+                  {renderJsonNode(item, `${path}[${i}]`, depth + 1)}
+                  {i < value.length - 1 && <span className="text-[var(--text-secondary)]">,</span>}
+                </div>
+              ))}
+              <div className="text-[var(--text-secondary)]">]</div>
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    // Object
+    const entries = Object.entries(value as Record<string, unknown>)
+    if (entries.length === 0) return <span className="text-[var(--text-secondary)]">{'{}'}</span>
+    return (
+      <div>
+        <span
+          onClick={() => toggleExpand(path)}
+          className="cursor-pointer select-none hover:text-[var(--accent)] transition-colors duration-100"
+        >
+          <span className="inline-block w-4 text-xs text-[var(--text-secondary)]">
+            {isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
+          </span>
+          <span className="text-[var(--text-secondary)]">{'{'}</span>
+          {!isExpanded && (
+            <span className="text-[var(--text-secondary)] text-xs ml-1">{entries.length} keys{'}'}</span>
+          )}
+        </span>
+        {isExpanded && (
+          <div style={indent} className="border-l border-[var(--border-subtle)] ml-[7px]">
+            {entries.map(([key, val]) => (
+              <div key={key} className="hover:bg-black/[0.02] rounded">
+                <span className="text-[var(--accent)]">"{key}"</span>
+                <span className="text-[var(--text-secondary)] mx-1">: </span>
+                {renderJsonNode(val, `${path}.${key}`, depth + 1)}
+                <span className="text-[var(--text-secondary)]">,</span>
+              </div>
+            ))}
+            <div className="text-[var(--text-secondary)]">{'}'}</div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const hasContent = !!input.trim()
   const inputStats = input ? `${input.length} chars · ${input.split('\n').length} lines` : ''
@@ -266,9 +350,9 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
       <div className={`flex-1 min-h-0 flex gap-3 ${layout === 'vertical' ? 'flex-col' : ''}`}>
         {/* Input panel */}
         <div className={`flex flex-col ${layout === 'vertical' ? 'flex-1' : 'flex-1'} min-h-0`}>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-1.5 h-7">
             <span className={PANEL_HEADER_CLS}>{t('jsonInput')}</span>
-            <span className="text-[10px] text-[var(--text-secondary)]">{inputStats}</span>
+            <span className="text-xs text-[var(--text-secondary)]">{inputStats}</span>
           </div>
           <textarea
             value={input}
@@ -278,65 +362,72 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
             spellCheck={false}
             className="flex-1 w-full px-4 py-3 rounded-lg border border-[var(--border-subtle)]
               bg-white text-[var(--text-primary)]
-              font-mono text-[13px] leading-relaxed outline-none resize-none
+              font-mono text-sm leading-relaxed outline-none resize-none
               focus:border-[var(--accent)] transition-colors duration-150"
           />
         </div>
 
         {/* Result panel */}
         <div className={`flex flex-col ${layout === 'vertical' ? 'flex-1' : 'flex-1'} min-h-0`}>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-1.5 h-7">
             <div className="flex items-center gap-2">
               <button
-                onClick={toggleFold}
+                onClick={toggleTree}
                 disabled={!output}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium
                   text-[var(--text-secondary)] hover:text-[var(--text-primary)]
                   hover:bg-[var(--border-subtle)] transition-all duration-150 cursor-pointer border-none bg-transparent
                   disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               >
-                {folded ? <EyeOutlined /> : <EyeInvisibleOutlined />}
-                {folded ? t('jsonUnfold') : t('jsonFold')}
+                <EyeOutlined style={{ fontSize: 12 }} />
+                {treeMode ? t('jsonTextMode') : t('jsonTreeMode')}
               </button>
-              <div className="w-px h-3 bg-[var(--border-subtle)]" />
+              <span className="w-px h-3.5 bg-[var(--border-subtle)]" />
               <button
                 onClick={handleCopy}
                 disabled={!output}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium
                   text-[var(--text-secondary)] hover:text-[var(--text-primary)]
                   hover:bg-[var(--border-subtle)] transition-all duration-150 cursor-pointer border-none bg-transparent
                   disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               >
-                <SnippetsOutlined />
+                <SnippetsOutlined style={{ fontSize: 12 }} />
                 {t('copy')}
               </button>
-              <div className="w-px h-3 bg-[var(--border-subtle)]" />
+              <span className="w-px h-3.5 bg-[var(--border-subtle)]" />
               <button
                 onClick={handleDownload}
                 disabled={!output}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium
                   text-[var(--text-secondary)] hover:text-[var(--text-primary)]
                   hover:bg-[var(--border-subtle)] transition-all duration-150 cursor-pointer border-none bg-transparent
                   disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               >
-                <DownloadOutlined />
+                <DownloadOutlined style={{ fontSize: 12 }} />
                 {t('jsonDownload')}
               </button>
             </div>
             <span className={PANEL_HEADER_CLS}>{t('jsonResult')}</span>
           </div>
-          <textarea
-            value={displayOutput}
-            readOnly
-            placeholder={t('jsonResultPlaceholder')}
-            spellCheck={false}
-            className={`flex-1 w-full px-4 py-3 rounded-lg border font-mono text-[13px] leading-relaxed outline-none resize-none select-all
-              ${error
-                ? 'border-red-300 bg-red-50 text-red-600'
-                : 'border-[var(--border-subtle)] bg-white text-[var(--text-primary)]'
-              }
-              focus:border-[var(--accent)] transition-colors duration-150`}
-          />
+          {treeMode && parsedForTree && !error ? (
+            <div className="flex-1 w-full px-4 py-3 rounded-lg border border-[var(--border-subtle)]
+              bg-white font-mono text-sm leading-relaxed overflow-auto select-all">
+              {renderJsonNode(parsedForTree, '$', 0)}
+            </div>
+          ) : (
+            <textarea
+              value={error || output}
+              readOnly
+              placeholder={t('jsonResultPlaceholder')}
+              spellCheck={false}
+              className={`flex-1 w-full px-4 py-3 rounded-lg border font-mono text-sm leading-relaxed outline-none resize-none select-all
+                ${error
+                  ? 'border-red-300 bg-red-50 text-red-600'
+                  : 'border-[var(--border-subtle)] bg-white text-[var(--text-primary)]'
+                }
+                focus:border-[var(--accent)] transition-colors duration-150`}
+            />
+          )}
         </div>
       </div>
     </div>

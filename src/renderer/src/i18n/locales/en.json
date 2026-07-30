@@ -81,8 +81,8 @@
   "jsonResult": "Result",
   "jsonInputPlaceholder": "Paste or type JSON here...",
   "jsonResultPlaceholder": "Click Format to see result",
-  "jsonFold": "Fold",
-  "jsonUnfold": "Unfold",
+  "jsonTreeMode": "Tree",
+  "jsonTextMode": "Text",
   "jsonParseError": "Parse error",
   "jsonDecoded": "Unicode decoded",
   "jsonDownload": "Download"

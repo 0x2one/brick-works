@@ -81,8 +81,8 @@
   "jsonResult": "结果",
   "jsonInputPlaceholder": "在此粘贴或输入 JSON...",
   "jsonResultPlaceholder": "点击格式化生成结果",
-  "jsonFold": "折叠",
-  "jsonUnfold": "展开",
+  "jsonTreeMode": "树形",
+  "jsonTextMode": "文本",
   "jsonParseError": "解析错误",
   "jsonDecoded": "Unicode 解码完成",
   "jsonDownload": "下载"
