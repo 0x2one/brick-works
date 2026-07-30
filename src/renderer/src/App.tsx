@@ -3,7 +3,14 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { Layout, Menu } from 'antd'
 import { NavLink, useLocation, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ToolOutlined, InfoCircleOutlined, PushpinOutlined, BuildOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import {
+  ToolOutlined,
+  InfoCircleOutlined,
+  PushpinOutlined,
+  BuildOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined
+} from '@ant-design/icons'
 import TitleBar from './components/TitleBar'
 import DevTools from './pages/DevTools'
 import DevToolDetail from './pages/DevToolDetail'
@@ -18,9 +25,21 @@ function AppLayout(): React.JSX.Element {
   const location = useLocation()
 
   const menuItems = [
-    { key: '/memo-sticky', icon: <PushpinOutlined />, label: <NavLink to="/memo-sticky">{t('memoSticky')}</NavLink> },
-    { key: '/dev-tools', icon: <ToolOutlined />, label: <NavLink to="/dev-tools">{t('devTools')}</NavLink> },
-    { key: '/about', icon: <InfoCircleOutlined />, label: <NavLink to="/about">{t('about')}</NavLink> },
+    {
+      key: '/memo-sticky',
+      icon: <PushpinOutlined />,
+      label: <NavLink to="/memo-sticky">{t('memoSticky')}</NavLink>
+    },
+    {
+      key: '/dev-tools',
+      icon: <ToolOutlined />,
+      label: <NavLink to="/dev-tools">{t('devTools')}</NavLink>
+    },
+    {
+      key: '/about',
+      icon: <InfoCircleOutlined />,
+      label: <NavLink to="/about">{t('about')}</NavLink>
+    }
   ]
 
   return (
@@ -43,7 +62,9 @@ function AppLayout(): React.JSX.Element {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[location.pathname.startsWith('/dev-tools') ? '/dev-tools' : location.pathname]}
+          selectedKeys={[
+            location.pathname.startsWith('/dev-tools') ? '/dev-tools' : location.pathname
+          ]}
           items={menuItems}
           className="!bg-transparent !border-e-0"
         />

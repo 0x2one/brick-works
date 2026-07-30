@@ -18,7 +18,7 @@ const toolComponents: Record<string, React.ComponentType<ToolProps>> = {
   'image-to-base64': ImageToBase64,
   'json-beautify': JsonBeautify,
   'codec-converter': CodecConverter,
-  'timestamp-converter': TimestampConverter,
+  'timestamp-converter': TimestampConverter
 }
 
 function DevToolDetail(): React.JSX.Element {
@@ -26,7 +26,7 @@ function DevToolDetail(): React.JSX.Element {
   const navigate = useNavigate()
   const { toolId } = useParams<{ toolId: string }>()
 
-  const tool = devTools.find(item => item.id === toolId)
+  const tool = devTools.find((item) => item.id === toolId)
 
   if (!tool) {
     return (
@@ -40,17 +40,13 @@ function DevToolDetail(): React.JSX.Element {
 
   const breadcrumb = (
     <div className="flex items-center gap-2 mb-3">
-      <Button
-        type="text"
-        icon={<ArrowLeftOutlined />}
-        onClick={() => navigate('/dev-tools')}
-      >
+      <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/dev-tools')}>
         {t('back')}
       </Button>
       <Breadcrumb
         items={[
           { title: <a onClick={() => navigate('/dev-tools')}>{t('devTools')}</a> },
-          { title: t(tool.nameKey) },
+          { title: t(tool.nameKey) }
         ]}
       />
     </div>
@@ -58,10 +54,11 @@ function DevToolDetail(): React.JSX.Element {
 
   return (
     <div>
-      {ToolComponent
-        ? <ToolComponent breadcrumb={breadcrumb as React.ReactNode} />
-        : <Typography.Text type="secondary">{t('toolNotImplemented')}</Typography.Text>
-      }
+      {ToolComponent ? (
+        <ToolComponent breadcrumb={breadcrumb as React.ReactNode} />
+      ) : (
+        <Typography.Text type="secondary">{t('toolNotImplemented')}</Typography.Text>
+      )}
     </div>
   )
 }

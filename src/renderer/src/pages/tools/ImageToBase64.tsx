@@ -1,7 +1,15 @@
 import { useState, useCallback, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, Image } from 'antd'
-import { LinkOutlined, PaperClipOutlined, FolderOpenOutlined, SwapOutlined, CopyOutlined, DownloadOutlined, CheckOutlined } from '@ant-design/icons'
+import {
+  LinkOutlined,
+  PaperClipOutlined,
+  FolderOpenOutlined,
+  SwapOutlined,
+  CopyOutlined,
+  DownloadOutlined,
+  CheckOutlined
+} from '@ant-design/icons'
 
 const MODES = ['url', 'clipboard', 'file', 'reverse'] as const
 
@@ -9,7 +17,7 @@ const MODE_ICONS: Record<string, ReactNode> = {
   url: <LinkOutlined />,
   clipboard: <PaperClipOutlined />,
   file: <FolderOpenOutlined />,
-  reverse: <SwapOutlined />,
+  reverse: <SwapOutlined />
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -25,7 +33,8 @@ function isValidDataUrl(s: string): boolean {
   return /^data:image\/[\w+-]+;base64,/.test(s.trim())
 }
 
-const LABEL_CLS = 'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
+const LABEL_CLS =
+  'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
 
 function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
   const { t } = useTranslation()
@@ -63,7 +72,7 @@ function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
     try {
       const items = await navigator.clipboard.read()
       for (const item of items) {
-        const imageType = item.types.find(t => t.startsWith('image/'))
+        const imageType = item.types.find((t) => t.startsWith('image/'))
         if (imageType) {
           const blob = await item.getType(imageType)
           const dataUrl = await blobToBase64(blob)
@@ -79,14 +88,17 @@ function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
     }
   }, [t, message])
 
-  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const dataUrl = await blobToBase64(file)
-    const base64 = dataUrl.split(',')[1]
-    setResult({ dataUrl, base64 })
-    message.success(t('imgToBase64Success'))
-  }, [t, message])
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      const dataUrl = await blobToBase64(file)
+      const base64 = dataUrl.split(',')[1]
+      setResult({ dataUrl, base64 })
+      message.success(t('imgToBase64Success'))
+    },
+    [t, message]
+  )
 
   const handleReverse = useCallback(() => {
     const input = reverseInput.trim()
@@ -99,16 +111,19 @@ function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
     setReversePreview(fullDataUrl)
   }, [reverseInput, t, message])
 
-  const handleCopyBase64 = useCallback(async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      message.success(t('copied'))
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      message.error(t('copyFailed'))
-    }
-  }, [t, message])
+  const handleCopyBase64 = useCallback(
+    async (text: string) => {
+      try {
+        await navigator.clipboard.writeText(text)
+        setCopied(true)
+        message.success(t('copied'))
+        setTimeout(() => setCopied(false), 2000)
+      } catch {
+        message.error(t('copyFailed'))
+      }
+    },
+    [t, message]
+  )
 
   const handleDownload = useCallback((dataUrl: string) => {
     const a = document.createElement('a')
@@ -126,10 +141,14 @@ function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
         <div className="mb-4">
           <label className={LABEL_CLS}>{t('imgToBase64InputMode')}</label>
           <div className="flex flex-wrap gap-2">
-            {MODES.map(m => (
+            {MODES.map((m) => (
               <button
                 key={m}
-                onClick={() => { setMode(m); setResult(null); setReversePreview(null) }}
+                onClick={() => {
+                  setMode(m)
+                  setResult(null)
+                  setReversePreview(null)
+                }}
                 className={`toggle-pill ${mode === m ? 'active' : ''}`}
               >
                 <span className="flex items-center gap-1.5 pill-label">
@@ -148,8 +167,8 @@ function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
               <input
                 type="text"
                 value={url}
-                onChange={e => setUrl(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleFetchUrl()}
+                onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
                 placeholder={t('imgToBase64UrlPlaceholder')}
                 className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)]
                   text-sm text-[var(--text-primary)] outline-none
@@ -216,7 +235,7 @@ function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
           <div className="mb-4">
             <textarea
               value={reverseInput}
-              onChange={e => setReverseInput(e.target.value)}
+              onChange={(e) => setReverseInput(e.target.value)}
               placeholder={t('imgToBase64ReversePlaceholder')}
               rows={10}
               spellCheck={false}
@@ -244,8 +263,10 @@ function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
         <div className="mt-8 border border-[var(--border-subtle)] rounded-xl overflow-hidden bg-[var(--surface)]">
           {/* Image preview */}
           <div className="p-5 flex justify-center bg-[var(--bg-warm)] border-b border-[var(--border-subtle)]">
-            <div className="w-32 h-32 rounded-lg overflow-hidden bg-white
-              flex items-center justify-center shadow-sm">
+            <div
+              className="w-32 h-32 rounded-lg overflow-hidden bg-white
+              flex items-center justify-center shadow-sm"
+            >
               <Image
                 src={result.dataUrl}
                 alt="preview"
@@ -299,8 +320,10 @@ function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
       {mode === 'reverse' && reversePreview && (
         <div className="mt-8 border border-[var(--border-subtle)] rounded-xl overflow-hidden bg-[var(--surface)]">
           <div className="p-5 flex justify-center bg-[var(--bg-warm)] border-b border-[var(--border-subtle)]">
-            <div className="w-32 h-32 rounded-lg overflow-hidden bg-white
-              flex items-center justify-center shadow-sm">
+            <div
+              className="w-32 h-32 rounded-lg overflow-hidden bg-white
+              flex items-center justify-center shadow-sm"
+            >
               <Image
                 src={reversePreview}
                 alt="preview"

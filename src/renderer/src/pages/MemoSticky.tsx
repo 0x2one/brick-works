@@ -6,7 +6,7 @@ import {
   DeleteOutlined,
   CopyOutlined,
   FormOutlined,
-  CheckOutlined,
+  CheckOutlined
 } from '@ant-design/icons'
 import { Modal, Input, Tooltip, message } from 'antd'
 
@@ -33,7 +33,7 @@ const TAG_COLORS = [
   '#d1b3e0',
   '#f3b37a',
   '#a8c8c8',
-  '#e8c4a8',
+  '#e8c4a8'
 ]
 
 const LS_TAGS = 'brickworks:stickyTags'
@@ -62,7 +62,7 @@ function TagSidebar({
   onSelectTag,
   onAddTag,
   onEditTag,
-  onDeleteTag,
+  onDeleteTag
 }: {
   tags: Tag[]
   selectedTagId: string | null
@@ -75,7 +75,10 @@ function TagSidebar({
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   return (
-    <div className="flex h-full flex-col border-r border-[var(--border-subtle)]" style={{ width: 164 }}>
+    <div
+      className="flex h-full flex-col border-r border-[var(--border-subtle)]"
+      style={{ width: 164 }}
+    >
       <div className="flex-1 overflow-y-auto px-2 pt-3">
         <div
           className={`sticky-tag-item ${selectedTagId === null ? 'active' : ''}`}
@@ -121,10 +124,7 @@ function TagSidebar({
       </div>
       <div className="flex justify-center border-t border-[var(--border-subtle)] px-2 py-2">
         <Tooltip title={t('memoStickyNewTag')}>
-          <button
-            className="sticky-toolbar-btn"
-            onClick={onAddTag}
-          >
+          <button className="sticky-toolbar-btn" onClick={onAddTag}>
             <PlusOutlined />
           </button>
         </Tooltip>
@@ -140,7 +140,7 @@ function NoteCard({
   batchMode,
   batchSelected,
   onClick,
-  onToggleBatch,
+  onToggleBatch
 }: {
   note: Note
   tag?: Tag
@@ -151,10 +151,7 @@ function NoteCard({
   onToggleBatch: () => void
 }) {
   return (
-    <div
-      className={`sticky-card cursor-pointer ${selected ? 'selected' : ''}`}
-      onClick={onClick}
-    >
+    <div className={`sticky-card cursor-pointer ${selected ? 'selected' : ''}`} onClick={onClick}>
       <div className="flex h-full flex-col p-3">
         {batchMode && (
           <div className="mb-2 flex items-center">
@@ -176,12 +173,18 @@ function NoteCard({
         <div className="flex items-center gap-2">
           {tag && <span className="sticky-tag-dot shrink-0" style={{ background: tag.color }} />}
           {note.title && (
-            <span className="truncate text-[13px] font-semibold" style={{ color: 'var(--sticky-text)' }}>
+            <span
+              className="truncate text-[13px] font-semibold"
+              style={{ color: 'var(--sticky-text)' }}
+            >
               {note.title}
             </span>
           )}
           <span className="ml-auto shrink-0 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-            {new Date(note.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            {new Date(note.updatedAt).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric'
+            })}
           </span>
         </div>
         <div
@@ -215,14 +218,17 @@ function MemoSticky(): React.JSX.Element {
   const [noteTitleInput, setNoteTitleInput] = useState('')
   const [noteContentInput, setNoteContentInput] = useState('')
 
-  useEffect(() => { saveToLS(LS_TAGS, tags) }, [tags])
-  useEffect(() => { saveToLS(LS_NOTES, notes) }, [notes])
+  useEffect(() => {
+    saveToLS(LS_TAGS, tags)
+  }, [tags])
+  useEffect(() => {
+    saveToLS(LS_NOTES, notes)
+  }, [notes])
 
   const tagMap = new Map(tags.map((t) => [t.id, t]))
 
-  const filteredNotes = selectedTagId === null
-    ? notes
-    : notes.filter((n) => n.tagId === selectedTagId)
+  const filteredNotes =
+    selectedTagId === null ? notes : notes.filter((n) => n.tagId === selectedTagId)
 
   const selectedNote = notes.find((n) => n.id === selectedNoteId) ?? null
 
@@ -244,7 +250,9 @@ function MemoSticky(): React.JSX.Element {
     const name = tagNameInput.trim()
     if (!name) return
     if (editingTag) {
-      setTags((prev) => prev.map((t) => (t.id === editingTag.id ? { ...t, name, color: tagColorInput } : t)))
+      setTags((prev) =>
+        prev.map((t) => (t.id === editingTag.id ? { ...t, name, color: tagColorInput } : t))
+      )
     } else {
       const newTag: Tag = { id: genId(), name, color: tagColorInput }
       setTags((prev) => [...prev, newTag])
@@ -252,11 +260,14 @@ function MemoSticky(): React.JSX.Element {
     closeTagModal()
   }, [tagNameInput, tagColorInput, editingTag, closeTagModal])
 
-  const deleteTag = useCallback((tag: Tag) => {
-    setTags((prev) => prev.filter((t) => t.id !== tag.id))
-    setNotes((prev) => prev.map((n) => (n.tagId === tag.id ? { ...n, tagId: null } : n)))
-    if (selectedTagId === tag.id) setSelectedTagId(null)
-  }, [selectedTagId])
+  const deleteTag = useCallback(
+    (tag: Tag) => {
+      setTags((prev) => prev.filter((t) => t.id !== tag.id))
+      setNotes((prev) => prev.map((n) => (n.tagId === tag.id ? { ...n, tagId: null } : n)))
+      if (selectedTagId === tag.id) setSelectedTagId(null)
+    },
+    [selectedTagId]
+  )
 
   const openNoteModal = useCallback((note?: Note) => {
     setEditingNote(note ?? null)
@@ -292,26 +303,32 @@ function MemoSticky(): React.JSX.Element {
         title,
         content,
         createdAt: Date.now(),
-        updatedAt: Date.now(),
+        updatedAt: Date.now()
       }
       setNotes((prev) => [newNote, ...prev])
     }
     closeNoteModal()
   }, [noteTitleInput, noteContentInput, editingNote, selectedTagId, closeNoteModal])
 
-  const deleteNote = useCallback((note: Note) => {
-    setNotes((prev) => prev.filter((n) => n.id !== note.id))
-    if (selectedNoteId === note.id) setSelectedNoteId(null)
-  }, [selectedNoteId])
+  const deleteNote = useCallback(
+    (note: Note) => {
+      setNotes((prev) => prev.filter((n) => n.id !== note.id))
+      if (selectedNoteId === note.id) setSelectedNoteId(null)
+    },
+    [selectedNoteId]
+  )
 
-  const copyNote = useCallback(async (note: Note) => {
-    try {
-      await navigator.clipboard.writeText(note.content)
-      message.success(t('memoStickyCopySuccess'))
-    } catch {
-      // fallback
-    }
-  }, [t])
+  const copyNote = useCallback(
+    async (note: Note) => {
+      try {
+        await navigator.clipboard.writeText(note.content)
+        message.success(t('memoStickyCopySuccess'))
+      } catch {
+        // fallback
+      }
+    },
+    [t]
+  )
 
   const toggleBatchSelect = useCallback((id: string) => {
     setBatchSelected((prev) => {
@@ -341,7 +358,7 @@ function MemoSticky(): React.JSX.Element {
             title: t('memoStickyDeleteTag'),
             content: t('memoStickyDeleteTagConfirm'),
             okButtonProps: { danger: true },
-            onOk: () => deleteTag(tag),
+            onOk: () => deleteTag(tag)
           })
         }}
       />
@@ -407,7 +424,7 @@ function MemoSticky(): React.JSX.Element {
                 title: t('memoStickyDeleteNote'),
                 content: t('memoStickyDeleteNoteConfirm'),
                 okButtonProps: { danger: true },
-                onOk: () => deleteNote(selectedNote),
+                onOk: () => deleteNote(selectedNote)
               })
             }}
           >
@@ -415,7 +432,10 @@ function MemoSticky(): React.JSX.Element {
           </button>
         </Tooltip>
         <div className="my-1 w-5 border-t border-[var(--border-subtle)]" />
-        <Tooltip title={batchMode ? t('memoStickyBatchDone') : t('memoStickyBatchMode')} placement="left">
+        <Tooltip
+          title={batchMode ? t('memoStickyBatchDone') : t('memoStickyBatchMode')}
+          placement="left"
+        >
           <button
             className={`sticky-toolbar-btn ${batchMode ? 'active' : ''}`}
             onClick={() => {
@@ -451,7 +471,10 @@ function MemoSticky(): React.JSX.Element {
       >
         <div className="flex flex-col gap-4 py-2">
           <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+            <label
+              className="mb-1 block text-xs font-medium"
+              style={{ color: 'var(--text-secondary)' }}
+            >
               {t('memoStickyTagName')}
             </label>
             <Input
@@ -463,7 +486,10 @@ function MemoSticky(): React.JSX.Element {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+            <label
+              className="mb-1 block text-xs font-medium"
+              style={{ color: 'var(--text-secondary)' }}
+            >
               {t('memoStickyChooseColor')}
             </label>
             <div className="flex flex-wrap gap-2">

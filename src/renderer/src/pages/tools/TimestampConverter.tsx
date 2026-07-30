@@ -1,11 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, Select, Tooltip } from 'antd'
-import {
-  SnippetsOutlined,
-  CloseOutlined,
-  ClockCircleOutlined,
-} from '@ant-design/icons'
+import { SnippetsOutlined, CloseOutlined, ClockCircleOutlined } from '@ant-design/icons'
 
 const PANEL_HEADER_CLS = 'text-[11px] font-semibold tracking-widest text-[var(--text-secondary)]'
 
@@ -29,16 +25,33 @@ function nowInTimezone(tz: string): string {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hour12: false
   }).formatToParts(now)
   const m: Record<string, string> = {}
   for (const p of parts) m[p.type] = p.value
   return `${m.year}-${m.month}-${m.day} ${m.hour}:${m.minute}:${m.second}`
 }
 
-function parseDateTimeText(input: string): { year: number; month: number; day: number; hour: number; minute: number; second: number } | null {
+function parseDateTimeText(
+  input: string
+): {
+  year: number
+  month: number
+  day: number
+  hour: number
+  minute: number
+  second: number
+} | null {
   const m = input.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/)
-  if (m) return { year: +m[1], month: +m[2], day: +m[3], hour: +m[4], minute: +m[5], second: +(m[6] ?? '00') }
+  if (m)
+    return {
+      year: +m[1],
+      month: +m[2],
+      day: +m[3],
+      hour: +m[4],
+      minute: +m[5],
+      second: +(m[6] ?? '00')
+    }
   const d = input.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (d) return { year: +d[1], month: +d[2], day: +d[3], hour: 0, minute: 0, second: 0 }
   return null
@@ -47,9 +60,9 @@ function parseDateTimeText(input: string): { year: number; month: number; day: n
 function getTzOffsetMs(date: Date, tz: string): number {
   const parts = new Intl.DateTimeFormat('en', {
     timeZone: tz,
-    timeZoneName: 'longOffset',
+    timeZoneName: 'longOffset'
   }).formatToParts(date)
-  const off = parts.find(p => p.type === 'timeZoneName')?.value
+  const off = parts.find((p) => p.type === 'timeZoneName')?.value
   if (!off) return 0
   const match = off.match(/GMT([+-])(\d+)(?::(\d+))?/)
   if (!match) return 0
@@ -59,18 +72,22 @@ function getTzOffsetMs(date: Date, tz: string): number {
   return sign * (h * 60 + min) * 60 * 1000
 }
 
-function formatClockTime(date: Date, tz: string, locale: string): { time: string; dateStr: string } {
+function formatClockTime(
+  date: Date,
+  tz: string,
+  locale: string
+): { time: string; dateStr: string } {
   const tf = new Intl.DateTimeFormat(locale, {
     timeZone: tz,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hour12: false
   })
   const df = new Intl.DateTimeFormat(locale, {
     timeZone: tz,
     month: '2-digit',
-    day: '2-digit',
+    day: '2-digit'
   })
   return { time: tf.format(date), dateStr: df.format(date) }
 }
@@ -85,7 +102,7 @@ function formatTimestamp(ts: number, tz: string): string {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hour12: false
   }).formatToParts(d)
   const m: Record<string, string> = {}
   for (const p of parts) m[p.type] = p.value
@@ -98,9 +115,9 @@ function tzOffsetSuffix(tz: string): string {
   if (tz === 'UTC') return ''
   const parts = new Intl.DateTimeFormat('en', {
     timeZone: tz,
-    timeZoneName: 'longOffset',
+    timeZoneName: 'longOffset'
   }).formatToParts(Date.now())
-  const off = parts.find(p => p.type === 'timeZoneName')?.value
+  const off = parts.find((p) => p.type === 'timeZoneName')?.value
   if (!off) return ''
   return off.replace('GMT', 'UTC')
 }
@@ -113,7 +130,7 @@ function tzDisplayName(zone: string): string {
   return offset ? `${name} (${offset})` : name
 }
 
-const TZ_OPTIONS = ALL_TIMEZONES.map(z => ({ value: z, label: tzDisplayName(z) }))
+const TZ_OPTIONS = ALL_TIMEZONES.map((z) => ({ value: z, label: tzDisplayName(z) }))
 
 function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -127,7 +144,7 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
   // ── World Clocks ──
   const [clocks, setClocks] = useState<string[]>(() => [
     localTimezone,
-    ...PRESET_CLOCK_ZONES.filter(z => z !== localTimezone),
+    ...PRESET_CLOCK_ZONES.filter((z) => z !== localTimezone)
   ])
   const [clockNow, setClockNow] = useState(Date.now())
   const clockTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -139,24 +156,15 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
     }
   }, [])
 
-  const addableTimezones = useMemo(
-    () => ALL_TIMEZONES.filter(z => !clocks.includes(z)),
-    [clocks],
-  )
+  const addableTimezones = useMemo(() => ALL_TIMEZONES.filter((z) => !clocks.includes(z)), [clocks])
 
-  const handleAddClock = useCallback(
-    (zone: string) => {
-      setClocks(prev => [...prev, zone])
-    },
-    [],
-  )
+  const handleAddClock = useCallback((zone: string) => {
+    setClocks((prev) => [...prev, zone])
+  }, [])
 
-  const handleRemoveClock = useCallback(
-    (zone: string) => {
-      setClocks(prev => prev.filter(z => z !== zone))
-    },
-    [],
-  )
+  const handleRemoveClock = useCallback((zone: string) => {
+    setClocks((prev) => prev.filter((z) => z !== zone))
+  }, [])
 
   // ── Time → Timestamp ──
   const [dateTimeText, setDateTimeText] = useState(() => nowInTimezone(localTimezone))
@@ -206,7 +214,7 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
         message.error(t('copyFailed'))
       }
     },
-    [t, message],
+    [t, message]
   )
 
   return (
@@ -228,7 +236,7 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
               showSearch
               variant="borderless"
               onChange={handleAddClock}
-              options={addableTimezones.map(z => ({ value: z, label: tzDisplayName(z) }))}
+              options={addableTimezones.map((z) => ({ value: z, label: tzDisplayName(z) }))}
               labelRender={({ label }) => <span className="text-xs">{label as string}</span>}
               filterOption={(input, option) =>
                 (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
@@ -238,7 +246,7 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
             />
           </div>
           <div className="flex gap-2.5 flex-wrap">
-            {clocks.map(zone => {
+            {clocks.map((zone) => {
               const { time, dateStr } = formatClockTime(new Date(clockNow), zone, locale)
               const isLocal = zone === localTimezone
               return (
@@ -278,9 +286,10 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
             <button
               onClick={() => setMode('time-to-ts')}
               className={`px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border-none transition-all duration-100
-                ${mode === 'time-to-ts'
-                  ? 'bg-[var(--accent)] text-white'
-                  : 'text-[var(--text-secondary)] bg-[var(--bg-warm)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]'
+                ${
+                  mode === 'time-to-ts'
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'text-[var(--text-secondary)] bg-[var(--bg-warm)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]'
                 }`}
             >
               {t('timestampModeTimeToTs')}
@@ -288,9 +297,10 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
             <button
               onClick={() => setMode('ts-to-time')}
               className={`px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border-none transition-all duration-100
-                ${mode === 'ts-to-time'
-                  ? 'bg-[var(--accent)] text-white'
-                  : 'text-[var(--text-secondary)] bg-[var(--bg-warm)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]'
+                ${
+                  mode === 'ts-to-time'
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'text-[var(--text-secondary)] bg-[var(--bg-warm)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]'
                 }`}
             >
               {t('timestampModeTsToTime')}
@@ -307,7 +317,7 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
                     <input
                       type="text"
                       value={dateTimeText}
-                      onChange={e => setDateTimeText(e.target.value)}
+                      onChange={(e) => setDateTimeText(e.target.value)}
                       placeholder={t('timestampPlaceholder')}
                       spellCheck={false}
                       className="flex-1 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)]
@@ -334,7 +344,8 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
                     style={{ width: '100%' }}
                     options={TZ_OPTIONS}
                     filterOption={(input, option) =>
-                      (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+                      (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ??
+                      false
                     }
                     className="text-xs"
                     popupMatchSelectWidth={false}
@@ -346,7 +357,9 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
               {timestampResult ? (
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--text-secondary)] w-14">{t('timestampSeconds')}</span>
+                    <span className="text-xs text-[var(--text-secondary)] w-14">
+                      {t('timestampSeconds')}
+                    </span>
                     <code className="flex-1 px-3 py-1.5 rounded-md bg-[var(--bg-warm)] text-sm font-mono text-[var(--text-primary)] break-all">
                       {timestampResult.s.toLocaleString()}
                     </code>
@@ -360,7 +373,9 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
                     </button>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--text-secondary)] w-14">{t('timestampMilliseconds')}</span>
+                    <span className="text-xs text-[var(--text-secondary)] w-14">
+                      {t('timestampMilliseconds')}
+                    </span>
                     <code className="flex-1 px-3 py-1.5 rounded-md bg-[var(--bg-warm)] text-sm font-mono text-[var(--text-primary)] break-all">
                       {timestampResult.ms.toLocaleString()}
                     </code>
@@ -375,7 +390,9 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
                   </div>
                 </div>
               ) : (
-                <div className="text-xs text-[var(--text-secondary)] italic">{t('timestampNoResult')}</div>
+                <div className="text-xs text-[var(--text-secondary)] italic">
+                  {t('timestampNoResult')}
+                </div>
               )}
             </div>
           )}
@@ -390,7 +407,7 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
                     <input
                       type="text"
                       value={tsInput}
-                      onChange={e => setTsInput(e.target.value.replace(/[^0-9]/g, ''))}
+                      onChange={(e) => setTsInput(e.target.value.replace(/[^0-9]/g, ''))}
                       placeholder="1722345678"
                       spellCheck={false}
                       className="flex-1 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)]
@@ -414,9 +431,10 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
                     <button
                       onClick={() => setTsUnit('s')}
                       className={`flex-1 px-2 py-1.5 text-xs font-medium cursor-pointer border-none transition-all duration-100
-                        ${tsUnit === 's'
-                          ? 'bg-[var(--accent)] text-white'
-                          : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                        ${
+                          tsUnit === 's'
+                            ? 'bg-[var(--accent)] text-white'
+                            : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                         }`}
                     >
                       {t('timestampSeconds')}
@@ -424,9 +442,10 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
                     <button
                       onClick={() => setTsUnit('ms')}
                       className={`flex-1 px-2 py-1.5 text-xs font-medium cursor-pointer border-none transition-all duration-100
-                        ${tsUnit === 'ms'
-                          ? 'bg-[var(--accent)] text-white'
-                          : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                        ${
+                          tsUnit === 'ms'
+                            ? 'bg-[var(--accent)] text-white'
+                            : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                         }`}
                     >
                       ms
@@ -442,7 +461,8 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
                     style={{ width: '100%' }}
                     options={TZ_OPTIONS}
                     filterOption={(input, option) =>
-                      (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+                      (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ??
+                      false
                     }
                     className="text-xs"
                     popupMatchSelectWidth={false}
@@ -466,7 +486,9 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
                   </button>
                 </div>
               ) : (
-                <div className="text-xs text-[var(--text-secondary)] italic">{t('timestampNoResult')}</div>
+                <div className="text-xs text-[var(--text-secondary)] italic">
+                  {t('timestampNoResult')}
+                </div>
               )}
             </div>
           )}

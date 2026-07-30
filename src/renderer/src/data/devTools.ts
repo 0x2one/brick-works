@@ -14,36 +14,36 @@ export const devTools: DevToolItem[] = [
     nameKey: 'devToolRandomPassword',
     descKey: 'devToolRandomPasswordDesc',
     tags: ['工具', '安全'],
-    route: '/dev-tools/random-password',
+    route: '/dev-tools/random-password'
   },
   {
     id: 'image-to-base64',
     nameKey: 'devToolImageToBase64',
     descKey: 'devToolImageToBase64Desc',
     tags: ['工具', '图片'],
-    route: '/dev-tools/image-to-base64',
+    route: '/dev-tools/image-to-base64'
   },
   {
     id: 'json-beautify',
     nameKey: 'devToolJsonBeautify',
     descKey: 'devToolJsonBeautifyDesc',
     tags: ['工具', 'JSON'],
-    route: '/dev-tools/json-beautify',
+    route: '/dev-tools/json-beautify'
   },
   {
     id: 'codec-converter',
     nameKey: 'devToolCodec',
     descKey: 'devToolCodecDesc',
     tags: ['工具', '编码'],
-    route: '/dev-tools/codec-converter',
+    route: '/dev-tools/codec-converter'
   },
   {
     id: 'timestamp-converter',
     nameKey: 'devToolTimestamp',
     descKey: 'devToolTimestampDesc',
     tags: ['工具', '时间'],
-    route: '/dev-tools/timestamp-converter',
-  },
+    route: '/dev-tools/timestamp-converter'
+  }
 ]
 
 export interface DevToolStats {
@@ -71,13 +71,13 @@ export function useDevToolStats() {
   const [stats, setStats] = useState<Record<string, DevToolStats>>(loadStats)
 
   const toggleFavorite = useCallback((id: string) => {
-    setStats(prev => {
+    setStats((prev) => {
       const next = {
         ...prev,
         [id]: {
-          ...prev[id] ?? { favorited: false, lastUsedAt: null, useCount: 0 },
-          favorited: !(prev[id]?.favorited ?? false),
-        },
+          ...(prev[id] ?? { favorited: false, lastUsedAt: null, useCount: 0 }),
+          favorited: !(prev[id]?.favorited ?? false)
+        }
       }
       saveStats(next)
       return next
@@ -85,14 +85,14 @@ export function useDevToolStats() {
   }, [])
 
   const recordUse = useCallback((id: string) => {
-    setStats(prev => {
+    setStats((prev) => {
       const next = {
         ...prev,
         [id]: {
-          ...prev[id] ?? { favorited: false, lastUsedAt: null, useCount: 0 },
+          ...(prev[id] ?? { favorited: false, lastUsedAt: null, useCount: 0 }),
           lastUsedAt: Date.now(),
-          useCount: (prev[id]?.useCount ?? 0) + 1,
-        },
+          useCount: (prev[id]?.useCount ?? 0) + 1
+        }
       }
       saveStats(next)
       return next

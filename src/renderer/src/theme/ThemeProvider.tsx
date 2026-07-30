@@ -13,7 +13,7 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue>({
   mode: 'system',
   resolved: 'light',
-  setMode: () => {},
+  setMode: () => {}
 })
 
 export const useTheme = (): ThemeContextValue => useContext(ThemeContext)
@@ -29,7 +29,13 @@ function resolveMode(mode: ThemeMode): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-function ThemeProvider({ children, locale }: { children: ReactNode; locale?: Locale }): React.JSX.Element {
+function ThemeProvider({
+  children,
+  locale
+}: {
+  children: ReactNode
+  locale?: Locale
+}): React.JSX.Element {
   const [mode, setModeState] = useState<ThemeMode>(getStoredMode)
   const [resolved, setResolved] = useState<'light' | 'dark'>(() => resolveMode(getStoredMode()))
 
@@ -62,10 +68,10 @@ function ThemeProvider({ children, locale }: { children: ReactNode; locale?: Loc
           resolved === 'dark'
             ? {
                 algorithm: theme.darkAlgorithm,
-                token: { colorPrimary: '#c8674b' },
+                token: { colorPrimary: '#c8674b' }
               }
             : {
-                token: { colorPrimary: '#c8674b' },
+                token: { colorPrimary: '#c8674b' }
               }
         }
       >

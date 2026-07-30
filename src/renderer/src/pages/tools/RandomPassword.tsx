@@ -6,7 +6,7 @@ import { SnippetsOutlined, ReloadOutlined, CheckOutlined } from '@ant-design/ico
 const DIGITS = '0123456789'
 const LOWER = 'abcdefghijklmnopqrstuvwxyz'
 const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-const SPECIALS = "~!@#$%^&*()[{]}-_=+|;:'\",<.>/?`"
+const SPECIALS = '~!@#$%^&*()[{]}-_=+|;:\'",<.>/?`'
 
 interface CharSet {
   key: string
@@ -16,7 +16,10 @@ interface CharSet {
 }
 
 function generateBatch(length: number, count: number, sets: CharSet[]): string[] {
-  const pool = sets.filter(s => s.active).map(s => s.chars).join('')
+  const pool = sets
+    .filter((s) => s.active)
+    .map((s) => s.chars)
+    .join('')
   if (!pool) return []
 
   const results: string[] = []
@@ -32,7 +35,8 @@ function generateBatch(length: number, count: number, sets: CharSet[]): string[]
   return results
 }
 
-const LABEL_CLS = 'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
+const LABEL_CLS =
+  'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
 const INPUT_LABEL_CLS = 'block text-xs font-medium text-[var(--text-secondary)] mb-1.5'
 
 function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
@@ -44,13 +48,13 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
     { key: 'digits', labelKey: 'digitsLabel', chars: DIGITS, active: true },
     { key: 'lower', labelKey: 'lowerLabel', chars: LOWER, active: true },
     { key: 'upper', labelKey: 'upperLabel', chars: UPPER, active: true },
-    { key: 'specials', labelKey: 'specialsLabel', chars: SPECIALS, active: true },
+    { key: 'specials', labelKey: 'specialsLabel', chars: SPECIALS, active: true }
   ])
   const [passwords, setPasswords] = useState<string[]>([])
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
 
   const toggleSet = useCallback((key: string) => {
-    setSets(prev => prev.map(s => s.key === key ? { ...s, active: !s.active } : s))
+    setSets((prev) => prev.map((s) => (s.key === key ? { ...s, active: !s.active } : s)))
   }, [])
 
   const handleGenerate = useCallback(() => {
@@ -58,16 +62,19 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
     setCopiedIdx(null)
   }, [length, count, sets])
 
-  const handleCopy = useCallback(async (pw: string, idx: number) => {
-    try {
-      await navigator.clipboard.writeText(pw)
-      setCopiedIdx(idx)
-      message.success(t('copied'))
-      setTimeout(() => setCopiedIdx(null), 2000)
-    } catch {
-      message.error(t('copyFailed'))
-    }
-  }, [t])
+  const handleCopy = useCallback(
+    async (pw: string, idx: number) => {
+      try {
+        await navigator.clipboard.writeText(pw)
+        setCopiedIdx(idx)
+        message.success(t('copied'))
+        setTimeout(() => setCopiedIdx(null), 2000)
+      } catch {
+        message.error(t('copyFailed'))
+      }
+    },
+    [t]
+  )
 
   const handleCopyAll = useCallback(async () => {
     if (!passwords.length) return
@@ -79,7 +86,7 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
     }
   }, [passwords, t])
 
-  const allDisabled = !sets.some(s => s.active)
+  const allDisabled = !sets.some((s) => s.active)
 
   return (
     <div className="flex flex-col min-h-0">
@@ -93,7 +100,7 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
           <div className="flex-1 min-w-[280px]">
             <label className={LABEL_CLS}>{t('characterTypes')}</label>
             <div className="flex flex-wrap gap-2">
-              {sets.map(s => (
+              {sets.map((s) => (
                 <button
                   key={s.key}
                   onClick={() => toggleSet(s.key)}
@@ -115,7 +122,7 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
                 min={4}
                 max={128}
                 value={length}
-                onChange={v => v != null && setLength(v)}
+                onChange={(v) => v != null && setLength(v)}
                 className="!w-full"
               />
             </div>
@@ -126,7 +133,7 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
                 min={1}
                 max={100}
                 value={count}
-                onChange={v => v != null && setCount(v)}
+                onChange={(v) => v != null && setCount(v)}
                 className="!w-full"
               />
             </div>
@@ -188,12 +195,16 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
               <span className="flex-1 font-mono text-[15px] leading-snug text-[var(--text-primary)] break-all min-w-0 select-all pointer-events-none">
                 {pw}
               </span>
-              <span className="shrink-0 flex items-center justify-center w-7 h-7 rounded
+              <span
+                className="shrink-0 flex items-center justify-center w-7 h-7 rounded
                 text-[var(--text-secondary)] opacity-30 group-hover:opacity-100
-                transition-all duration-150">
-                {copiedIdx === idx
-                  ? <CheckOutlined style={{ color: 'var(--accent)', fontSize: 13 }} />
-                  : <SnippetsOutlined style={{ fontSize: 13 }} />}
+                transition-all duration-150"
+              >
+                {copiedIdx === idx ? (
+                  <CheckOutlined style={{ color: 'var(--accent)', fontSize: 13 }} />
+                ) : (
+                  <SnippetsOutlined style={{ fontSize: 13 }} />
+                )}
               </span>
             </div>
           ))}

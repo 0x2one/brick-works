@@ -2,19 +2,30 @@ import { useState, useCallback, useRef, useMemo, memo, type ReactNode } from 're
 import { useTranslation } from 'react-i18next'
 import { App } from 'antd'
 import {
-  CodeOutlined, CompressOutlined, SnippetsOutlined, DownloadOutlined,
-  ColumnWidthOutlined, ColumnHeightOutlined, DeleteOutlined,
-  FolderOpenOutlined, EyeOutlined, ArrowUpOutlined, ArrowDownOutlined,
-  CaretRightOutlined, CaretDownOutlined
+  CodeOutlined,
+  CompressOutlined,
+  SnippetsOutlined,
+  DownloadOutlined,
+  ColumnWidthOutlined,
+  ColumnHeightOutlined,
+  DeleteOutlined,
+  FolderOpenOutlined,
+  EyeOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined,
+  CaretRightOutlined,
+  CaretDownOutlined
 } from '@ant-design/icons'
 
 function sortKeysAsc(obj: unknown): unknown {
   if (Array.isArray(obj)) return obj.map(sortKeysAsc)
   if (obj !== null && typeof obj === 'object') {
-    return Object.keys(obj).sort().reduce((acc: Record<string, unknown>, key) => {
-      acc[key] = sortKeysAsc((obj as Record<string, unknown>)[key])
-      return acc
-    }, {})
+    return Object.keys(obj)
+      .sort()
+      .reduce((acc: Record<string, unknown>, key) => {
+        acc[key] = sortKeysAsc((obj as Record<string, unknown>)[key])
+        return acc
+      }, {})
   }
   return obj
 }
@@ -22,10 +33,13 @@ function sortKeysAsc(obj: unknown): unknown {
 function sortKeysDesc(obj: unknown): unknown {
   if (Array.isArray(obj)) return obj.map(sortKeysDesc)
   if (obj !== null && typeof obj === 'object') {
-    return Object.keys(obj).sort().reverse().reduce((acc: Record<string, unknown>, key) => {
-      acc[key] = sortKeysDesc((obj as Record<string, unknown>)[key])
-      return acc
-    }, {})
+    return Object.keys(obj)
+      .sort()
+      .reverse()
+      .reduce((acc: Record<string, unknown>, key) => {
+        acc[key] = sortKeysDesc((obj as Record<string, unknown>)[key])
+        return acc
+      }, {})
   }
   return obj
 }
@@ -50,32 +64,38 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
 
-  const formatJSON = useCallback((text: string, fmtMode: 'format' | 'minify', sortMode: string): void => {
-    if (!text.trim()) return
-    try {
-      const parsed = JSON.parse(text.trim())
-      let sorted = parsed
-      if (sortMode === 'asc') sorted = sortKeysAsc(parsed)
-      else if (sortMode === 'desc') sorted = sortKeysDesc(parsed)
-      const formatted = JSON.stringify(sorted, null, fmtMode === 'format' ? 2 : undefined)
-      setOutput(formatted)
-      setError(null)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : t('jsonParseError')
-      setError(msg.split('\n')[0].trim())
-      setOutput('')
-    }
-  }, [t])
+  const formatJSON = useCallback(
+    (text: string, fmtMode: 'format' | 'minify', sortMode: string): void => {
+      if (!text.trim()) return
+      try {
+        const parsed = JSON.parse(text.trim())
+        let sorted = parsed
+        if (sortMode === 'asc') sorted = sortKeysAsc(parsed)
+        else if (sortMode === 'desc') sorted = sortKeysDesc(parsed)
+        const formatted = JSON.stringify(sorted, null, fmtMode === 'format' ? 2 : undefined)
+        setOutput(formatted)
+        setError(null)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : t('jsonParseError')
+        setError(msg.split('\n')[0].trim())
+        setOutput('')
+      }
+    },
+    [t]
+  )
 
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
-    const pasted = e.clipboardData.getData('text')
-    try {
-      JSON.parse(pasted.trim())
-      e.preventDefault()
-      setInput(pasted)
-      formatJSON(pasted, mode, sort)
-    } catch { }
-  }, [mode, sort, formatJSON])
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      const pasted = e.clipboardData.getData('text')
+      try {
+        JSON.parse(pasted.trim())
+        e.preventDefault()
+        setInput(pasted)
+        formatJSON(pasted, mode, sort)
+      } catch {}
+    },
+    [mode, sort, formatJSON]
+  )
 
   const handleCopy = useCallback(async () => {
     if (!output) return
@@ -110,46 +130,66 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
     reader.readAsText(file)
   }, [])
 
-  const handleModeChange = useCallback((newMode: 'format' | 'minify') => {
-    setMode(newMode)
-    if (input.trim()) {
-      formatJSON(input, newMode, sort)
-    }
-  }, [input, sort, formatJSON])
+  const handleModeChange = useCallback(
+    (newMode: 'format' | 'minify') => {
+      setMode(newMode)
+      if (input.trim()) {
+        formatJSON(input, newMode, sort)
+      }
+    },
+    [input, sort, formatJSON]
+  )
 
-  const handleSortChange = useCallback((newSort: string) => {
-    setSort(newSort)
-    if (input.trim()) {
-      formatJSON(input, mode, newSort)
-    }
-  }, [input, mode, formatJSON])
+  const handleSortChange = useCallback(
+    (newSort: string) => {
+      setSort(newSort)
+      if (input.trim()) {
+        formatJSON(input, mode, newSort)
+      }
+    },
+    [input, mode, formatJSON]
+  )
 
-  const toggleTree = useCallback(() => setTreeMode(v => !v), [])
+  const toggleTree = useCallback(() => setTreeMode((v) => !v), [])
 
   const toggleExpand = useCallback((path: string) => {
-    setExpanded(prev => {
+    setExpanded((prev) => {
       const next = new Set(prev)
-      if (next.has(path)) next.delete(path); else next.add(path)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
       return next
     })
   }, [])
 
   const parsedForTree = useMemo(() => {
     if (!output) return null
-    try { return JSON.parse(output) } catch { return null }
+    try {
+      return JSON.parse(output)
+    } catch {
+      return null
+    }
   }, [output])
 
   const JsonNode = memo(function JsonNode({
-    value, path, expanded, onToggle, indent
+    value,
+    path,
+    expanded,
+    onToggle,
+    indent
   }: {
-    value: unknown; path: string; expanded: Set<string>; onToggle: (p: string) => void; indent?: number
+    value: unknown
+    path: string
+    expanded: Set<string>
+    onToggle: (p: string) => void
+    indent?: number
   }): ReactNode {
     const isExpanded = expanded.has(path)
     const gap = indent ?? 16
     const style = { paddingLeft: gap }
 
     if (value === null) return <span className="text-gray-400 font-medium">null</span>
-    if (typeof value === 'boolean') return <span className="text-amber-600 font-medium">{String(value)}</span>
+    if (typeof value === 'boolean')
+      return <span className="text-amber-600 font-medium">{String(value)}</span>
     if (typeof value === 'number') return <span className="text-blue-600 font-medium">{value}</span>
     if (typeof value === 'string') {
       const content = value.length > 500 ? value.slice(0, 500) + '...' : value
@@ -168,14 +208,25 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
               {isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
             </span>
             <span className="text-[var(--text-secondary)]">[</span>
-            {!isExpanded && <span className="text-[var(--text-secondary)] text-xs ml-1">{value.length} items]</span>}
+            {!isExpanded && (
+              <span className="text-[var(--text-secondary)] text-xs ml-1">
+                {value.length} items]
+              </span>
+            )}
           </span>
           {isExpanded && (
             <div style={style} className="border-l border-[var(--border-subtle)] ml-[7px]">
               {value.map((item, i) => (
                 <div key={i} className="hover:bg-black/[0.02] rounded">
-                  <span className="text-[var(--text-secondary)] text-xs select-none mr-1">{i}:</span>
-                  <JsonNode value={item} path={`${path}[${i}]`} expanded={expanded} onToggle={onToggle} />
+                  <span className="text-[var(--text-secondary)] text-xs select-none mr-1">
+                    {i}:
+                  </span>
+                  <JsonNode
+                    value={item}
+                    path={`${path}[${i}]`}
+                    expanded={expanded}
+                    onToggle={onToggle}
+                  />
                   {i < value.length - 1 && <span className="text-[var(--text-secondary)]">,</span>}
                 </div>
               ))}
@@ -198,7 +249,11 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
             {isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
           </span>
           <span className="text-[var(--text-secondary)]">{'{'}</span>
-          {!isExpanded && <span className="text-[var(--text-secondary)] text-xs ml-1">{entries.length} keys{'}'}</span>}
+          {!isExpanded && (
+            <span className="text-[var(--text-secondary)] text-xs ml-1">
+              {entries.length} keys{'}'}
+            </span>
+          )}
         </span>
         {isExpanded && (
           <div style={style} className="border-l border-[var(--border-subtle)] ml-[7px]">
@@ -206,7 +261,12 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
               <div key={key} className="hover:bg-black/[0.02] rounded">
                 <span className="text-[var(--accent)]">"{key}"</span>
                 <span className="text-[var(--text-secondary)] mx-1">: </span>
-                <JsonNode value={val} path={`${path}.${key}`} expanded={expanded} onToggle={onToggle} />
+                <JsonNode
+                  value={val}
+                  path={`${path}.${key}`}
+                  expanded={expanded}
+                  onToggle={onToggle}
+                />
                 <span className="text-[var(--text-secondary)]">,</span>
               </div>
             ))}
@@ -232,9 +292,10 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
             <button
               onClick={() => handleModeChange('format')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150 cursor-pointer border-none flex items-center gap-1.5
-                ${mode === 'format'
-                  ? 'bg-[var(--accent)] text-white'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-transparent'
+                ${
+                  mode === 'format'
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-transparent'
                 }`}
             >
               <CodeOutlined />
@@ -243,9 +304,10 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
             <button
               onClick={() => handleModeChange('minify')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150 cursor-pointer border-none flex items-center gap-1.5
-                ${mode === 'minify'
-                  ? 'bg-[var(--accent)] text-white'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-transparent'
+                ${
+                  mode === 'minify'
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-transparent'
                 }`}
             >
               <CompressOutlined />
@@ -260,9 +322,10 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
             <button
               onClick={() => setLayout('horizontal')}
               className={`p-1.5 rounded-md text-xs transition-all duration-150 cursor-pointer border-none leading-none
-                ${layout === 'horizontal'
-                  ? 'bg-[var(--accent)] text-white'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-transparent'
+                ${
+                  layout === 'horizontal'
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-transparent'
                 }`}
               title="Left-Right"
             >
@@ -271,9 +334,10 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
             <button
               onClick={() => setLayout('vertical')}
               className={`p-1.5 rounded-md text-xs transition-all duration-150 cursor-pointer border-none leading-none
-                ${layout === 'vertical'
-                  ? 'bg-[var(--accent)] text-white'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-transparent'
+                ${
+                  layout === 'vertical'
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-transparent'
                 }`}
               title="Top-Bottom"
             >
@@ -285,19 +349,24 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
 
           {/* Sort */}
           <div className="flex items-center gap-1 p-0.5 bg-[var(--surface)] border border-[var(--border-subtle)] rounded-lg">
-            {SORT_OPTIONS.map(s => (
+            {SORT_OPTIONS.map((s) => (
               <button
                 key={s}
                 onClick={() => handleSortChange(s)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150 cursor-pointer border-none flex items-center gap-1
-                  ${sort === s
-                    ? 'bg-[var(--accent)] text-white'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-transparent'
+                  ${
+                    sort === s
+                      ? 'bg-[var(--accent)] text-white'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-transparent'
                   }`}
               >
                 {s === 'asc' && <ArrowUpOutlined />}
                 {s === 'desc' && <ArrowDownOutlined />}
-                {s === 'default' ? t('jsonSortDefault') : s === 'asc' ? t('jsonSortAsc') : t('jsonSortDesc')}
+                {s === 'default'
+                  ? t('jsonSortDefault')
+                  : s === 'asc'
+                    ? t('jsonSortAsc')
+                    : t('jsonSortDesc')}
               </button>
             ))}
           </div>
@@ -331,7 +400,11 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
             {t('jsonOpenFile')}
           </button>
           <button
-            onClick={() => { setInput(''); setOutput(''); setError(null) }}
+            onClick={() => {
+              setInput('')
+              setOutput('')
+              setError(null)
+            }}
             disabled={!hasContent}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold
               flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none
@@ -344,7 +417,13 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
         </div>
       </div>
 
-      <input ref={fileRef} type="file" accept=".json,application/json" onChange={handleFileOpen} className="hidden" />
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".json,application/json"
+        onChange={handleFileOpen}
+        className="hidden"
+      />
 
       {/* Two-panel area */}
       <div className={`flex-1 min-h-0 flex gap-3 ${layout === 'vertical' ? 'flex-col' : ''}`}>
@@ -356,7 +435,11 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
           </div>
           <textarea
             value={input}
-            onChange={e => { setInput(e.target.value); setOutput(''); setError(null) }}
+            onChange={(e) => {
+              setInput(e.target.value)
+              setOutput('')
+              setError(null)
+            }}
             onPaste={handlePaste}
             placeholder={t('jsonInputPlaceholder')}
             spellCheck={false}
@@ -410,9 +493,16 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
             <span className={PANEL_HEADER_CLS}>{t('jsonResult')}</span>
           </div>
           {treeMode && parsedForTree && !error ? (
-            <div className="flex-1 w-full px-4 py-3 rounded-lg border border-[var(--border-subtle)]
-              bg-white dark:bg-[var(--surface)] font-mono text-sm leading-relaxed overflow-auto select-all">
-              <JsonNode value={parsedForTree} path="$" expanded={expanded} onToggle={toggleExpand} />
+            <div
+              className="flex-1 w-full px-4 py-3 rounded-lg border border-[var(--border-subtle)]
+              bg-white dark:bg-[var(--surface)] font-mono text-sm leading-relaxed overflow-auto select-all"
+            >
+              <JsonNode
+                value={parsedForTree}
+                path="$"
+                expanded={expanded}
+                onToggle={toggleExpand}
+              />
             </div>
           ) : (
             <textarea
@@ -421,9 +511,10 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
               placeholder={t('jsonResultPlaceholder')}
               spellCheck={false}
               className={`flex-1 w-full px-4 py-3 rounded-lg border font-mono text-sm leading-relaxed outline-none resize-none select-all
-                ${error
-                  ? 'border-red-300 bg-red-50 text-red-600'
-                  : 'border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]'
+                ${
+                  error
+                    ? 'border-red-300 bg-red-50 text-red-600'
+                    : 'border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]'
                 }
                 focus:border-[var(--accent)] transition-colors duration-150`}
             />
