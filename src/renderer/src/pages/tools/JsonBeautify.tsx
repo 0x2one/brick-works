@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo, type ReactNode } from 'react'
+import { useState, useCallback, useRef, useMemo, memo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App } from 'antd'
 import {
@@ -139,15 +139,20 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
     try { return JSON.parse(output) } catch { return null }
   }, [output])
 
-  function renderJsonNode(value: unknown, path: string, depth: number): ReactNode {
+  const JsonNode = memo(function JsonNode({
+    value, path, expanded, onToggle, indent
+  }: {
+    value: unknown; path: string; expanded: Set<string>; onToggle: (p: string) => void; indent?: number
+  }): ReactNode {
     const isExpanded = expanded.has(path)
-    const indent = { paddingLeft: 16 }
+    const gap = indent ?? 16
+    const style = { paddingLeft: gap }
 
     if (value === null) return <span className="text-gray-400 font-medium">null</span>
     if (typeof value === 'boolean') return <span className="text-amber-600 font-medium">{String(value)}</span>
     if (typeof value === 'number') return <span className="text-blue-600 font-medium">{value}</span>
     if (typeof value === 'string') {
-      const content = value.length > 200 ? value.slice(0, 200) + '...' : value
+      const content = value.length > 500 ? value.slice(0, 500) + '...' : value
       return <span className="text-green-700">"{content}"</span>
     }
 
@@ -156,23 +161,21 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
       return (
         <div>
           <span
-            onClick={() => toggleExpand(path)}
+            onClick={() => onToggle(path)}
             className="cursor-pointer select-none hover:text-[var(--accent)] transition-colors duration-100"
           >
             <span className="inline-block w-4 text-xs text-[var(--text-secondary)]">
               {isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
             </span>
             <span className="text-[var(--text-secondary)]">[</span>
-            {!isExpanded && (
-              <span className="text-[var(--text-secondary)] text-xs ml-1">{value.length} items]</span>
-            )}
+            {!isExpanded && <span className="text-[var(--text-secondary)] text-xs ml-1">{value.length} items]</span>}
           </span>
           {isExpanded && (
-            <div style={indent} className="border-l border-[var(--border-subtle)] ml-[7px]">
+            <div style={style} className="border-l border-[var(--border-subtle)] ml-[7px]">
               {value.map((item, i) => (
                 <div key={i} className="hover:bg-black/[0.02] rounded">
                   <span className="text-[var(--text-secondary)] text-xs select-none mr-1">{i}:</span>
-                  {renderJsonNode(item, `${path}[${i}]`, depth + 1)}
+                  <JsonNode value={item} path={`${path}[${i}]`} expanded={expanded} onToggle={onToggle} />
                   {i < value.length - 1 && <span className="text-[var(--text-secondary)]">,</span>}
                 </div>
               ))}
@@ -183,30 +186,27 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
       )
     }
 
-    // Object
     const entries = Object.entries(value as Record<string, unknown>)
     if (entries.length === 0) return <span className="text-[var(--text-secondary)]">{'{}'}</span>
     return (
       <div>
         <span
-          onClick={() => toggleExpand(path)}
+          onClick={() => onToggle(path)}
           className="cursor-pointer select-none hover:text-[var(--accent)] transition-colors duration-100"
         >
           <span className="inline-block w-4 text-xs text-[var(--text-secondary)]">
             {isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
           </span>
           <span className="text-[var(--text-secondary)]">{'{'}</span>
-          {!isExpanded && (
-            <span className="text-[var(--text-secondary)] text-xs ml-1">{entries.length} keys{'}'}</span>
-          )}
+          {!isExpanded && <span className="text-[var(--text-secondary)] text-xs ml-1">{entries.length} keys{'}'}</span>}
         </span>
         {isExpanded && (
-          <div style={indent} className="border-l border-[var(--border-subtle)] ml-[7px]">
+          <div style={style} className="border-l border-[var(--border-subtle)] ml-[7px]">
             {entries.map(([key, val]) => (
               <div key={key} className="hover:bg-black/[0.02] rounded">
                 <span className="text-[var(--accent)]">"{key}"</span>
                 <span className="text-[var(--text-secondary)] mx-1">: </span>
-                {renderJsonNode(val, `${path}.${key}`, depth + 1)}
+                <JsonNode value={val} path={`${path}.${key}`} expanded={expanded} onToggle={onToggle} />
                 <span className="text-[var(--text-secondary)]">,</span>
               </div>
             ))}
@@ -215,7 +215,7 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
         )}
       </div>
     )
-  }
+  })
 
   const hasContent = !!input.trim()
   const inputStats = input ? `${input.length} chars · ${input.split('\n').length} lines` : ''
@@ -412,7 +412,7 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
           {treeMode && parsedForTree && !error ? (
             <div className="flex-1 w-full px-4 py-3 rounded-lg border border-[var(--border-subtle)]
               bg-white font-mono text-sm leading-relaxed overflow-auto select-all">
-              {renderJsonNode(parsedForTree, '$', 0)}
+              <JsonNode value={parsedForTree} path="$" expanded={expanded} onToggle={toggleExpand} />
             </div>
           ) : (
             <textarea
