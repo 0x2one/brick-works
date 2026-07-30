@@ -5,7 +5,7 @@ function About(): React.JSX.Element {
   const { t } = useTranslation()
 
   return (
-    <div>
+    <div className="p-6">
       <Typography.Title level={2}>{t('aboutTitle')}</Typography.Title>
       <Typography.Paragraph>{t('aboutDesc')}</Typography.Paragraph>
     </div>

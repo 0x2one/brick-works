@@ -281,7 +281,7 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
   const inputStats = input ? `${input.length} chars · ${input.split('\n').length} lines` : ''
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 72px)' }}>
+    <div className="flex flex-col p-6" style={{ height: 'calc(100vh - 56px)' }}>
       <div className="sticky top-0 z-10 bg-[var(--content-bg)] pb-3">
         {breadcrumb ?? <div className="mb-3" />}
 

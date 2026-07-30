@@ -89,7 +89,7 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
   const allDisabled = !sets.some((s) => s.active)
 
   return (
-    <div className="flex flex-col min-h-0">
+    <div className="flex flex-col min-h-0 p-6">
       {/* Sticky zone: breadcrumb + controls + results header */}
       <div className="sticky top-0 z-10 bg-[var(--content-bg)]">
         {breadcrumb ?? <div className="mb-4" />}

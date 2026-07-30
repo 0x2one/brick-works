@@ -358,7 +358,7 @@ function CodecConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
   const totalFormats = ENCODE_FORMATS.length + DECODE_FORMATS.length
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 72px)' }}>
+    <div className="flex flex-col p-6" style={{ height: 'calc(100vh - 56px)' }}>
       {breadcrumb ? <div className="mb-3 shrink-0">{breadcrumb}</div> : <div className="mb-3" />}
 
       <input

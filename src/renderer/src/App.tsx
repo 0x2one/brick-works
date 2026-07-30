@@ -71,7 +71,7 @@ function AppLayout(): React.JSX.Element {
       </Sider>
       <Layout className="layout-right">
         <TitleBar />
-        <Content className="px-6 pb-6 pt-2 overflow-auto content-area">
+        <Content className="overflow-auto content-area">
           <Outlet />
         </Content>
       </Layout>

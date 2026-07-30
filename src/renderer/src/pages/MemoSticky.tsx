@@ -122,7 +122,7 @@ function TagSidebar({
           </div>
         ))}
       </div>
-      <div className="flex justify-center border-t border-[var(--border-subtle)] px-2 py-2">
+      <div className="flex items-center justify-center border-t border-[var(--border-subtle)] h-12">
         <Tooltip title={t('memoStickyNewTag')}>
           <button className="sticky-toolbar-btn" onClick={onAddTag}>
             <PlusOutlined />
@@ -150,48 +150,73 @@ function NoteCard({
   onClick: () => void
   onToggleBatch: () => void
 }) {
+  const { t } = useTranslation()
+
+  const handleCopyLine = useCallback(
+    (e: React.MouseEvent, text: string) => {
+      e.stopPropagation()
+      navigator.clipboard.writeText(text)
+      message.success(t('memoStickyCopySuccess'))
+    },
+    [t]
+  )
+
   return (
-    <div className={`sticky-card cursor-pointer ${selected ? 'selected' : ''}`} onClick={onClick}>
-      <div className="flex h-full flex-col p-3">
+    <div
+      className={`sticky-card w-full cursor-pointer ${selected ? 'selected' : ''}`}
+      onClick={onClick}
+    >
+      <div className="flex flex-1 flex-col min-h-0">
         {batchMode && (
-          <div className="mb-2 flex items-center">
-            <button
-              className={`flex h-5 w-5 items-center justify-center rounded border text-[10px] ${
-                batchSelected
-                  ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
-                  : 'border-[var(--border-subtle)]'
-              }`}
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleBatch()
-              }}
-            >
-              {batchSelected && <CheckOutlined />}
-            </button>
+          <div className="shrink-0 px-3 pt-3">
+            <div className="mb-2 flex items-center">
+              <button
+                className={`flex h-5 w-5 items-center justify-center rounded border text-[10px] ${
+                  batchSelected
+                    ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                    : 'border-[var(--border-subtle)]'
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleBatch()
+                }}
+              >
+                {batchSelected && <CheckOutlined />}
+              </button>
+            </div>
           </div>
         )}
-        <div className="flex items-center gap-2">
-          {tag && <span className="sticky-tag-dot shrink-0" style={{ background: tag.color }} />}
-          {note.title && (
-            <span
-              className="truncate text-[13px] font-semibold"
-              style={{ color: 'var(--sticky-text)' }}
-            >
-              {note.title}
-            </span>
-          )}
-          <span className="ml-auto shrink-0 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-            {new Date(note.updatedAt).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric'
-            })}
-          </span>
+        <div className="shrink-0 px-3 pt-3">
+          <div className="flex items-center gap-2 pb-1.5">
+            {tag && <span className="sticky-tag-dot shrink-0" style={{ background: tag.color }} />}
+            {note.title && (
+              <span
+                className="truncate text-[13px] font-semibold"
+                style={{ color: 'var(--sticky-text)' }}
+              >
+                {note.title}
+              </span>
+            )}
+          </div>
         </div>
-        <div
-          className="mt-2 flex-1 overflow-y-auto whitespace-pre-wrap break-words text-[12px] leading-[1.6]"
-          style={{ color: 'var(--sticky-text)', maxHeight: 140 }}
-        >
-          {note.content || <span style={{ color: 'var(--text-secondary)' }}>...</span>}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {note.content ? (
+            note.content.split('\n').map((line, i) => (
+              <div
+                key={i}
+                className="px-3 py-0.5 text-[12px] leading-[1.6] cursor-pointer rounded-none hover:bg-black/[0.04]"
+                style={{ color: 'var(--sticky-text)' }}
+                onClick={(e) => handleCopyLine(e, line)}
+              >
+                {line || '\u00A0'}
+              </div>
+            ))
+          ) : (
+            <div className="px-3 py-0.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+              ...
+            </div>
+          )}
+          <div className="h-2.5" />
         </div>
       </div>
     </div>
@@ -346,7 +371,7 @@ function MemoSticky(): React.JSX.Element {
   }, [batchSelected])
 
   return (
-    <div className="flex h-full overflow-hidden rounded-xl" style={{ background: 'var(--bg-warm)' }}>
+    <div className="flex h-full overflow-hidden rounded-xl">
       <TagSidebar
         tags={tags}
         selectedTagId={selectedTagId}
@@ -364,7 +389,7 @@ function MemoSticky(): React.JSX.Element {
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-4 py-3">
           {filteredNotes.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
@@ -372,7 +397,7 @@ function MemoSticky(): React.JSX.Element {
               </p>
             </div>
           ) : (
-            <div className="mx-auto flex max-w-2xl flex-col gap-3">
+            <div className="flex flex-col gap-3">
               {filteredNotes.map((note) => (
                 <NoteCard
                   key={note.id}

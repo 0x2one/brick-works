@@ -61,7 +61,7 @@ function DevTools(): React.JSX.Element {
   }
 
   return (
-    <div>
+    <div className="p-6">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex items-center gap-1 p-0.5 bg-[var(--surface)] border border-[var(--border-subtle)] rounded-lg w-fit">
           {TABS.map((key) => (

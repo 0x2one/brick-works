@@ -133,7 +133,7 @@ function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
   }, [])
 
   return (
-    <div>
+    <div className="p-6">
       <div className="sticky top-0 z-10 bg-[var(--content-bg)]">
         {breadcrumb ?? <div className="mb-4" />}
 

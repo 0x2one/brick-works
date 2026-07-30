@@ -356,8 +356,12 @@
 /* ── Sticky Notes ── */
 
 .sticky-card {
+  display: flex;
+  flex-direction: column;
   background: var(--sticky-card-bg);
   border-radius: 8px;
+  max-height: 220px;
+  overflow: hidden;
   box-shadow:
     0 0 0 1px var(--sticky-card-border),
     0 1px 3px var(--sticky-shadow1),

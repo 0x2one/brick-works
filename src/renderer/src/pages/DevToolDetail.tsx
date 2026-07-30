@@ -30,7 +30,7 @@ function DevToolDetail(): React.JSX.Element {
 
   if (!tool) {
     return (
-      <div>
+      <div className="p-6">
         <Typography.Text type="danger">{t('toolNotFound')}</Typography.Text>
       </div>
     )
@@ -53,7 +53,7 @@ function DevToolDetail(): React.JSX.Element {
   )
 
   return (
-    <div>
+    <div className="p-6">
       {ToolComponent ? (
         <ToolComponent breadcrumb={breadcrumb as React.ReactNode} />
       ) : (

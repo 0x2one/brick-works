@@ -218,7 +218,7 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
   )
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 72px)' }}>
+    <div className="flex flex-col p-6" style={{ height: 'calc(100vh - 56px)' }}>
       {breadcrumb ? <div className="mb-3 shrink-0">{breadcrumb}</div> : <div className="mb-3" />}
 
       <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-y-auto">
