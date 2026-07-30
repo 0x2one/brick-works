@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
-import { ConfigProvider, theme } from 'antd'
+import { ConfigProvider, theme, App } from 'antd'
 import type { Locale } from 'antd/es/locale'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -69,7 +69,7 @@ function ThemeProvider({ children, locale }: { children: ReactNode; locale?: Loc
               }
         }
       >
-        {children}
+        <App>{children}</App>
       </ConfigProvider>
     </ThemeContext.Provider>
   )

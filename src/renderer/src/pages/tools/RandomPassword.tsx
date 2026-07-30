@@ -1,7 +1,7 @@
 import { useState, useCallback, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { InputNumber, message } from 'antd'
-import { CopyOutlined, ReloadOutlined, CheckOutlined } from '@ant-design/icons'
+import { InputNumber, App } from 'antd'
+import { SnippetsOutlined, ReloadOutlined, CheckOutlined } from '@ant-design/icons'
 
 const DIGITS = '0123456789'
 const LOWER = 'abcdefghijklmnopqrstuvwxyz'
@@ -10,7 +10,7 @@ const SPECIALS = "~!@#$%^&*()[{]}-_=+|;:'\",<.>/?`"
 
 interface CharSet {
   key: string
-  label: string
+  labelKey: string
   chars: string
   active: boolean
 }
@@ -32,17 +32,19 @@ function generateBatch(length: number, count: number, sets: CharSet[]): string[]
   return results
 }
 
-const LABEL_CLS = 'block text-[11px] font-semibold uppercase tracking-widest text-[var(--text-secondary)] mb-1.5'
+const LABEL_CLS = 'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
+const INPUT_LABEL_CLS = 'block text-xs font-medium text-[var(--text-secondary)] mb-1.5'
 
 function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const [length, setLength] = useState(16)
   const [count, setCount] = useState(5)
   const [sets, setSets] = useState<CharSet[]>([
-    { key: 'digits', label: t('digitsLabel'), chars: DIGITS, active: true },
-    { key: 'lower', label: t('lowerLabel'), chars: LOWER, active: true },
-    { key: 'upper', label: t('upperLabel'), chars: UPPER, active: true },
-    { key: 'specials', label: t('specialsLabel'), chars: SPECIALS, active: true },
+    { key: 'digits', labelKey: 'digitsLabel', chars: DIGITS, active: true },
+    { key: 'lower', labelKey: 'lowerLabel', chars: LOWER, active: true },
+    { key: 'upper', labelKey: 'upperLabel', chars: UPPER, active: true },
+    { key: 'specials', labelKey: 'specialsLabel', chars: SPECIALS, active: true },
   ])
   const [passwords, setPasswords] = useState<string[]>([])
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
@@ -97,7 +99,7 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
                   onClick={() => toggleSet(s.key)}
                   className={`toggle-pill ${s.active ? 'active' : ''}`}
                 >
-                  <span className="pill-label">{s.label}</span>
+                  <span className="pill-label">{t(s.labelKey)}</span>
                   <span className="pill-chars">{s.chars}</span>
                 </button>
               ))}
@@ -106,8 +108,8 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
 
           {/* Length + Count */}
           <div className="flex gap-3 items-start shrink-0">
-            <div className="w-20">
-              <label className={LABEL_CLS}>{t('passwordLength')}</label>
+            <div className="w-24">
+              <label className={INPUT_LABEL_CLS}>{t('passwordLength')}</label>
               <InputNumber<number>
                 size="large"
                 min={4}
@@ -118,7 +120,7 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
               />
             </div>
             <div className="w-20">
-              <label className={LABEL_CLS}>{t('count')}</label>
+              <label className={INPUT_LABEL_CLS}>{t('count')}</label>
               <InputNumber<number>
                 size="large"
                 min={1}
@@ -172,29 +174,27 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
           {passwords.map((pw, idx) => (
             <div
               key={idx}
+              onClick={() => handleCopy(pw, idx)}
               className={`
-                flex items-center gap-3 px-4 py-2.5 group
+                flex items-center gap-3 px-4 py-2.5 group cursor-pointer
+                transition-colors duration-100
                 ${idx % 2 === 1 ? 'bg-black/[0.02]' : ''}
+                hover:bg-black/[0.04]
               `}
             >
               <span className="font-mono text-xs text-[var(--text-secondary)] tabular-nums w-5 shrink-0 text-right leading-none opacity-50">
                 {idx + 1}
               </span>
-              <span className="flex-1 font-mono text-[15px] leading-snug text-[var(--text-primary)] break-all min-w-0 select-all">
+              <span className="flex-1 font-mono text-[15px] leading-snug text-[var(--text-primary)] break-all min-w-0 select-all pointer-events-none">
                 {pw}
               </span>
-              <button
-                onClick={() => handleCopy(pw, idx)}
-                className="shrink-0 flex items-center justify-center w-7 h-7 rounded
-                  text-[var(--text-secondary)] opacity-30 group-hover:opacity-100
-                  hover:opacity-100 hover:bg-[var(--border-subtle)]
-                  transition-all duration-150 cursor-pointer border-none bg-transparent"
-                title={t('copy')}
-              >
+              <span className="shrink-0 flex items-center justify-center w-7 h-7 rounded
+                text-[var(--text-secondary)] opacity-30 group-hover:opacity-100
+                transition-all duration-150">
                 {copiedIdx === idx
                   ? <CheckOutlined style={{ color: 'var(--accent)', fontSize: 13 }} />
-                  : <CopyOutlined style={{ fontSize: 13 }} />}
-              </button>
+                  : <SnippetsOutlined style={{ fontSize: 13 }} />}
+              </span>
             </div>
           ))}
         </div>
