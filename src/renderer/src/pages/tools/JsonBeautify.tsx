@@ -361,7 +361,7 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
             placeholder={t('jsonInputPlaceholder')}
             spellCheck={false}
             className="flex-1 w-full px-4 py-3 rounded-lg border border-[var(--border-subtle)]
-              bg-white text-[var(--text-primary)]
+              bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]
               font-mono text-sm leading-relaxed outline-none resize-none
               focus:border-[var(--accent)] transition-colors duration-150"
           />
@@ -411,7 +411,7 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
           </div>
           {treeMode && parsedForTree && !error ? (
             <div className="flex-1 w-full px-4 py-3 rounded-lg border border-[var(--border-subtle)]
-              bg-white font-mono text-sm leading-relaxed overflow-auto select-all">
+              bg-white dark:bg-[var(--surface)] font-mono text-sm leading-relaxed overflow-auto select-all">
               <JsonNode value={parsedForTree} path="$" expanded={expanded} onToggle={toggleExpand} />
             </div>
           ) : (
@@ -423,7 +423,7 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
               className={`flex-1 w-full px-4 py-3 rounded-lg border font-mono text-sm leading-relaxed outline-none resize-none select-all
                 ${error
                   ? 'border-red-300 bg-red-50 text-red-600'
-                  : 'border-[var(--border-subtle)] bg-white text-[var(--text-primary)]'
+                  : 'border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]'
                 }
                 focus:border-[var(--accent)] transition-colors duration-150`}
             />

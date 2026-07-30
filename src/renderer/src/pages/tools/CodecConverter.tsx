@@ -332,10 +332,11 @@ function CodecConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
                 <button
                   onClick={handleConvert}
                   disabled={!input.trim() || processing}
-                  className="px-3 py-1 rounded-lg text-xs font-semibold
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold
                     flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none
-                    bg-[var(--accent)] text-white hover:brightness-110 active:brightness-90
-                    disabled:opacity-40 disabled:cursor-not-allowed"
+                    bg-[var(--accent)] text-white active:brightness-90
+                    disabled:opacity-40 disabled:cursor-not-allowed
+                    hover:brightness-110 hover:shadow-[0_0_8px_var(--accent)]"
                 >
                   {t('codecConvert')}
                 </button>
@@ -367,7 +368,7 @@ function CodecConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
               placeholder={t('codecInputPlaceholder')}
               spellCheck={false}
               className="flex-1 w-full px-4 py-3 rounded-lg border border-[var(--border-subtle)]
-                bg-white text-[var(--text-primary)]
+                bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]
                 font-mono text-sm leading-relaxed outline-none resize-none
                 focus:border-[var(--accent)] transition-colors duration-150"
             />
@@ -397,7 +398,7 @@ function CodecConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
               placeholder={t('codecOutputPlaceholder')}
               spellCheck={false}
               className="flex-1 w-full px-4 py-3 rounded-lg border border-[var(--border-subtle)]
-                bg-white text-[var(--text-primary)]
+                bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]
                 font-mono text-sm leading-relaxed outline-none resize-none select-all
                 focus:border-[var(--accent)] transition-colors duration-150"
             />

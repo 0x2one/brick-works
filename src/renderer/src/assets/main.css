@@ -42,6 +42,12 @@
   --sidebar-bg: #fff;
   --sidebar-text: #374151;
   --content-bg: #fff;
+
+  --sticky-card-bg: #fffcf0;
+  --sticky-card-border: rgba(200, 180, 160, 0.3);
+  --sticky-shadow1: rgba(80, 60, 40, 0.06);
+  --sticky-shadow2: rgba(80, 60, 40, 0.03);
+  --sticky-text: #3d352a;
 }
 
 [data-theme='dark'] {
@@ -50,7 +56,7 @@
   --border-subtle: #333;
   --text-primary: #e0e0e0;
   --text-secondary: #888;
-  --accent: #c8674b;
+  --accent: #d97f66;
   --title-bar-bg: #1f1f1f;
   --title-bar-color: #999;
   --title-bar-hover-bg: rgba(255, 255, 255, 0.08);
@@ -58,6 +64,12 @@
   --sidebar-bg: #1a1a1a;
   --sidebar-text: #ccc;
   --content-bg: #1a1a1a;
+
+  --sticky-card-bg: #2a2824;
+  --sticky-card-border: rgba(60, 55, 48, 0.6);
+  --sticky-shadow1: rgba(0, 0, 0, 0.15);
+  --sticky-shadow2: rgba(0, 0, 0, 0.08);
+  --sticky-text: #d5cdc0;
 }
 
 .title-bar {
@@ -337,6 +349,114 @@
 .toggle-pill.active .pill-chars {
   display: block;
   color: rgba(255, 255, 255, 0.8);
+}
+
+/* ── Sticky Notes ── */
+
+.sticky-card {
+  background: var(--sticky-card-bg);
+  border-radius: 3px;
+  box-shadow:
+    0 0 0 1px var(--sticky-card-border),
+    0 1px 3px var(--sticky-shadow1),
+    1px 1px 0 0 var(--sticky-card-border),
+    2px 2px 0 0 var(--sticky-card-border),
+    3px 3px 0 0 var(--sticky-shadow1);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.sticky-card:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px var(--sticky-card-border),
+    0 4px 12px var(--sticky-shadow1),
+    1px 1px 0 0 var(--sticky-card-border),
+    2px 2px 0 0 var(--sticky-card-border),
+    3px 3px 0 0 var(--sticky-shadow1);
+}
+
+.sticky-card.selected {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 1px 3px var(--sticky-shadow1),
+    1px 1px 0 0 var(--sticky-card-border),
+    2px 2px 0 0 var(--sticky-card-border),
+    3px 3px 0 0 var(--sticky-shadow1);
+}
+
+.sticky-tag-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sticky-tag-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sticky-tag-item:hover {
+  background: var(--border-subtle);
+}
+
+.sticky-tag-item.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sticky-tag-item.active .sticky-tag-dot {
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.5);
+}
+
+.sticky-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sticky-toolbar-btn:hover {
+  background: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.sticky-toolbar-btn.active {
+  color: var(--accent);
+  background: rgba(200, 103, 75, 0.1);
+}
+
+.sticky-color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.sticky-color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.sticky-color-swatch.selected {
+  border-color: var(--text-primary);
+  transform: scale(1.15);
 }
 
 /* ── Animations ── */

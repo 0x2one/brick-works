@@ -3,11 +3,12 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { Layout, Menu } from 'antd'
 import { NavLink, useLocation, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ToolOutlined, InfoCircleOutlined, BuildOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import { ToolOutlined, InfoCircleOutlined, PushpinOutlined, BuildOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import TitleBar from './components/TitleBar'
 import DevTools from './pages/DevTools'
 import DevToolDetail from './pages/DevToolDetail'
 import About from './pages/About'
+import MemoSticky from './pages/MemoSticky'
 
 const { Sider, Content } = Layout
 
@@ -17,6 +18,7 @@ function AppLayout(): React.JSX.Element {
   const location = useLocation()
 
   const menuItems = [
+    { key: '/memo-sticky', icon: <PushpinOutlined />, label: <NavLink to="/memo-sticky">{t('memoSticky')}</NavLink> },
     { key: '/dev-tools', icon: <ToolOutlined />, label: <NavLink to="/dev-tools">{t('devTools')}</NavLink> },
     { key: '/about', icon: <InfoCircleOutlined />, label: <NavLink to="/about">{t('about')}</NavLink> },
   ]
@@ -62,6 +64,7 @@ function App(): React.JSX.Element {
       <Route element={<AppLayout />}>
         <Route path="/dev-tools" element={<DevTools />} />
         <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
+        <Route path="/memo-sticky" element={<MemoSticky />} />
         <Route path="/about" element={<About />} />
         <Route path="/" element={<Navigate to="/dev-tools" replace />} />
       </Route>

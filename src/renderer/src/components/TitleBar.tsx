@@ -8,6 +8,7 @@ import Settings from '../pages/Settings'
 const pathToLabelKey: Record<string, string> = {
   '/dev-tools': 'devTools',
   '/about': 'about',
+  '/memo-sticky': 'memoSticky',
 }
 
 function TitleBar(): React.JSX.Element {
