@@ -3,9 +3,10 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { Layout, Menu } from 'antd'
 import { NavLink, useLocation, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { HomeOutlined, InfoCircleOutlined, BuildOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import { ToolOutlined, InfoCircleOutlined, BuildOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import TitleBar from './components/TitleBar'
-import Home from './pages/Home'
+import DevTools from './pages/DevTools'
+import DevToolDetail from './pages/DevToolDetail'
 import About from './pages/About'
 
 const { Sider, Content } = Layout
@@ -16,7 +17,7 @@ function AppLayout(): React.JSX.Element {
   const location = useLocation()
 
   const menuItems = [
-    { key: '/', icon: <HomeOutlined />, label: <NavLink to="/">{t('home')}</NavLink> },
+    { key: '/dev-tools', icon: <ToolOutlined />, label: <NavLink to="/dev-tools">{t('devTools')}</NavLink> },
     { key: '/about', icon: <InfoCircleOutlined />, label: <NavLink to="/about">{t('about')}</NavLink> },
   ]
 
@@ -40,14 +41,14 @@ function AppLayout(): React.JSX.Element {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[location.pathname]}
+          selectedKeys={[location.pathname.startsWith('/dev-tools') ? '/dev-tools' : location.pathname]}
           items={menuItems}
           className="!bg-transparent !border-e-0"
         />
       </Sider>
       <Layout className="layout-right">
         <TitleBar />
-        <Content className="p-6 overflow-auto content-area">
+        <Content className="px-6 pb-6 pt-2 overflow-auto content-area">
           <Outlet />
         </Content>
       </Layout>
@@ -59,8 +60,10 @@ function App(): React.JSX.Element {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route path="/" element={<Home />} />
+        <Route path="/dev-tools" element={<DevTools />} />
+        <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
         <Route path="/about" element={<About />} />
+        <Route path="/" element={<Navigate to="/dev-tools" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

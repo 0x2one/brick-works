@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Modal } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { MinusOutlined, CompressOutlined, BorderOutlined, CloseOutlined, SettingOutlined } from '@ant-design/icons'
 import Settings from '../pages/Settings'
 
+const pathToLabelKey: Record<string, string> = {
+  '/dev-tools': 'devTools',
+  '/about': 'about',
+}
+
 function TitleBar(): React.JSX.Element {
   const { t } = useTranslation()
+  const location = useLocation()
   const [maximized, setMaximized] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  const labelKey = pathToLabelKey[location.pathname] ??
+    (location.pathname.startsWith('/dev-tools') ? 'devTools' : '')
 
   useEffect(() => {
     window.api.windowControls.isMaximized().then(setMaximized)
@@ -17,6 +27,11 @@ function TitleBar(): React.JSX.Element {
 
   return (
     <div className="title-bar">
+      {labelKey && (
+        <div className="title-bar-page ml-3 text-sm font-medium select-none" style={{ color: 'var(--title-bar-color)' }}>
+          {t(labelKey)}
+        </div>
+      )}
       <div className="title-bar-drag" />
       <div className="title-bar-controls">
         <button className="title-bar-btn" onClick={() => setSettingsOpen(true)} title={t('settings')}>
