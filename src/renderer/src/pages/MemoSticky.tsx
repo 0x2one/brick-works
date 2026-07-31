@@ -171,16 +171,23 @@ function NoteCard({
         <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0 min-w-0">
           {note.content ? (
             <div className="pl-3">
-              {note.content.split('\n').map((para, i) => (
-                <div
-                  key={i}
-                  className="w-fit cursor-pointer rounded text-[12px] leading-[1.6] whitespace-nowrap hover:bg-black/[0.04] first:mt-3 last:mb-3"
-                  style={{ color: 'var(--sticky-text)' }}
-                  onClick={(e) => handleCopyPara(e, para)}
-                >
-                  {para || '\u00A0'}
-                </div>
-              ))}
+              {note.content.split('\n').map((para, i) => {
+                const isCurl = para.trim().startsWith('curl')
+                return (
+                  <div
+                    key={i}
+                    className={`w-fit cursor-pointer rounded text-[12px] leading-[1.6] ${
+                      isCurl
+                        ? 'whitespace-nowrap'
+                        : 'whitespace-pre-wrap break-words'
+                    } hover:bg-black/[0.04] first:mt-3 last:mb-3`}
+                    style={{ color: 'var(--sticky-text)' }}
+                    onClick={(e) => handleCopyPara(e, para)}
+                  >
+                    {para || '\u00A0'}
+                  </div>
+                )
+              })}
             </div>
           ) : (
             <div className="pl-3 py-0.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
@@ -361,15 +368,15 @@ function MemoSticky(): React.JSX.Element {
 
       <div className="flex flex-1 flex-col overflow-hidden min-w-0">
         <div className="flex-1 overflow-y-auto">
-          {filteredNotes.length === 0 ? (
-            <div className="flex h-full items-center justify-center pl-4 py-3">
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                {t('memoStickyNoNotes')}
-              </p>
-            </div>
-          ) : (
-            <div className="flex min-h-full min-w-0 w-full">
-              <div className="flex-1 pl-4 py-3 min-w-0">
+          <div className="flex min-h-full min-w-0 w-full">
+            <div className="flex-1 pl-4 py-3 min-w-0">
+              {filteredNotes.length === 0 ? (
+                <div className="flex h-full items-center justify-center">
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    {t('memoStickyNoNotes')}
+                  </p>
+                </div>
+              ) : (
                 <div className="flex flex-col gap-3">
                   {filteredNotes.map((note) => (
                     <NoteCard
@@ -384,7 +391,8 @@ function MemoSticky(): React.JSX.Element {
                     />
                   ))}
                 </div>
-              </div>
+              )}
+            </div>
               <div className="sticky top-0 flex h-fit flex-col items-center gap-1 px-2 py-3 shrink-0">
                 <Tooltip title={t('memoStickyCopySuccess')} placement="left">
                   <button
@@ -454,8 +462,7 @@ function MemoSticky(): React.JSX.Element {
                   </Tooltip>
                 )}
               </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -532,6 +539,7 @@ function MemoSticky(): React.JSX.Element {
             placeholder={t('memoStickyContentPlaceholder')}
             rows={14}
             autoFocus
+            spellCheck={false}
           />
         </div>
       </Modal>
