@@ -8,6 +8,7 @@ import ImageToBase64 from './tools/ImageToBase64'
 import JsonBeautify from './tools/JsonBeautify'
 import CodecConverter from './tools/CodecConverter'
 import TimestampConverter from './tools/TimestampConverter'
+import PdfImageAnnotate from './tools/PdfImageAnnotate'
 
 interface ToolProps {
   breadcrumb?: React.ReactNode
@@ -18,7 +19,8 @@ const toolComponents: Record<string, React.ComponentType<ToolProps>> = {
   'image-to-base64': ImageToBase64,
   'json-beautify': JsonBeautify,
   'codec-converter': CodecConverter,
-  'timestamp-converter': TimestampConverter
+  'timestamp-converter': TimestampConverter,
+  'pdf-image-annotate': PdfImageAnnotate
 }
 
 function DevToolDetail(): React.JSX.Element {

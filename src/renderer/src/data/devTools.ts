@@ -43,6 +43,13 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolTimestampDesc',
     tags: ['工具', '时间'],
     route: '/dev-tools/timestamp-converter'
+  },
+  {
+    id: 'pdf-image-annotate',
+    nameKey: 'devToolPdfImageAnnotate',
+    descKey: 'devToolPdfImageAnnotateDesc',
+    tags: ['工具', '文档', '图片'],
+    route: '/dev-tools/pdf-image-annotate'
   }
 ]
 

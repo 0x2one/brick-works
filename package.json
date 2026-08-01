@@ -25,6 +25,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "electron-updater": "^6.3.9",
     "i18next": "^26.3.6",
+    "pdfjs-dist": "^6.2.108",
     "react-i18next": "^17.0.11",
     "react-router-dom": "^7.18.1"
   },
