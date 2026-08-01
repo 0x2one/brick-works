@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, ColorPicker, Input, Modal, Popconfirm, Slider } from 'antd'
+import { App, ColorPicker, Input, InputNumber, Modal, Popconfirm, Slider } from 'antd'
 import {
   FolderOpenOutlined,
   ZoomInOutlined,
@@ -10,7 +10,8 @@ import {
   RightOutlined,
   HighlightOutlined,
   EditOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  PlusOutlined
 } from '@ant-design/icons'
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
@@ -48,24 +49,19 @@ const MAX_ZOOM = 4
 const MIN_DRAG = 0.01
 const SCROLLBAR_MARGIN = 12
 
-const COLOR_PRESETS = [
-  {
-    label: 'Palette',
-    colors: [
-      '#f5222d',
-      '#fa541c',
-      '#fa8c16',
-      '#fadb14',
-      '#52c41a',
-      '#13c2c2',
-      '#1677ff',
-      '#2f54eb',
-      '#722ed1',
-      '#eb2f96',
-      '#8c8c8c',
-      '#262626'
-    ]
-  }
+const COLOR_PRESET_COLORS = [
+  '#f5222d',
+  '#fa541c',
+  '#fa8c16',
+  '#fadb14',
+  '#52c41a',
+  '#13c2c2',
+  '#1677ff',
+  '#2f54eb',
+  '#722ed1',
+  '#eb2f96',
+  '#8c8c8c',
+  '#262626'
 ]
 
 const LABEL_CLS =
@@ -121,10 +117,14 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
     null
   )
   const [modalState, setModalState] = useState<
-    { mode: 'new'; rect: Rect } | { mode: 'edit'; anno: Annotation } | null
+    { mode: 'new' } | { mode: 'edit'; anno: Annotation } | null
   >(null)
   const [draftColor, setDraftColor] = useState('#fa8c16')
   const [draftInfo, setDraftInfo] = useState('')
+  const [draftX, setDraftX] = useState(0)
+  const [draftY, setDraftY] = useState(0)
+  const [draftW, setDraftW] = useState(0)
+  const [draftH, setDraftH] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const display = useMemo(() => {
@@ -362,7 +362,11 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
       }
       setDraftColor(color)
       setDraftInfo('')
-      setModalState({ mode: 'new', rect })
+      setDraftX(Math.round(rect.x * natural.width))
+      setDraftY(Math.round(rect.y * natural.height))
+      setDraftW(Math.round(rect.w * natural.width))
+      setDraftH(Math.round(rect.h * natural.height))
+      setModalState({ mode: 'new' })
     },
     [annotateMode, natural, toNorm, rectFrom, color, t, message]
   )
@@ -388,14 +392,36 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
   }, [])
 
   const handleModalOk = useCallback(() => {
-    if (!modalState) return
+    if (!modalState || !natural) return
     if (modalState.mode === 'new') {
+      const x = draftX
+      const y = draftY
+      const w = draftW
+      const h = draftH
+      if (
+        !Number.isFinite(x) ||
+        !Number.isFinite(y) ||
+        !Number.isFinite(w) ||
+        !Number.isFinite(h) ||
+        w <= 0 ||
+        h <= 0 ||
+        x < 0 ||
+        y < 0 ||
+        x + w > natural.width ||
+        y + h > natural.height
+      ) {
+        message.error(t('annoInvalidCoords'))
+        return
+      }
       const anno: Annotation = {
         id: crypto.randomUUID(),
         page: currentPage,
         color: draftColor,
         info: draftInfo.trim(),
-        ...modalState.rect
+        x: x / natural.width,
+        y: y / natural.height,
+        w: w / natural.width,
+        h: h / natural.height
       }
       setAnnotations((prev) => [...prev, anno])
       setSelectedId(anno.id)
@@ -409,7 +435,30 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
       setSelectedId(null)
     }
     setModalState(null)
-  }, [modalState, draftColor, draftInfo, currentPage])
+  }, [
+    modalState,
+    draftColor,
+    draftInfo,
+    draftX,
+    draftY,
+    draftW,
+    draftH,
+    currentPage,
+    natural,
+    t,
+    message
+  ])
+
+  const openManualAdd = useCallback(() => {
+    if (!natural) return
+    setDraftColor(color)
+    setDraftInfo('')
+    setDraftX(Math.round(natural.width * 0.1))
+    setDraftY(Math.round(natural.height * 0.1))
+    setDraftW(Math.round(natural.width * 0.2))
+    setDraftH(Math.round(natural.height * 0.1))
+    setModalState({ mode: 'new' })
+  }, [natural, color])
 
   /* ── zoom / page ── */
   const handleZoomIn = useCallback(() => {
@@ -436,6 +485,11 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
   }, [pageInput, currentPage, gotoPage])
 
   const zoomPercent = Math.round(zoom * 100)
+
+  const colorPresets = useMemo(
+    () => [{ label: t('annoColorPresets'), colors: COLOR_PRESET_COLORS }],
+    [t]
+  )
 
   return (
     <div className="flex flex-col p-6" style={{ height: 'calc(100vh - 56px)' }}>
@@ -536,10 +590,15 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
                 {t('annoAnnotateMode')}
               </button>
 
+              <button onClick={openManualAdd} title={t('annoAddCoords')} className={BTN_CLS}>
+                <PlusOutlined />
+                {t('annoAddCoords')}
+              </button>
+
               <ColorPicker
                 size="small"
                 value={color}
-                presets={COLOR_PRESETS}
+                presets={colorPresets}
                 onChange={(c) => setColor(c.toHexString())}
                 disabled={!annotateMode}
               />
@@ -813,7 +872,7 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
             <label className={LABEL_CLS}>{t('annoColor')}</label>
             <ColorPicker
               value={draftColor}
-              presets={COLOR_PRESETS}
+              presets={colorPresets}
               showText
               onChange={(c) => setDraftColor(c.toHexString())}
             />
@@ -828,12 +887,64 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
             />
           </div>
           {modalState?.mode === 'new' && natural && (
-            <p className="font-mono text-xs text-[var(--text-secondary)]">
-              {t('annoCoordinate')}: ({Math.round(modalState.rect.x * natural.width)},{' '}
-              {Math.round(modalState.rect.y * natural.height)}) · {t('annoSize')}:{' '}
-              {Math.round(modalState.rect.w * natural.width)} ×{' '}
-              {Math.round(modalState.rect.h * natural.height)}px
-            </p>
+            <div>
+              <label className={LABEL_CLS}>{t('annoCoordinate')}</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                    X
+                  </span>
+                  <InputNumber
+                    min={0}
+                    max={natural.width}
+                    precision={0}
+                    value={draftX}
+                    onChange={(v) => setDraftX(Number(v) || 0)}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                    Y
+                  </span>
+                  <InputNumber
+                    min={0}
+                    max={natural.height}
+                    precision={0}
+                    value={draftY}
+                    onChange={(v) => setDraftY(Number(v) || 0)}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                    W
+                  </span>
+                  <InputNumber
+                    min={1}
+                    max={natural.width}
+                    precision={0}
+                    value={draftW}
+                    onChange={(v) => setDraftW(Number(v) || 0)}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                    H
+                  </span>
+                  <InputNumber
+                    min={1}
+                    max={natural.height}
+                    precision={0}
+                    value={draftH}
+                    onChange={(v) => setDraftH(Number(v) || 0)}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+              <p className="mt-1 text-[11px] text-[var(--text-secondary)]">{t('annoCoordsPx')}</p>
+            </div>
           )}
         </div>
       </Modal>
