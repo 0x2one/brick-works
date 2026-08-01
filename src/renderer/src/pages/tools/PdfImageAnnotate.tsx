@@ -579,10 +579,10 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
             ref={scrollRef}
             className="flex-1 min-h-0 overflow-auto bg-[var(--bg-warm)] border border-[var(--border-subtle)] rounded-lg"
           >
-            <div className="min-h-full w-max min-w-full flex items-start justify-center mx-auto py-6 px-6">
+            <div className="min-h-full w-max min-w-full flex py-6 px-6">
               <div
                 ref={stageRef}
-                className="relative bg-white shadow-md"
+                className="relative bg-white shadow-md m-auto"
                 style={{
                   width: display.width || undefined,
                   height: display.height || undefined,
