@@ -227,13 +227,14 @@ function LanTransfer(): React.JSX.Element {
         width={320}
       >
         <div className="flex flex-col items-center gap-3 py-4">
-          <div className="p-3 rounded-xl bg-white shadow-sm">
+          <div className="p-3 rounded-xl bg-[var(--surface)] shadow-sm">
             <QRCodeSVG
               value={baseUrl}
               size={200}
-              fgColor="#1a1a1a"
-              bgColor="#ffffff"
+              fgColor="currentColor"
+              bgColor="transparent"
               marginSize={1}
+              style={{ color: 'var(--text-primary)' }}
             />
           </div>
           <span className="text-[11px] text-[var(--text-secondary)] text-center">
