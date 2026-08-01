@@ -16,6 +16,22 @@ const api = {
         ipcRenderer.removeListener('window:maximize-change', handler)
       }
     }
+  },
+  lan: {
+    getStatus: () => ipcRenderer.invoke('lan:status'),
+    start: (dir?: string) => ipcRenderer.invoke('lan:start', dir),
+    stop: () => ipcRenderer.invoke('lan:stop'),
+    chooseDir: () => ipcRenderer.invoke('lan:chooseDir'),
+    openBrowser: (url: string) => ipcRenderer.invoke('lan:openBrowser', url),
+    openDir: () => ipcRenderer.invoke('lan:openDir'),
+    onStatusChange: (callback: (status: LanStatus) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: LanStatus): void =>
+        callback(status)
+      ipcRenderer.on('lan:status-change', handler)
+      return () => {
+        ipcRenderer.removeListener('lan:status-change', handler)
+      }
+    }
   }
 }
 

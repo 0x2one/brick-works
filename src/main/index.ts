@@ -1,7 +1,8 @@
-import { app, shell, BrowserWindow, ipcMain, nativeImage, net } from 'electron'
+import { app, shell, BrowserWindow, dialog, ipcMain, nativeImage, net } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import iconPng from '../../resources/icon.png?asset'
+import { createLanServer, type LanStatus } from './lan-server'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -74,6 +75,73 @@ ipcMain.handle('fetch:image', async (_event, url: string): Promise<string | null
 
 ipcMain.handle('window:isMaximized', () => {
   return mainWindow?.isMaximized() ?? false
+})
+
+/* ── LAN transfer service ── */
+
+let lanDir: string | null = null
+let lanServer: ReturnType<typeof createLanServer> | null = null
+
+function lanStatus(): LanStatus {
+  if (!lanServer || !lanServer.isRunning()) {
+    return { running: false, ip: null, port: null, url: null, dir: lanDir }
+  }
+  const info = lanServer.getInfo()
+  return { running: true, ip: info.ip, port: info.port, url: info.url, dir: lanDir }
+}
+
+function broadcastLanStatus(): void {
+  mainWindow?.webContents.send('lan:status-change', lanStatus())
+}
+
+ipcMain.handle('lan:status', () => lanStatus())
+
+ipcMain.handle('lan:start', async (_event, dir?: string) => {
+  if (dir && typeof dir === 'string') lanDir = dir
+  if (!lanDir) lanDir = app.getPath('downloads')
+  if (lanServer?.isRunning()) return lanStatus()
+  lanServer = createLanServer(lanDir)
+  try {
+    await lanServer.start()
+    broadcastLanStatus()
+    return lanStatus()
+  } catch (err) {
+    lanServer = null
+    throw err
+  }
+})
+
+ipcMain.handle('lan:stop', async () => {
+  await lanServer?.stop()
+  lanServer = null
+  broadcastLanStatus()
+  return lanStatus()
+})
+
+ipcMain.handle('lan:chooseDir', async () => {
+  const options: Electron.OpenDialogOptions = {
+    title: '选择管理目录',
+    properties: ['openDirectory']
+  }
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || !result.filePaths[0]) return null
+  lanDir = result.filePaths[0]
+  return lanDir
+})
+
+ipcMain.handle('lan:openBrowser', (_event, url: string) => {
+  shell.openExternal(url)
+})
+
+ipcMain.handle('lan:openDir', async () => {
+  if (!lanDir) return
+  await shell.openPath(lanDir)
+})
+
+app.on('will-quit', () => {
+  lanServer?.stop()
 })
 
 app.whenReady().then(() => {

@@ -9,13 +9,15 @@ import {
   PushpinOutlined,
   BuildOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined
+  MenuUnfoldOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons'
 import TitleBar from './components/TitleBar'
 import DevTools from './pages/DevTools'
 import DevToolDetail from './pages/DevToolDetail'
 import About from './pages/About'
 import MemoSticky from './pages/MemoSticky'
+import LanTransfer from './pages/LanTransfer'
 
 const { Sider, Content } = Layout
 
@@ -29,6 +31,11 @@ function AppLayout(): React.JSX.Element {
       key: '/memo-sticky',
       icon: <PushpinOutlined />,
       label: <NavLink to="/memo-sticky">{t('memoSticky')}</NavLink>
+    },
+    {
+      key: '/lan-transfer',
+      icon: <ThunderboltOutlined />,
+      label: <NavLink to="/lan-transfer">{t('lanTransfer')}</NavLink>
     },
     {
       key: '/dev-tools',
@@ -86,6 +93,7 @@ function App(): React.JSX.Element {
         <Route path="/dev-tools" element={<DevTools />} />
         <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
         <Route path="/memo-sticky" element={<MemoSticky />} />
+        <Route path="/lan-transfer" element={<LanTransfer />} />
         <Route path="/about" element={<About />} />
         <Route path="/" element={<Navigate to="/dev-tools" replace />} />
       </Route>

@@ -8,9 +8,20 @@ interface WindowControls {
   onMaximizeChange: (callback: (maximized: boolean) => void) => () => void
 }
 
+interface LanApi {
+  getStatus: () => Promise<LanStatus>
+  start: (dir?: string) => Promise<LanStatus>
+  stop: () => Promise<LanStatus>
+  chooseDir: () => Promise<string | null>
+  openBrowser: (url: string) => Promise<void>
+  openDir: () => Promise<void>
+  onStatusChange: (callback: (status: LanStatus) => void) => () => void
+}
+
 interface Api {
   fetchImage: (url: string) => Promise<string | null>
   windowControls: WindowControls
+  lan: LanApi
 }
 
 declare global {
@@ -19,3 +30,5 @@ declare global {
     api: Api
   }
 }
+
+export {}
