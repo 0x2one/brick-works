@@ -19,11 +19,12 @@ const api = {
   },
   lan: {
     getStatus: () => ipcRenderer.invoke('lan:status'),
-    start: (dir?: string) => ipcRenderer.invoke('lan:start', dir),
+    start: (dir?: string, lang?: string) => ipcRenderer.invoke('lan:start', dir, lang),
     stop: () => ipcRenderer.invoke('lan:stop'),
     chooseDir: () => ipcRenderer.invoke('lan:chooseDir'),
     openBrowser: (url: string) => ipcRenderer.invoke('lan:openBrowser', url),
     openDir: () => ipcRenderer.invoke('lan:openDir'),
+    setLang: (lang: string) => ipcRenderer.invoke('lan:setLang', lang),
     onStatusChange: (callback: (status: LanStatus) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, status: LanStatus): void =>
         callback(status)

@@ -80,6 +80,7 @@ ipcMain.handle('window:isMaximized', () => {
 /* ── LAN transfer service ── */
 
 let lanDir: string | null = null
+let lanLang: string = 'zh'
 let lanServer: ReturnType<typeof createLanServer> | null = null
 
 function lanStatus(): LanStatus {
@@ -96,11 +97,12 @@ function broadcastLanStatus(): void {
 
 ipcMain.handle('lan:status', () => lanStatus())
 
-ipcMain.handle('lan:start', async (_event, dir?: string) => {
+ipcMain.handle('lan:start', async (_event, dir?: string, lang?: string) => {
   if (dir && typeof dir === 'string') lanDir = dir
+  if (lang === 'en' || lang === 'zh') lanLang = lang
   if (!lanDir) lanDir = app.getPath('downloads')
   if (lanServer?.isRunning()) return lanStatus()
-  lanServer = createLanServer(lanDir)
+  lanServer = createLanServer(lanDir, lanLang)
   try {
     await lanServer.start()
     broadcastLanStatus()
@@ -138,6 +140,14 @@ ipcMain.handle('lan:openBrowser', (_event, url: string) => {
 ipcMain.handle('lan:openDir', async () => {
   if (!lanDir) return
   await shell.openPath(lanDir)
+})
+
+ipcMain.handle('lan:setLang', (_event, lang?: string) => {
+  if (lang === 'en' || lang === 'zh') {
+    lanLang = lang
+    lanServer?.setLang(lang)
+  }
+  return lanLang
 })
 
 app.on('will-quit', () => {

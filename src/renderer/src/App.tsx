@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Layout, Menu } from 'antd'
 import { NavLink, useLocation, Outlet } from 'react-router-dom'
@@ -22,9 +22,13 @@ import LanTransfer from './pages/LanTransfer'
 const { Sider, Content } = Layout
 
 function AppLayout(): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
+
+  useEffect(() => {
+    window.api.lan.setLang(i18n.language === 'en' ? 'en' : 'zh')
+  }, [i18n.language])
 
   const menuItems = [
     {

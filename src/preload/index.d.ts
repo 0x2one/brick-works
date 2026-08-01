@@ -10,11 +10,12 @@ interface WindowControls {
 
 interface LanApi {
   getStatus: () => Promise<LanStatus>
-  start: (dir?: string) => Promise<LanStatus>
+  start: (dir?: string, lang?: string) => Promise<LanStatus>
   stop: () => Promise<LanStatus>
   chooseDir: () => Promise<string | null>
   openBrowser: (url: string) => Promise<void>
   openDir: () => Promise<void>
+  setLang: (lang: string) => Promise<void>
   onStatusChange: (callback: (status: LanStatus) => void) => () => void
 }
 

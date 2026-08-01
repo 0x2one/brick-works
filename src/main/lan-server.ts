@@ -38,23 +38,53 @@ function sendJson(res: ServerResponse, status: number, obj: unknown): void {
   res.end(JSON.stringify(obj))
 }
 
+const ERR_MSGS: Record<string, { zh: string; en: string }> = {
+  OUT_OF_RANGE: { zh: '路径超出管理目录范围', en: 'Path is outside the managed folder' },
+  INVALID_NAME: { zh: '文件名无效', en: 'Invalid file name' },
+  NOT_FOUND: { zh: '接口不存在', en: 'Endpoint not found' },
+  NOT_FILE: { zh: '不是文件', en: 'Not a file' },
+  INTERNAL: { zh: '服务器内部错误', en: 'Internal server error' }
+}
+
+class HttpError extends Error {
+  code: string
+  status: number
+
+  constructor(code: string, status = 400) {
+    super(code)
+    this.code = code
+    this.status = status
+  }
+}
+
+function errMessage(code: string, lang: string): string {
+  return ERR_MSGS[code]?.[lang === 'en' ? 'en' : 'zh'] ?? code
+}
+
+function langFromUrl(url: string): string {
+  const query = new URLSearchParams(url.includes('?') ? url.slice(url.indexOf('?') + 1) : '')
+  return query.get('lang') === 'en' ? 'en' : 'zh'
+}
+
 export interface LanServer {
   isRunning: () => boolean
   getInfo: () => LanServerInfo
   start: () => Promise<LanServerInfo>
   stop: () => Promise<void>
+  setLang: (lang: string) => void
 }
 
-export function createLanServer(rootDir: string): LanServer {
+export function createLanServer(rootDir: string, initialLang = 'zh'): LanServer {
   let server: Server | null = null
   let port = 0
+  let lang: string = initialLang === 'en' ? 'en' : 'zh'
   const tmpRoot = join(rootDir, TMP_DIR)
 
   function resolveSafe(rel: string): string {
     const clean = decodeURIComponent(rel).replace(/\\/g, '/').replace(/^\/+/, '')
     const target = resolve(rootDir, clean)
     if (target !== rootDir && !target.startsWith(rootDir + sep)) {
-      throw new Error('路径超出管理目录范围')
+      throw new HttpError('OUT_OF_RANGE')
     }
     return target
   }
@@ -65,10 +95,12 @@ export function createLanServer(rootDir: string): LanServer {
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    let reqLang = 'zh'
     try {
       const url = req.url ?? '/'
       const pathname = url.split('?')[0]
       const query = new URLSearchParams(url.includes('?') ? url.slice(url.indexOf('?') + 1) : '')
+      reqLang = langFromUrl(url)
 
       if (pathname === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
@@ -91,7 +123,7 @@ export function createLanServer(rootDir: string): LanServer {
         } catch {
           // statfs may be unsupported on some platforms
         }
-        sendJson(res, 200, { root: rootDir, total, free })
+        sendJson(res, 200, { root: rootDir, total, free, lang })
         return
       }
 
@@ -125,8 +157,7 @@ export function createLanServer(rootDir: string): LanServer {
         const dir = resolveSafe(query.get('dir') ?? '')
         const name = basename(decodeURIComponent(query.get('name') ?? ''))
         if (!name || name === '.' || name === '..') {
-          sendJson(res, 400, { error: '文件名无效' })
-          return
+          throw new HttpError('INVALID_NAME')
         }
         const session = decodeURIComponent(query.get('session') ?? '') || String(Date.now())
         const index = Number(query.get('index') ?? '0')
@@ -145,8 +176,7 @@ export function createLanServer(rootDir: string): LanServer {
         const file = resolveSafe(query.get('path') ?? '')
         const s = await fsp.stat(file)
         if (!s.isFile()) {
-          sendJson(res, 400, { error: '不是文件' })
-          return
+          throw new HttpError('NOT_FILE')
         }
         res.writeHead(200, {
           'Content-Type': 'application/octet-stream',
@@ -164,13 +194,17 @@ export function createLanServer(rootDir: string): LanServer {
         return
       }
 
-      sendJson(res, 404, { error: '接口不存在' })
+      throw new HttpError('NOT_FOUND', 404)
     } catch (err) {
       if (res.headersSent) {
         res.destroy()
         return
       }
-      sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) })
+      if (err instanceof HttpError) {
+        sendJson(res, err.status, { error: errMessage(err.code, reqLang), code: err.code })
+        return
+      }
+      sendJson(res, 500, { error: errMessage('INTERNAL', reqLang), code: 'INTERNAL' })
     }
   }
 
@@ -184,7 +218,10 @@ export function createLanServer(rootDir: string): LanServer {
       await new Promise<void>((resolveStart, rejectStart) => {
         const srv = createServer((req, res) => {
           handle(req, res).catch(() => {
-            if (!res.headersSent) sendJson(res, 500, { error: '服务器内部错误' })
+            if (!res.headersSent) {
+              const l = langFromUrl(req.url ?? '')
+              sendJson(res, 500, { error: errMessage('INTERNAL', l), code: 'INTERNAL' })
+            }
           })
         })
         server = srv
@@ -211,6 +248,9 @@ export function createLanServer(rootDir: string): LanServer {
       }
       port = 0
       await fsp.rm(tmpRoot, { recursive: true, force: true }).catch(() => {})
+    },
+    setLang(next: string): void {
+      lang = next === 'en' ? 'en' : 'zh'
     }
   }
 }

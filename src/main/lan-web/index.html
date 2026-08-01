@@ -62,6 +62,28 @@
       .mono {
         font-family: ui-monospace, 'SF Mono', Consolas, monospace;
       }
+      .lang-switch {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .lang-btn {
+        border: none;
+        background: var(--surface);
+        color: var(--text-2);
+        padding: 6px 12px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .lang-btn + .lang-btn {
+        border-left: 1px solid var(--border);
+      }
+      .lang-btn.active {
+        background: var(--accent);
+        color: #fff;
+      }
       .btn {
         display: inline-flex;
         align-items: center;
@@ -253,21 +275,25 @@
   </head>
   <body>
     <header>
-      <h1><span class="dot"></span>局域快传</h1>
+      <h1><span class="dot"></span><span data-i18n="title">局域快传</span></h1>
       <div class="header-meta">
         <span class="mono" id="addr"></span>
         <span id="rootInfo"></span>
       </div>
-      <button class="btn" onclick="copyUrl()">复制链接</button>
-      <button class="btn" onclick="load()">刷新</button>
+      <div class="lang-switch">
+        <button id="langZh" class="lang-btn" onclick="setLang('zh')">中文</button>
+        <button id="langEn" class="lang-btn" onclick="setLang('en')">EN</button>
+      </div>
+      <button class="btn" onclick="copyUrl()" data-i18n="copyLink">复制链接</button>
+      <button class="btn" onclick="load()" data-i18n="refresh">刷新</button>
     </header>
 
     <main>
       <div class="crumbs" id="crumbs"></div>
 
       <div style="margin-bottom: 14px; display: flex; gap: 10px; flex-wrap: wrap">
-        <button class="btn primary" onclick="document.getElementById('fileInput').click()">上传文件</button>
-        <button class="btn" onclick="newFolder()">新建文件夹</button>
+        <button class="btn primary" onclick="document.getElementById('fileInput').click()" data-i18n="upload">上传文件</button>
+        <button class="btn" onclick="newFolder()" data-i18n="newFolder">新建文件夹</button>
       </div>
       <input id="fileInput" type="file" multiple style="display: none" onchange="pickFiles(this.files); this.value=''" />
 
@@ -277,27 +303,57 @@
         <table>
           <thead>
             <tr>
-              <th>名称</th>
-              <th style="width: 110px">大小</th>
-              <th style="width: 170px">修改时间</th>
-              <th style="width: 150px">操作</th>
+              <th data-i18n="name">名称</th>
+              <th style="width: 110px" data-i18n="size">大小</th>
+              <th style="width: 170px" data-i18n="modified">修改时间</th>
+              <th style="width: 150px" data-i18n="actions">操作</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
         </table>
-        <div class="empty" id="empty" style="display: none">此文件夹为空</div>
+        <div class="empty" id="empty" style="display: none" data-i18n="empty">此文件夹为空</div>
       </div>
     </main>
 
-    <div id="drop">松开上传文件</div>
+    <div id="drop" data-i18n="drop">松开上传文件</div>
     <div id="toast"></div>
 
     <script>
+      var I18N = {
+        title: { zh: '局域快传', en: 'LAN Transfer' },
+        copyLink: { zh: '复制链接', en: 'Copy Link' },
+        refresh: { zh: '刷新', en: 'Refresh' },
+        upload: { zh: '上传文件', en: 'Upload Files' },
+        newFolder: { zh: '新建文件夹', en: 'New Folder' },
+        name: { zh: '名称', en: 'Name' },
+        size: { zh: '大小', en: 'Size' },
+        modified: { zh: '修改时间', en: 'Modified' },
+        actions: { zh: '操作', en: 'Actions' },
+        empty: { zh: '此文件夹为空', en: 'This folder is empty' },
+        drop: { zh: '松开上传文件', en: 'Drop files to upload' },
+        root: { zh: '根目录', en: 'Root' },
+        free: { zh: '剩余', en: 'Free' },
+        copied: { zh: '已复制', en: 'Copied' },
+        copyFailed: { zh: '复制失败', en: 'Copy failed' },
+        requestFailed: { zh: '请求失败', en: 'Request failed' },
+        enterFolderName: { zh: '请输入文件夹名称', en: 'Enter a folder name' },
+        created: { zh: '已创建', en: 'Created' },
+        done: { zh: '完成', en: 'Done' },
+        uploadFailed: { zh: '上传失败', en: 'Upload failed' },
+        download: { zh: '下载', en: 'Download' }
+      }
+
       var CHUNK = 1024 * 1024
       var currentPath = ''
       var items = []
       var crumbPaths = []
       var uploads = {}
+      var infoCache = null
+      var lang = localStorage.getItem('lan-web-lang') === 'en' ? 'en' : 'zh'
+
+      function t(key) {
+        return (I18N[key] && I18N[key][lang]) || key
+      }
 
       function esc(s) {
         return String(s).replace(/[&<>"']/g, function (c) {
@@ -350,12 +406,12 @@
             ok = false
           }
           document.body.removeChild(ta)
-          toast(ok ? '已复制' : '复制失败')
+          toast(ok ? t('copied') : t('copyFailed'))
         }
         if (navigator.clipboard && window.isSecureContext) {
           navigator.clipboard.writeText(text).then(
             function () {
-              toast('已复制')
+              toast(t('copied'))
             },
             fallback
           )
@@ -378,13 +434,39 @@
       }
 
       async function apiJson(url, opts) {
+        var sep = url.indexOf('?') >= 0 ? '&' : '?'
+        url = url + sep + 'lang=' + encodeURIComponent(lang)
         var resp = await fetch(url, opts)
         var j = {}
         try {
           j = await resp.json()
         } catch (e) {}
-        if (!resp.ok || j.error) throw new Error(j.error || '请求失败')
+        if (!resp.ok || j.error) throw new Error(j.error || t('requestFailed'))
         return j
+      }
+
+      function renderStatic() {
+        document.title = t('title')
+        document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN'
+        document.querySelectorAll('[data-i18n]').forEach(function (el) {
+          el.textContent = t(el.getAttribute('data-i18n'))
+        })
+        document.getElementById('langZh').classList.toggle('active', lang === 'zh')
+        document.getElementById('langEn').classList.toggle('active', lang === 'en')
+        document.getElementById('addr').textContent = location.origin + '/'
+        if (infoCache) {
+          document.getElementById('rootInfo').textContent =
+            infoCache.root + ' · ' + t('free') + ' ' + fmtSize(infoCache.free)
+        }
+        renderCrumbs()
+        renderList()
+        renderUploads()
+      }
+
+      function setLang(next) {
+        lang = next === 'en' ? 'en' : 'zh'
+        localStorage.setItem('lan-web-lang', lang)
+        renderStatic()
       }
 
       async function load() {
@@ -401,10 +483,30 @@
       async function loadInfo() {
         try {
           var info = await apiJson('/api/info')
-          document.getElementById('addr').textContent = location.origin + '/'
-          document.getElementById('rootInfo').textContent = info.root + ' · 剩余 ' + fmtSize(info.free)
+          infoCache = info
+          if (!localStorage.getItem('lan-web-lang') && info.lang === 'en') {
+            lang = 'en'
+          }
         } catch (e) {
-          document.getElementById('addr').textContent = location.origin + '/'
+          // keep current language
+        }
+        renderStatic()
+      }
+
+      async function pollFollow() {
+        try {
+          var info = await apiJson('/api/info')
+          infoCache = info
+          var infoLang = info.lang === 'en' ? 'en' : 'zh'
+          if (!localStorage.getItem('lan-web-lang') && lang !== infoLang) {
+            lang = infoLang
+            renderStatic()
+          } else {
+            document.getElementById('rootInfo').textContent =
+              info.root + ' · ' + t('free') + ' ' + fmtSize(info.free)
+          }
+        } catch (e) {
+          // ignore polling errors
         }
       }
 
@@ -417,7 +519,7 @@
           acc = acc ? acc + '/' + p : p
           crumbPaths.push(acc)
         })
-        var html = '<span class="crumb" onclick="gotoCrumb(-1)">根目录</span>'
+        var html = '<span class="crumb" onclick="gotoCrumb(-1)">' + esc(t('root')) + '</span>'
         parts.forEach(function (p, i) {
           html += '<span class="sep">/</span><span class="crumb" onclick="gotoCrumb(' + i + ')">' + esc(p) + '</span>'
         })
@@ -451,8 +553,9 @@
               ? '<div class="name" onclick="goDir(' + i + ')"><span>📁</span><span class="nm">' + esc(it.name) + '</span></div>'
               : '<div class="name file"><span>📄</span><span class="nm">' + esc(it.name) + '</span></div>'
             var acts = it.isDir
-              ? '<button onclick="copyDirLink(' + i + ')">复制链接</button>'
-              : '<button onclick="download(' + i + ')">下载</button><button onclick="copyFileLink(' + i + ')">复制链接</button>'
+              ? '<button onclick="copyDirLink(' + i + ')">' + esc(t('copyLink')) + '</button>'
+              : '<button onclick="download(' + i + ')">' + esc(t('download')) + '</button>' +
+                '<button onclick="copyFileLink(' + i + ')">' + esc(t('copyLink')) + '</button>'
             return (
               '<tr>' +
               '<td>' + nameCell + '</td>' +
@@ -463,16 +566,6 @@
             )
           })
           .join('')
-      }
-
-      function goDir(target) {
-        if (typeof target === 'number') {
-          currentPath = joinPath(currentPath, items[target].name)
-        } else {
-          currentPath = target
-        }
-        load()
-        history.replaceState(null, '', deepLink())
       }
 
       function download(i) {
@@ -489,11 +582,11 @@
       }
 
       async function newFolder() {
-        var name = prompt('请输入文件夹名称')
+        var name = prompt(t('enterFolderName'))
         if (!name) return
         try {
           await apiJson('/api/mkdir?path=' + encodeURIComponent(joinPath(currentPath, name)), { method: 'POST' })
-          toast('已创建')
+          toast(t('created'))
           load()
         } catch (e) {
           toast(e.message)
@@ -546,7 +639,7 @@
           .map(function (k) {
             var u = uploads[k]
             var pct = u.size ? Math.min(100, Math.round((u.sent / u.size) * 100)) : 100
-            var status = u.error ? u.msg : u.done ? '完成' : pct + '%'
+            var status = u.error ? u.msg : u.done ? t('done') : pct + '%'
             return (
               '<div class="up-row"><div class="up-top">' +
               '<span class="up-name">' + esc(u.name) + '</span>' +
@@ -574,7 +667,7 @@
               total: String(total)
             })
             var j = await apiJson('/api/upload?' + qs.toString(), { method: 'POST', body: blob })
-            if (!j.ok) throw new Error('上传失败')
+            if (!j.ok) throw new Error(t('uploadFailed'))
             sent += blob.size
             setUploadProgress(id, sent, file.size)
           }
@@ -636,6 +729,7 @@
       currentPath = initPath ? initPath.replace(/^\/+/, '') : ''
       loadInfo()
       load()
+      setInterval(pollFollow, 3000)
     </script>
   </body>
 </html>

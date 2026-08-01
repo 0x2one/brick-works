@@ -23,7 +23,7 @@ const BTN_CLS =
   'disabled:opacity-40 disabled:cursor-not-allowed'
 
 function LanTransfer(): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { message } = App.useApp()
   const [status, setStatus] = useState<LanStatus | null>(null)
   const [starting, setStarting] = useState(false)
@@ -53,7 +53,8 @@ function LanTransfer(): React.JSX.Element {
         message.success(t('lanStoppedMsg'))
       } else {
         setStarting(true)
-        setStatus(await window.api.lan.start())
+        const appLang = i18n.language === 'en' ? 'en' : 'zh'
+        setStatus(await window.api.lan.start(undefined, appLang))
         message.success(t('lanStartedMsg'))
       }
     } catch {
@@ -61,7 +62,7 @@ function LanTransfer(): React.JSX.Element {
     } finally {
       setStarting(false)
     }
-  }, [status, t, message])
+  }, [status, t, message, i18n.language])
 
   const handleChooseDir = useCallback(async () => {
     const dir = await window.api.lan.chooseDir()
