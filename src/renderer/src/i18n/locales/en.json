@@ -215,6 +215,8 @@
   "lanSubdir": "Sub-folder (optional)",
   "lanSubdirPlaceholder": "Enter a sub-folder path, e.g. /docs",
   "lanCopyDeepLink": "Copy Direct Link",
+  "lanQrHint": "Scan with your phone to open",
+  "lanQrCode": "QR Code",
   "lanStartedMsg": "Service started",
   "lanStoppedMsg": "Service stopped",
   "lanStartFail": "Failed to start the service. Check folder permissions.",

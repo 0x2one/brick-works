@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App } from 'antd'
+import { App, Modal } from 'antd'
 import {
   PlayCircleOutlined,
   StopOutlined,
@@ -8,8 +8,10 @@ import {
   FolderOutlined,
   LinkOutlined,
   CopyOutlined,
-  GlobalOutlined
+  GlobalOutlined,
+  QrcodeOutlined
 } from '@ant-design/icons'
+import { QRCodeSVG } from 'qrcode.react'
 
 const LABEL_CLS =
   'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
@@ -28,6 +30,7 @@ function LanTransfer(): React.JSX.Element {
   const [status, setStatus] = useState<LanStatus | null>(null)
   const [starting, setStarting] = useState(false)
   const [subdir, setSubdir] = useState('')
+  const [qrOpen, setQrOpen] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -185,6 +188,10 @@ function LanTransfer(): React.JSX.Element {
                   <GlobalOutlined />
                   {t('lanOpenBrowser')}
                 </button>
+                <button onClick={() => setQrOpen(true)} className={BTN_CLS}>
+                  <QrcodeOutlined />
+                  {t('lanQrCode')}
+                </button>
               </div>
 
               <div>
@@ -209,6 +216,31 @@ function LanTransfer(): React.JSX.Element {
           </section>
         )}
       </div>
+
+      {/* QR code modal */}
+      <Modal
+        open={qrOpen}
+        title={t('lanQrCode')}
+        footer={null}
+        onCancel={() => setQrOpen(false)}
+        destroyOnHidden
+        width={320}
+      >
+        <div className="flex flex-col items-center gap-3 py-4">
+          <div className="p-3 rounded-xl bg-white shadow-sm">
+            <QRCodeSVG
+              value={baseUrl}
+              size={200}
+              fgColor="#1a1a1a"
+              bgColor="#ffffff"
+              marginSize={1}
+            />
+          </div>
+          <span className="text-[11px] text-[var(--text-secondary)] text-center">
+            {t('lanQrHint')}
+          </span>
+        </div>
+      </Modal>
     </div>
   )
 }

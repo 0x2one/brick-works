@@ -215,6 +215,8 @@
   "lanSubdir": "子目录（可选）",
   "lanSubdirPlaceholder": "输入子目录路径，如 /docs",
   "lanCopyDeepLink": "复制直达链接",
+  "lanQrHint": "使用手机等设备扫描二维码打开",
+  "lanQrCode": "二维码",
   "lanStartedMsg": "服务已开启",
   "lanStoppedMsg": "服务已停止",
   "lanStartFail": "开启服务失败，请检查目录权限",
