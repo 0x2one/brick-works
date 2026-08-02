@@ -39,14 +39,20 @@ const api = {
     saveNode: (input: SshNodeInput) => ipcRenderer.invoke('ssh:saveNode', input),
     deleteNode: (id: string) => ipcRenderer.invoke('ssh:deleteNode', id),
     chooseKeyFile: () => ipcRenderer.invoke('ssh:chooseKeyFile'),
+    clearHostKey: (nodeId: string) => ipcRenderer.invoke('ssh:clearHostKey', nodeId),
     status: () => ipcRenderer.invoke('ssh:status'),
-    connect: (nodeId: string) => ipcRenderer.invoke('ssh:connect', nodeId),
+    connect: (nodeId: string, type?: SshTunnelType) =>
+      ipcRenderer.invoke('ssh:connect', nodeId, type),
     disconnect: (nodeId: string) => ipcRenderer.invoke('ssh:disconnect', nodeId),
+    disconnectType: (nodeId: string, type: SshTunnelType) =>
+      ipcRenderer.invoke('ssh:disconnectType', nodeId, type),
     disconnectAll: () => ipcRenderer.invoke('ssh:disconnectAll'),
     test: (nodeId: string) => ipcRenderer.invoke('ssh:test', nodeId),
     listTunnels: () => ipcRenderer.invoke('ssh:listTunnels'),
     addTunnel: (nodeId: string, spec: SshTunnelSpec) =>
       ipcRenderer.invoke('ssh:addTunnel', nodeId, spec),
+    updateTunnel: (nodeId: string, spec: SshTunnelSpec) =>
+      ipcRenderer.invoke('ssh:updateTunnel', nodeId, spec),
     removeTunnel: (nodeId: string, tunnelId: string) =>
       ipcRenderer.invoke('ssh:removeTunnel', nodeId, tunnelId),
     startTunnel: (nodeId: string, tunnelId: string) =>

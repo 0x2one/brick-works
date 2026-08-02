@@ -4,7 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import iconPng from '../../resources/icon.png?asset'
 import { createLanServer, type LanStatus } from './lan-server'
 import { createSshStore, type SshNodeInput } from './ssh-store'
-import { createSshManager, type SshTunnelSpec } from './ssh-manager'
+import { createSshManager, type SshTunnelSpec, type SshTunnelType } from './ssh-manager'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -155,7 +155,9 @@ ipcMain.handle('lan:setLang', (_event, lang?: string) => {
 /* ── SSH tunnel service ── */
 
 const sshStore = createSshStore()
-const sshManager = createSshManager()
+const sshManager = createSshManager({
+  verifyHostKey: (host, port, key) => sshStore.verifyHostKey(host, port, key)
+})
 
 function broadcastSshStatus(): void {
   mainWindow?.webContents.send('ssh:status-change', sshManager.getStatus())
@@ -211,13 +213,24 @@ ipcMain.handle('ssh:chooseKeyFile', async () => {
 
 ipcMain.handle('ssh:status', () => sshManager.getStatus())
 
-ipcMain.handle('ssh:connect', async (_event, nodeId: string) => {
+ipcMain.handle('ssh:connect', async (_event, nodeId: string, type?: SshTunnelType) => {
   const node = sshStore.get(nodeId)
   if (!node) throw new Error('NODE_NOT_FOUND')
-  return sshManager.connect(node, sshStore.listTunnels(nodeId))
+  const tunnels = sshStore.listTunnels(nodeId)
+  const selected = type ? tunnels.filter((t) => t.type === type) : tunnels
+  if (selected.length === 0) throw new Error('NO_TUNNELS')
+  const session = sshManager.getStatus().find((s) => s.nodeId === nodeId)
+  if (session?.state === 'connected') {
+    return sshManager.startTunnels(nodeId, selected)
+  }
+  return sshManager.connect(node, selected)
 })
 
 ipcMain.handle('ssh:disconnect', (_event, nodeId: string) => sshManager.disconnect(nodeId))
+
+ipcMain.handle('ssh:disconnectType', (_event, nodeId: string, type: SshTunnelType) =>
+  sshManager.disconnectType(nodeId, type)
+)
 
 ipcMain.handle('ssh:disconnectAll', () => sshManager.disconnectAll())
 
@@ -227,22 +240,55 @@ ipcMain.handle('ssh:test', async (_event, nodeId: string) => {
   return sshManager.test(node)
 })
 
-function validateTunnelSpec(spec: SshTunnelSpec): string | null {
+ipcMain.handle('ssh:clearHostKey', (_event, nodeId: string) => {
+  return sshStore.clearHostKeyByNodeId(nodeId)
+})
+
+function isValidPort(port: unknown, allowZero = false): boolean {
+  if (typeof port !== 'number' || !Number.isInteger(port)) return false
+  if (allowZero && port === 0) return true
+  return port >= 1 && port <= 65535
+}
+
+function validateTunnelSpec(spec: SshTunnelSpec, nodeId: string, excludeId?: string): string | null {
   if (!spec || typeof spec !== 'object') return 'INVALID'
   if (spec.type !== 'local' && spec.type !== 'remote' && spec.type !== 'socks5') {
     return 'TYPE_INVALID'
   }
-  if (spec.type === 'local' && (!spec.localPort || !spec.remoteHost || !spec.remotePort)) {
-    return 'LOCAL_INCOMPLETE'
+  if (spec.type === 'local') {
+    if (!spec.remoteHost || !isValidPort(spec.remotePort)) return 'LOCAL_INCOMPLETE'
+    if (!isValidPort(spec.localPort)) return 'PORT_INVALID'
+  } else if (spec.type === 'remote') {
+    if (spec.bindPort === undefined || !spec.targetHost || !isValidPort(spec.targetPort)) {
+      return 'REMOTE_INCOMPLETE'
+    }
+    if (!isValidPort(spec.bindPort, true)) return 'PORT_INVALID'
+  } else if (!isValidPort(spec.localPort)) {
+    return 'PORT_INVALID'
   }
-  if (
-    spec.type === 'remote' &&
-    (spec.bindPort === undefined || !spec.targetHost || !spec.targetPort)
-  ) {
-    return 'REMOTE_INCOMPLETE'
+
+  const all = sshStore.listTunnels()
+  if (spec.type === 'local' || spec.type === 'socks5') {
+    const listenAddr = spec.listenAddr || '127.0.0.1'
+    const conflict = all.some(
+      (t) =>
+        t.id !== excludeId &&
+        (t.type === 'local' || t.type === 'socks5') &&
+        t.localPort === spec.localPort &&
+        (t.listenAddr || '127.0.0.1') === listenAddr
+    )
+    if (conflict) return 'PORT_CONFLICT'
   }
-  if (spec.type === 'socks5' && !spec.localPort) {
-    return 'SOCKS_INCOMPLETE'
+  if (spec.type === 'remote' && spec.bindPort !== 0) {
+    const conflict = all.some(
+      (t) =>
+        t.id !== excludeId &&
+        t.nodeId === nodeId &&
+        t.type === 'remote' &&
+        t.bindPort === spec.bindPort &&
+        (t.bindAddr || '127.0.0.1') === (spec.bindAddr || '127.0.0.1')
+    )
+    if (conflict) return 'PORT_CONFLICT'
   }
   return null
 }
@@ -250,10 +296,21 @@ function validateTunnelSpec(spec: SshTunnelSpec): string | null {
 ipcMain.handle('ssh:listTunnels', () => sshStore.listTunnels())
 
 ipcMain.handle('ssh:addTunnel', (_event, nodeId: string, spec: SshTunnelSpec) => {
-  const err = validateTunnelSpec(spec)
+  const err = validateTunnelSpec(spec, nodeId)
   if (err) throw new Error(err)
   const saved = sshStore.saveTunnel({ ...spec, nodeId })
   sshManager.addTunnel(nodeId, saved)
+  return saved
+})
+
+ipcMain.handle('ssh:updateTunnel', (_event, nodeId: string, spec: SshTunnelSpec) => {
+  if (!spec?.id) throw new Error('TUNNEL_NOT_FOUND')
+  const existing = sshStore.listTunnels(nodeId).find((t) => t.id === spec.id)
+  if (!existing) throw new Error('TUNNEL_NOT_FOUND')
+  const err = validateTunnelSpec(spec, nodeId, spec.id)
+  if (err) throw new Error(err)
+  const saved = sshStore.saveTunnel({ ...spec, nodeId, id: spec.id })
+  sshManager.updateTunnel(nodeId, saved)
   return saved
 })
 

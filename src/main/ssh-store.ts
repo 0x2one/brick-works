@@ -12,6 +12,7 @@ export interface SshTunnelSpec {
   name?: string
   type: SshTunnelType
   localPort?: number
+  listenAddr?: string
   remoteHost?: string
   remotePort?: number
   bindAddr?: string
@@ -89,6 +90,7 @@ interface StoredTunnel {
   name: string | null
   type: SshTunnelType
   localPort: number | null
+  listenAddr: string | null
   remoteHost: string | null
   remotePort: number | null
   bindAddr: string | null
@@ -101,6 +103,11 @@ interface StoreFile {
   version: 1
   nodes: StoredNode[]
   tunnels?: StoredTunnel[]
+  knownHosts?: Record<string, string>
+}
+
+function hostKeyId(host: string, port: number): string {
+  return `${host.trim().toLowerCase()}:${port}`
 }
 
 function encryptSecret(value?: string | null): StoredSecret | null {
@@ -180,6 +187,7 @@ function toStoredTunnel(spec: SshTunnelSpec): StoredTunnel {
     name: spec.name?.trim() || null,
     type: spec.type,
     localPort: spec.localPort ?? null,
+    listenAddr: spec.listenAddr?.trim() || null,
     remoteHost: spec.remoteHost?.trim() || null,
     remotePort: spec.remotePort ?? null,
     bindAddr: spec.bindAddr?.trim() || null,
@@ -196,6 +204,7 @@ function fromStoredTunnel(s: StoredTunnel): SshTunnelSpec {
     name: s.name ?? undefined,
     type: s.type,
     localPort: s.localPort ?? undefined,
+    listenAddr: s.listenAddr ?? undefined,
     remoteHost: s.remoteHost ?? undefined,
     remotePort: s.remotePort ?? undefined,
     bindAddr: s.bindAddr ?? undefined,
@@ -220,12 +229,16 @@ export interface SshStore {
   listTunnels: (nodeId?: string) => SshTunnelSpec[]
   saveTunnel: (spec: SshTunnelSpec) => SshTunnelSpec
   removeTunnel: (id: string) => boolean
+  verifyHostKey: (host: string, port: number, key: Buffer) => boolean
+  clearHostKey: (host: string, port: number) => boolean
+  clearHostKeyByNodeId: (nodeId: string) => boolean
 }
 
 export function createSshStore(): SshStore {
   const file = join(app.getPath('userData'), 'ssh-nodes.json')
   let nodes = new Map<string, SshNode>()
   let tunnels = new Map<string, StoredTunnel>()
+  let knownHosts = new Map<string, string>()
 
   async function load(): Promise<void> {
     try {
@@ -237,9 +250,14 @@ export function createSshStore(): SshStore {
       )
       const tunArr = Array.isArray(data?.tunnels) ? data.tunnels : []
       tunnels = new Map(tunArr.filter((t) => t && typeof t.id === 'string').map((t) => [t.id, t]))
+      const hosts = data?.knownHosts && typeof data.knownHosts === 'object' ? data.knownHosts : {}
+      knownHosts = new Map(
+        Object.entries(hosts).filter(([k, v]) => typeof k === 'string' && typeof v === 'string')
+      )
     } catch {
       nodes = new Map()
       tunnels = new Map()
+      knownHosts = new Map()
     }
   }
 
@@ -247,7 +265,8 @@ export function createSshStore(): SshStore {
     const payload: StoreFile = {
       version: 1,
       nodes: [...nodes.values()].map(toStored),
-      tunnels: [...tunnels.values()]
+      tunnels: [...tunnels.values()],
+      knownHosts: Object.fromEntries(knownHosts)
     }
     try {
       mkdirSync(app.getPath('userData'), { recursive: true })
@@ -287,11 +306,19 @@ export function createSshStore(): SshStore {
               : existing?.auth.passphrase
         }
       }
+      const host = input.host.trim()
+      const port = input.port
+      if (
+        existing &&
+        (existing.host.trim().toLowerCase() !== host.toLowerCase() || existing.port !== port)
+      ) {
+        knownHosts.delete(hostKeyId(existing.host, existing.port))
+      }
       const node: SshNode = {
         id: existing?.id ?? randomUUID(),
         name: input.name.trim(),
-        host: input.host.trim(),
-        port: input.port,
+        host,
+        port,
         username: input.username.trim(),
         auth,
         createdAt: existing?.createdAt ?? now,
@@ -302,10 +329,12 @@ export function createSshStore(): SshStore {
       return toView(node)
     },
     remove(id: string): boolean {
+      const node = nodes.get(id)
       const existed = nodes.delete(id)
       for (const tunnel of tunnels.values()) {
         if (tunnel.nodeId === id) tunnels.delete(tunnel.id)
       }
+      if (node) knownHosts.delete(hostKeyId(node.host, node.port))
       if (existed) persist()
       return existed
     },
@@ -324,6 +353,7 @@ export function createSshStore(): SshStore {
         name: pickStr(input.name, existing?.name),
         type: input.type,
         localPort: input.localPort ?? existing?.localPort ?? undefined,
+        listenAddr: pickStr(input.listenAddr, existing?.listenAddr),
         remoteHost: pickStr(input.remoteHost, existing?.remoteHost),
         remotePort: input.remotePort ?? existing?.remotePort ?? undefined,
         bindAddr: pickStr(input.bindAddr, existing?.bindAddr),
@@ -339,6 +369,27 @@ export function createSshStore(): SshStore {
       const existed = tunnels.delete(id)
       if (existed) persist()
       return existed
+    },
+    verifyHostKey(host: string, port: number, key: Buffer): boolean {
+      const id = hostKeyId(host, port)
+      const fingerprint = key.toString('base64')
+      const known = knownHosts.get(id)
+      if (!known) {
+        knownHosts.set(id, fingerprint)
+        persist()
+        return true
+      }
+      return known === fingerprint
+    },
+    clearHostKey(host: string, port: number): boolean {
+      const existed = knownHosts.delete(hostKeyId(host, port))
+      if (existed) persist()
+      return existed
+    },
+    clearHostKeyByNodeId(nodeId: string): boolean {
+      const node = nodes.get(nodeId)
+      if (!node) return false
+      return this.clearHostKey(node.host, node.port)
     }
   }
 }

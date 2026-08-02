@@ -9,6 +9,7 @@ interface SshTunnelState {
   status: SshTunnelStatusName
   error?: string
   localPort?: number
+  listenAddr?: string
   remoteHost?: string
   remotePort?: number
   bindAddr?: string
@@ -70,6 +71,7 @@ interface SshTunnelSpec {
   type: SshTunnelType
   name?: string
   localPort?: number
+  listenAddr?: string
   remoteHost?: string
   remotePort?: number
   bindAddr?: string

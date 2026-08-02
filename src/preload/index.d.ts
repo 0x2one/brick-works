@@ -24,13 +24,16 @@ interface SshApi {
   saveNode: (input: SshNodeInput) => Promise<SshNodeView>
   deleteNode: (id: string) => Promise<boolean>
   chooseKeyFile: () => Promise<string | null>
+  clearHostKey: (nodeId: string) => Promise<boolean>
   status: () => Promise<SshSessionStatus[]>
-  connect: (nodeId: string) => Promise<SshSessionStatus>
+  connect: (nodeId: string, type?: SshTunnelType) => Promise<SshSessionStatus>
   disconnect: (nodeId: string) => Promise<SshSessionStatus>
+  disconnectType: (nodeId: string, type: SshTunnelType) => Promise<SshSessionStatus>
   disconnectAll: () => Promise<SshSessionStatus[]>
   test: (nodeId: string) => Promise<{ ok: boolean; error?: string; latencyMs: number }>
   listTunnels: () => Promise<SshTunnelSpec[]>
   addTunnel: (nodeId: string, spec: SshTunnelSpec) => Promise<SshTunnelSpec>
+  updateTunnel: (nodeId: string, spec: SshTunnelSpec) => Promise<SshTunnelSpec>
   removeTunnel: (nodeId: string, tunnelId: string) => Promise<SshSessionStatus>
   startTunnel: (nodeId: string, tunnelId: string) => Promise<SshSessionStatus>
   stopTunnel: (nodeId: string, tunnelId: string) => Promise<SshSessionStatus>

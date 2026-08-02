@@ -6,12 +6,15 @@ import type { SshNode, SshTunnelSpec, SshTunnelType } from './ssh-store'
 
 export type { SshTunnelSpec, SshTunnelType } from './ssh-store'
 
+export type SshTunnelStatusName = 'starting' | 'running' | 'error'
+
 export interface SshTunnelState {
   id: string
   type: SshTunnelType
   status: SshTunnelStatusName
   error?: string
   localPort?: number
+  listenAddr?: string
   remoteHost?: string
   remotePort?: number
   bindAddr?: string
@@ -46,6 +49,25 @@ export interface SshLogEntry {
 }
 
 const RETRY_DELAY = 3000
+const MAX_RETRY = 10
+
+function normalizeSshError(message: string): string {
+  if (/host key|host denied|verification failed/i.test(message)) return 'HOST_KEY_MISMATCH'
+  if (/authentication failed|all configured authentication|permission denied|unable to authenticate/i.test(message)) {
+    return 'AUTH_FAILED'
+  }
+  return message
+}
+
+function isNonRecoverableError(error?: string): boolean {
+  if (!error) return false
+  if (error === 'HOST_KEY_MISMATCH' || error === 'AUTH_FAILED' || error === 'RECONNECT_EXHAUSTED') {
+    return true
+  }
+  return /authentication failed|all configured authentication|permission denied|unable to authenticate/i.test(
+    error
+  )
+}
 
 interface TunnelRuntime {
   spec: SshTunnelSpec
@@ -63,11 +85,20 @@ interface SessionRuntime {
   everConnected: boolean
   stopRequested: boolean
   retryTimer?: NodeJS.Timeout
+  retryCount: number
   pending: SshTunnelSpec[]
   tunnels: Map<string, TunnelRuntime>
+  connectPromise?: Promise<void>
 }
 
-async function makeConnectConfig(node: SshNode): Promise<ConnectConfig> {
+export interface SshManagerOptions {
+  verifyHostKey?: (host: string, port: number, key: Buffer) => boolean
+}
+
+async function makeConnectConfig(
+  node: SshNode,
+  verifyHostKey?: SshManagerOptions['verifyHostKey']
+): Promise<ConnectConfig> {
   const cfg: ConnectConfig = {
     host: node.host,
     port: node.port,
@@ -83,6 +114,9 @@ async function makeConnectConfig(node: SshNode): Promise<ConnectConfig> {
     cfg.privateKey = await fsp.readFile(node.auth.privateKeyPath)
     if (node.auth.passphrase) cfg.passphrase = node.auth.passphrase
   }
+  if (verifyHostKey) {
+    cfg.hostVerifier = (key: Buffer) => verifyHostKey(node.host, node.port, key)
+  }
   return cfg
 }
 
@@ -92,6 +126,7 @@ function tunnelStateFromSpec(spec: SshTunnelSpec): SshTunnelState {
     type: spec.type,
     status: 'starting',
     localPort: spec.localPort,
+    listenAddr: spec.listenAddr,
     remoteHost: spec.remoteHost,
     remotePort: spec.remotePort,
     bindAddr: spec.bindAddr,
@@ -110,9 +145,11 @@ function formatIpv6(bytes: Buffer): string {
 }
 
 function handleSocks5(socket: Socket, client: Client): void {
-  let stage: 'greeting' | 'request' = 'greeting'
+  let stage: 'greeting' | 'request' | 'done' = 'greeting'
   let buffer = Buffer.alloc(0)
   const fail = (code: number): void => {
+    stage = 'done'
+    socket.removeListener('data', onData)
     if (!socket.destroyed) {
       socket.write(Buffer.from([0x05, code, 0x00, 0x01, 0, 0, 0, 0, 0, 0]))
       socket.end()
@@ -120,6 +157,7 @@ function handleSocks5(socket: Socket, client: Client): void {
   }
 
   function onData(chunk: Buffer): void {
+    if (stage === 'done') return
     buffer = Buffer.concat([buffer, chunk])
 
     if (stage === 'greeting') {
@@ -131,47 +169,59 @@ function handleSocks5(socket: Socket, client: Client): void {
       stage = 'request'
     }
 
-    if (stage === 'request') {
-      if (buffer.length < 4) return
-      if (buffer[0] !== 0x05 || buffer[1] !== 0x01) {
-        fail(0x07)
-        return
-      }
-      const atyp = buffer[3]
-      let host = ''
-      let addrLen = 0
-      if (atyp === 0x01) {
-        if (buffer.length < 8) return
-        addrLen = 4
-        host = [...buffer.subarray(4, 8)].join('.')
-      } else if (atyp === 0x03) {
-        if (buffer.length < 5) return
-        const len = buffer[4]
-        if (buffer.length < 5 + len + 2) return
-        addrLen = 1 + len
-        host = buffer.subarray(5, 5 + len).toString()
-      } else if (atyp === 0x04) {
-        if (buffer.length < 20) return
-        addrLen = 16
-        host = formatIpv6(buffer.subarray(4, 20))
-      } else {
-        fail(0x08)
-        return
-      }
-      const port = buffer.readUInt16BE(4 + addrLen)
-      client.forwardOut('127.0.0.1', 0, host, port, (err, stream) => {
-        if (err || !stream) {
-          fail(0x05)
-          return
-        }
-        socket.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]))
-        stream.pipe(socket).pipe(stream)
-        stream.on('close', () => socket.destroy())
-        socket.on('close', () => stream.end())
-        socket.on('error', () => stream.destroy())
-        stream.on('error', () => socket.destroy())
-      })
+    if (stage !== 'request') return
+    if (buffer.length < 4) return
+    if (buffer[0] !== 0x05 || buffer[1] !== 0x01) {
+      fail(0x07)
+      return
     }
+    const atyp = buffer[3]
+    let host = ''
+    let addrLen = 0
+    if (atyp === 0x01) {
+      if (buffer.length < 10) return
+      addrLen = 4
+      host = [...buffer.subarray(4, 8)].join('.')
+    } else if (atyp === 0x03) {
+      if (buffer.length < 5) return
+      const len = buffer[4]
+      if (buffer.length < 5 + len + 2) return
+      addrLen = 1 + len
+      host = buffer.subarray(5, 5 + len).toString()
+    } else if (atyp === 0x04) {
+      if (buffer.length < 22) return
+      addrLen = 16
+      host = formatIpv6(buffer.subarray(4, 20))
+    } else {
+      fail(0x08)
+      return
+    }
+    const port = buffer.readUInt16BE(4 + addrLen)
+    const leftover = buffer.subarray(4 + addrLen + 2)
+    buffer = Buffer.alloc(0)
+    stage = 'done'
+    socket.removeListener('data', onData)
+
+    client.forwardOut('127.0.0.1', 0, host, port, (err, stream) => {
+      if (err || !stream) {
+        if (!socket.destroyed) {
+          socket.write(Buffer.from([0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0]))
+          socket.end()
+        }
+        return
+      }
+      if (socket.destroyed) {
+        stream.destroy()
+        return
+      }
+      socket.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0]))
+      if (leftover.length > 0) stream.write(leftover)
+      stream.pipe(socket).pipe(stream)
+      stream.on('close', () => socket.destroy())
+      socket.on('close', () => stream.end())
+      socket.on('error', () => stream.destroy())
+      stream.on('error', () => socket.destroy())
+    })
   }
 
   socket.on('data', onData)
@@ -186,17 +236,25 @@ export interface SshManager {
   addTunnel: (nodeId: string, spec: SshTunnelSpec) => Promise<SshSessionStatus>
   removeTunnel: (nodeId: string, tunnelId: string) => Promise<SshSessionStatus>
   startTunnel: (nodeId: string, spec: SshTunnelSpec) => Promise<SshSessionStatus>
+  startTunnels: (nodeId: string, specs: SshTunnelSpec[]) => Promise<SshSessionStatus>
   stopTunnel: (nodeId: string, tunnelId: string) => Promise<SshSessionStatus>
+  updateTunnel: (nodeId: string, spec: SshTunnelSpec) => Promise<SshSessionStatus>
+  disconnectType: (nodeId: string, type: SshTunnelType) => Promise<SshSessionStatus>
   test: (node: SshNode) => Promise<{ ok: boolean; error?: string; latencyMs: number }>
   onStatusChange: (cb: (statuses: SshSessionStatus[]) => void) => () => void
   onLog: (cb: (entry: SshLogEntry) => void) => () => void
   stop: () => void
 }
 
-export function createSshManager(): SshManager {
+export function createSshManager(options: SshManagerOptions = {}): SshManager {
   const sessions = new Map<string, SessionRuntime>()
   const statusCbs = new Set<(statuses: SshSessionStatus[]) => void>()
   const logCbs = new Set<(entry: SshLogEntry) => void>()
+  const disconnectRef: {
+    fn: (nodeId: string) => Promise<SshSessionStatus>
+  } = {
+    fn: async (nodeId) => emptyStatus(nodeId)
+  }
 
   function emitStatus(): void {
     const statuses = [...sessions.values()].map(sessionToStatus)
@@ -248,6 +306,27 @@ export function createSshManager(): SshManager {
     }
   }
 
+  function mergePending(session: SessionRuntime, tunnels: SshTunnelSpec[]): void {
+    const byId = new Map<string, SshTunnelSpec>()
+    const withoutId: SshTunnelSpec[] = []
+    for (const spec of [...session.pending, ...tunnels]) {
+      if (spec.id) byId.set(spec.id, spec)
+      else withoutId.push(spec)
+    }
+    session.pending = [...byId.values(), ...withoutId]
+  }
+
+  function capturePendingFromLive(session: SessionRuntime): void {
+    const byId = new Map<string, SshTunnelSpec>()
+    for (const rt of session.tunnels.values()) {
+      if (rt.spec.id) byId.set(rt.spec.id, rt.spec)
+    }
+    for (const spec of session.pending) {
+      if (spec.id) byId.set(spec.id, spec)
+    }
+    session.pending = [...byId.values(), ...session.pending.filter((s) => !s.id)]
+  }
+
   function teardownTunnels(session: SessionRuntime): void {
     for (const rt of session.tunnels.values()) {
       if (rt.server) {
@@ -255,6 +334,31 @@ export function createSshManager(): SshManager {
         rt.server = undefined
       }
     }
+  }
+
+  function stopRuntime(session: SessionRuntime, rt: TunnelRuntime): void {
+    if (rt.server) {
+      rt.server.close()
+      rt.server = undefined
+    }
+    if (session.client && rt.state.type === 'remote' && rt.effectivePort != null) {
+      session.client.unforwardIn(rt.state.bindAddr || '127.0.0.1', rt.effectivePort, () => {})
+    }
+    session.tunnels.delete(rt.state.id)
+  }
+
+  function hasActiveTunnels(session: SessionRuntime): boolean {
+    return [...session.tunnels.values()].some(
+      (rt) => rt.state.status === 'running' || rt.state.status === 'starting'
+    )
+  }
+
+  async function disconnectIfIdle(session: SessionRuntime): Promise<SshSessionStatus> {
+    if (session.state === 'connected' && !hasActiveTunnels(session)) {
+      return disconnectRef.fn(session.node.id)
+    }
+    emitStatus()
+    return sessionToStatus(session)
   }
 
   function bindTunnel(session: SessionRuntime, spec: SshTunnelSpec): void {
@@ -268,6 +372,9 @@ export function createSshManager(): SshManager {
       state.error = err.message
       emitLog(session.node.id, session.node.name, 'error', `隧道失败: ${err.message}`)
       emitStatus()
+      if (session.state === 'connected' && !hasActiveTunnels(session)) {
+        void disconnectRef.fn(session.node.id)
+      }
     }
 
     try {
@@ -291,9 +398,11 @@ export function createSshManager(): SshManager {
             }
           )
         })
+        const listenAddr = spec.listenAddr || '127.0.0.1'
         server.on('error', setError)
-        server.listen(spec.localPort!, '127.0.0.1', () => {
+        server.listen(spec.localPort!, listenAddr, () => {
           state.status = 'running'
+          state.listenAddr = listenAddr
           rt.effectivePort = spec.localPort
           emitStatus()
         })
@@ -318,9 +427,11 @@ export function createSshManager(): SshManager {
         })
       } else {
         const server = createServer((socket) => handleSocks5(socket, client))
+        const listenAddr = spec.listenAddr || '127.0.0.1'
         server.on('error', setError)
-        server.listen(spec.localPort!, '127.0.0.1', () => {
+        server.listen(spec.localPort!, listenAddr, () => {
           state.status = 'running'
+          state.listenAddr = listenAddr
           rt.effectivePort = spec.localPort
           emitStatus()
         })
@@ -332,135 +443,240 @@ export function createSshManager(): SshManager {
   }
 
   function scheduleReconnect(session: SessionRuntime): void {
+    session.retryCount += 1
+    if (session.retryCount > MAX_RETRY) {
+      session.state = 'error'
+      session.error = 'RECONNECT_EXHAUSTED'
+      session.pending = []
+      session.tunnels = new Map()
+      emitLog(
+        session.node.id,
+        session.node.name,
+        'error',
+        `自动重连已达上限（${MAX_RETRY} 次），已停止`
+      )
+      emitStatus()
+      return
+    }
     session.state = 'connecting'
     session.error = undefined
     session.retryTimer = setTimeout(() => {
       session.retryTimer = undefined
       if (session.stopRequested) return
-      doConnect(session).catch(() => {})
+      const p = doConnect(session)
+      session.connectPromise = p
+      p.catch(() => {}).finally(() => {
+        if (session.connectPromise === p) session.connectPromise = undefined
+      })
     }, RETRY_DELAY)
-    emitLog(session.node.id, session.node.name, 'warn', '连接断开，3 秒后自动重连...')
+    emitLog(
+      session.node.id,
+      session.node.name,
+      'warn',
+      `连接断开，3 秒后自动重连（${session.retryCount}/${MAX_RETRY}）...`
+    )
     emitStatus()
   }
 
   async function doConnect(session: SessionRuntime): Promise<void> {
     let cfg: ConnectConfig
     try {
-      cfg = await makeConnectConfig(session.node)
+      cfg = await makeConnectConfig(session.node, options.verifyHostKey)
     } catch (err) {
       if (session.stopRequested) return
       session.state = 'error'
       session.error = (err as Error).message
       emitLog(session.node.id, session.node.name, 'error', `连接失败: ${(err as Error).message}`)
       emitStatus()
-      return
+      throw err
     }
     if (session.stopRequested) return
-    const client = new Client()
-    session.client = client
 
-    client.on('ready', () => {
-      session.state = 'connected'
-      session.error = undefined
-      session.everConnected = true
-      session.connectedAt = Date.now()
-      clearRetry(session)
-      emitLog(
-        session.node.id,
-        session.node.name,
-        'info',
-        `已建立 SSH 连接: ${session.node.username}@${session.node.host}:${session.node.port}`
-      )
-      const pendingSpecs = session.pending
-      const liveSpecs = [...session.tunnels.values()].map((t) => t.spec)
-      session.pending = []
-      const byId = new Map<string, SshTunnelSpec>()
-      for (const spec of [...liveSpecs, ...pendingSpecs]) {
-        if (spec.id) byId.set(spec.id, spec)
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const succeed = (): void => {
+        if (settled) return
+        settled = true
+        resolve()
       }
-      const specs = [...byId.values()]
-      teardownTunnels(session)
-      session.tunnels = new Map()
-      emitStatus()
-      for (const spec of specs) {
-        bindTunnel(session, spec)
+      const fail = (err: Error): void => {
+        if (settled) return
+        settled = true
+        reject(err)
       }
-    })
 
-    client.on('tcp connection', (details, accept, reject) => {
-      const rt = [...session.tunnels.values()].find(
-        (t) => t.state.type === 'remote' && t.effectivePort === details.destPort
-      )
-      if (!rt) {
-        reject()
-        return
-      }
-      const host = rt.spec.targetHost || '127.0.0.1'
-      const port = rt.spec.targetPort!
-      const local = connect({ host, port })
-      local.on('connect', () => {
-        let stream: ClientChannel
-        try {
-          stream = accept()
-        } catch {
-          local.destroy()
+      const client = new Client()
+      session.client = client
+
+      client.on('ready', () => {
+        if (session.stopRequested || session.client !== client) {
+          try {
+            client.end()
+          } catch {
+            // ignore
+          }
+          succeed()
           return
         }
-        stream.pipe(local).pipe(stream)
-        stream.on('close', () => local.destroy())
-        local.on('close', () => stream.end())
-        local.on('error', () => stream.destroy())
-        stream.on('error', () => local.destroy())
-      })
-      local.on('error', () => reject())
-    })
-
-    client.on('error', (err) => {
-      session.error = err.message
-      if (session.state === 'connecting') {
-        session.state = 'error'
-        emitLog(session.node.id, session.node.name, 'error', `连接失败: ${err.message}`)
-        emitStatus()
-      }
-    })
-
-    client.on('close', () => {
-      teardownTunnels(session)
-      session.client = null
-      if (session.stopRequested) {
-        session.state = 'disconnected'
+        session.state = 'connected'
         session.error = undefined
+        session.everConnected = true
+        session.connectedAt = Date.now()
+        session.retryCount = 0
+        clearRetry(session)
+        emitLog(
+          session.node.id,
+          session.node.name,
+          'info',
+          `已建立 SSH 连接: ${session.node.username}@${session.node.host}:${session.node.port}`
+        )
+        const seen = new Set<string>()
+        const specs = session.pending.filter((s) => {
+          if (!s.id) return true
+          if (seen.has(s.id)) return false
+          seen.add(s.id)
+          return true
+        })
+        session.pending = []
+        teardownTunnels(session)
+        session.tunnels = new Map()
         emitStatus()
-        return
-      }
-      if (session.everConnected) {
-        scheduleReconnect(session)
-      } else {
-        session.state = 'error'
-        emitStatus()
-      }
-    })
+        for (const spec of specs) {
+          bindTunnel(session, spec)
+        }
+        succeed()
+      })
 
-    client.connect(cfg)
+      client.on('tcp connection', (details, accept, rejectTcp) => {
+        if (session.client !== client) {
+          rejectTcp()
+          return
+        }
+        const rt = [...session.tunnels.values()].find(
+          (t) => t.state.type === 'remote' && t.effectivePort === details.destPort
+        )
+        if (!rt) {
+          rejectTcp()
+          return
+        }
+        const host = rt.spec.targetHost || '127.0.0.1'
+        const port = rt.spec.targetPort!
+        const local = connect({ host, port })
+        local.on('connect', () => {
+          let stream: ClientChannel
+          try {
+            stream = accept()
+          } catch {
+            local.destroy()
+            return
+          }
+          stream.pipe(local).pipe(stream)
+          stream.on('close', () => local.destroy())
+          local.on('close', () => stream.end())
+          local.on('error', () => stream.destroy())
+          stream.on('error', () => local.destroy())
+        })
+        local.on('error', () => rejectTcp())
+      })
+
+      client.on('error', (err) => {
+        if (session.client !== client) return
+        const message = normalizeSshError(err.message)
+        session.error = message
+        if (session.state === 'connecting') {
+          session.state = 'error'
+          emitLog(
+            session.node.id,
+            session.node.name,
+            'error',
+            message === 'HOST_KEY_MISMATCH'
+              ? '主机密钥不匹配，可能存在安全风险。可在节点编辑中重置信任后重试'
+              : message === 'AUTH_FAILED'
+                ? '认证失败，请检查用户名、密码或私钥'
+                : `连接失败: ${err.message}`
+          )
+          emitStatus()
+          fail(new Error(message))
+        } else {
+          emitStatus()
+        }
+      })
+
+      client.on('close', () => {
+        if (session.client !== client) return
+        session.client = null
+        teardownTunnels(session)
+        if (session.stopRequested) {
+          session.state = 'disconnected'
+          session.error = undefined
+          session.pending = []
+          session.tunnels = new Map()
+          emitStatus()
+          succeed()
+          return
+        }
+        if (session.everConnected) {
+          if (isNonRecoverableError(session.error)) {
+            session.state = 'error'
+            session.pending = []
+            session.tunnels = new Map()
+            emitLog(
+              session.node.id,
+              session.node.name,
+              'error',
+              '遇到不可自动恢复的错误，已停止重连'
+            )
+            emitStatus()
+            succeed()
+            return
+          }
+          capturePendingFromLive(session)
+          session.tunnels = new Map()
+          scheduleReconnect(session)
+          succeed()
+        } else {
+          session.state = 'error'
+          const err = new Error(session.error || 'CONNECTION_CLOSED')
+          if (!session.error) session.error = err.message
+          emitStatus()
+          fail(err)
+        }
+      })
+
+      client.connect(cfg)
+    })
   }
 
-  return {
+  const manager: SshManager = {
     getStatus(): SshSessionStatus[] {
       return [...sessions.values()].map(sessionToStatus)
     },
     async connect(node: SshNode, tunnels: SshTunnelSpec[] = []): Promise<SshSessionStatus> {
       let session = sessions.get(node.id)
-      if (session && (session.state === 'connected' || session.state === 'connecting')) {
-        session.pending = [...session.pending, ...tunnels]
+      if (session && session.state === 'connected') {
+        return this.startTunnels(node.id, tunnels)
+      }
+      if (session && session.state === 'connecting') {
+        mergePending(session, tunnels)
+        if (session.connectPromise) {
+          try {
+            await session.connectPromise
+          } catch {
+            // status already updated
+          }
+        }
         return sessionToStatus(session)
       }
       if (session) {
+        session.node = node
         session.stopRequested = false
         clearRetry(session)
         session.state = 'connecting'
         session.error = undefined
         session.everConnected = false
+        session.retryCount = 0
         session.pending = tunnels
+        session.tunnels = new Map()
       } else {
         session = {
           node,
@@ -469,18 +685,26 @@ export function createSshManager(): SshManager {
           error: undefined,
           everConnected: false,
           stopRequested: false,
+          retryCount: 0,
           pending: tunnels,
           tunnels: new Map()
         }
         sessions.set(node.id, session)
       }
       emitStatus()
+      const p = doConnect(session)
+      session.connectPromise = p
       try {
-        await doConnect(session)
+        await p
       } catch (err) {
-        session.state = 'error'
-        session.error = (err as Error).message
-        emitStatus()
+        if (session.state !== 'error') {
+          session.state = 'error'
+          session.error = (err as Error).message
+          emitStatus()
+        }
+        throw err
+      } finally {
+        if (session.connectPromise === p) session.connectPromise = undefined
       }
       return sessionToStatus(session)
     },
@@ -491,27 +715,40 @@ export function createSshManager(): SshManager {
       clearRetry(session)
       teardownTunnels(session)
       session.tunnels.clear()
-      session.client?.end()
-      session.client = null
+      session.pending = []
+      session.retryCount = 0
       session.state = 'disconnected'
       session.error = undefined
       session.everConnected = false
       session.connectedAt = undefined
+      const client = session.client
+      if (client) {
+        client.end()
+      }
+      sessions.delete(nodeId)
       emitStatus()
-      return sessionToStatus(session)
+      return emptyStatus(nodeId)
     },
     async disconnectAll(): Promise<SshSessionStatus[]> {
-      for (const session of sessions.values()) {
-        await this.disconnect(session.node.id)
+      const ids = [...sessions.keys()]
+      for (const id of ids) {
+        await this.disconnect(id)
       }
       return this.getStatus()
     },
     async addTunnel(nodeId: string, spec: SshTunnelSpec): Promise<SshSessionStatus> {
       const session = sessions.get(nodeId)
-      if (!session || session.state !== 'connected' || !session.client) {
+      if (!session) return emptyStatus(nodeId)
+      const next: SshTunnelSpec = { ...spec, id: spec.id ?? randomUUID() }
+      if (session.state === 'connecting') {
+        if (next.id && !session.pending.some((p) => p.id === next.id)) {
+          session.pending.push(next)
+        }
+        return sessionToStatus(session)
+      }
+      if (session.state !== 'connected' || !session.client) {
         return emptyStatus(nodeId)
       }
-      const next: SshTunnelSpec = { ...spec, id: spec.id ?? randomUUID() }
       if (!session.tunnels.has(next.id!)) {
         bindTunnel(session, next)
       }
@@ -519,7 +756,14 @@ export function createSshManager(): SshManager {
     },
     async startTunnel(nodeId: string, spec: SshTunnelSpec): Promise<SshSessionStatus> {
       const session = sessions.get(nodeId)
-      if (!session || session.state !== 'connected' || !session.client) {
+      if (!session) return emptyStatus(nodeId)
+      if (session.state === 'connecting') {
+        if (spec.id && !session.pending.some((p) => p.id === spec.id)) {
+          session.pending.push(spec)
+        }
+        return sessionToStatus(session)
+      }
+      if (session.state !== 'connected' || !session.client) {
         return emptyStatus(nodeId)
       }
       if (!spec.id) return sessionToStatus(session)
@@ -534,39 +778,70 @@ export function createSshManager(): SshManager {
       bindTunnel(session, spec)
       return sessionToStatus(session)
     },
+    async startTunnels(nodeId: string, specs: SshTunnelSpec[]): Promise<SshSessionStatus> {
+      const session = sessions.get(nodeId)
+      if (!session || session.state !== 'connected' || !session.client) {
+        return emptyStatus(nodeId)
+      }
+      for (const spec of specs) {
+        if (!spec.id) continue
+        const rt = session.tunnels.get(spec.id)
+        if (rt) {
+          if (rt.state.status === 'error') {
+            session.tunnels.delete(spec.id)
+            bindTunnel(session, spec)
+          }
+          continue
+        }
+        bindTunnel(session, spec)
+      }
+      emitStatus()
+      return sessionToStatus(session)
+    },
     async stopTunnel(nodeId: string, tunnelId: string): Promise<SshSessionStatus> {
       const session = sessions.get(nodeId)
       if (!session) return emptyStatus(nodeId)
       const rt = session.tunnels.get(tunnelId)
-      if (rt) {
-        if (rt.server) {
-          rt.server.close()
-          rt.server = undefined
-        }
-        if (session.client && rt.state.type === 'remote' && rt.effectivePort != null) {
-          session.client.unforwardIn(rt.state.bindAddr || '127.0.0.1', rt.effectivePort, () => {})
-        }
-        session.tunnels.delete(tunnelId)
+      if (!rt) return sessionToStatus(session)
+      stopRuntime(session, rt)
+      return disconnectIfIdle(session)
+    },
+    async updateTunnel(nodeId: string, spec: SshTunnelSpec): Promise<SshSessionStatus> {
+      const session = sessions.get(nodeId)
+      if (!session || !spec.id) return emptyStatus(nodeId)
+      session.pending = session.pending.filter((s) => s.id !== spec.id)
+      const rt = session.tunnels.get(spec.id)
+      const shouldRestart = !!rt
+      if (rt) stopRuntime(session, rt)
+      if (session.state === 'connecting') {
+        session.pending.push(spec)
         emitStatus()
+        return sessionToStatus(session)
       }
-      return sessionToStatus(session)
+      if (session.state === 'connected' && session.client && shouldRestart) {
+        bindTunnel(session, spec)
+        emitStatus()
+        return sessionToStatus(session)
+      }
+      return disconnectIfIdle(session)
+    },
+    async disconnectType(nodeId: string, type: SshTunnelType): Promise<SshSessionStatus> {
+      const session = sessions.get(nodeId)
+      if (!session) return emptyStatus(nodeId)
+      for (const rt of [...session.tunnels.values()]) {
+        if (rt.state.type === type) {
+          stopRuntime(session, rt)
+        }
+      }
+      return disconnectIfIdle(session)
     },
     async removeTunnel(nodeId: string, tunnelId: string): Promise<SshSessionStatus> {
       const session = sessions.get(nodeId)
       if (!session) return emptyStatus(nodeId)
+      session.pending = session.pending.filter((s) => s.id !== tunnelId)
       const rt = session.tunnels.get(tunnelId)
-      if (rt) {
-        if (rt.server) {
-          rt.server.close()
-          rt.server = undefined
-        }
-        if (session.client && rt.state.type === 'remote' && rt.effectivePort != null) {
-          session.client.unforwardIn(rt.state.bindAddr || '127.0.0.1', rt.effectivePort, () => {})
-        }
-        session.tunnels.delete(tunnelId)
-        emitStatus()
-      }
-      return sessionToStatus(session)
+      if (rt) stopRuntime(session, rt)
+      return disconnectIfIdle(session)
     },
     test(node: SshNode): Promise<{ ok: boolean; error?: string; latencyMs: number }> {
       return new Promise((resolve) => {
@@ -580,8 +855,10 @@ export function createSshManager(): SshManager {
           resolve({ ok, error, latencyMs: Date.now() - started })
         }
         client.on('ready', () => finish(true))
-        client.on('error', (err) => finish(false, err.message))
-        makeConnectConfig(node)
+        client.on('error', (err) => {
+          finish(false, normalizeSshError(err.message))
+        })
+        makeConnectConfig(node, options.verifyHostKey)
           .then((cfg) => client.connect(cfg))
           .catch((err) => finish(false, err.message))
       })
@@ -605,4 +882,7 @@ export function createSshManager(): SshManager {
       sessions.clear()
     }
   }
+
+  disconnectRef.fn = (nodeId) => manager.disconnect(nodeId)
+  return manager
 }

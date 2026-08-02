@@ -61,8 +61,10 @@ interface TunnelDraft {
   type: SshTunnelType
   name: string
   localPort: number
+  listenAddr: string
   remoteHost: string
   remotePort: number
+  bindAddr: string
   bindPort: number
   targetHost: string
   targetPort: number
@@ -73,12 +75,76 @@ const DEFAULT_DRAFT: TunnelDraft = {
   type: 'local',
   name: '',
   localPort: 8080,
+  listenAddr: '127.0.0.1',
   remoteHost: '127.0.0.1',
   remotePort: 80,
+  bindAddr: '127.0.0.1',
   bindPort: 8080,
   targetHost: '127.0.0.1',
   targetPort: 3000,
   socksPort: 1080
+}
+
+function draftFromSpec(spec: SshTunnelSpec): TunnelDraft {
+  return {
+    type: spec.type,
+    name: spec.name ?? '',
+    localPort: spec.localPort ?? 8080,
+    listenAddr: spec.listenAddr || '127.0.0.1',
+    remoteHost: spec.remoteHost || '127.0.0.1',
+    remotePort: spec.remotePort ?? 80,
+    bindAddr: spec.bindAddr || '127.0.0.1',
+    bindPort: spec.bindPort ?? 8080,
+    targetHost: spec.targetHost || '127.0.0.1',
+    targetPort: spec.targetPort ?? 3000,
+    socksPort: spec.localPort ?? 1080
+  }
+}
+
+let cachedSshLogs: SshLogEntry[] = []
+
+const SSH_ERROR_CODES = [
+  'NO_TUNNELS',
+  'PORT_CONFLICT',
+  'PORT_INVALID',
+  'HOST_KEY_MISMATCH',
+  'AUTH_FAILED',
+  'RECONNECT_EXHAUSTED',
+  'NODE_NOT_FOUND',
+  'TUNNEL_NOT_FOUND'
+] as const
+
+function extractSshErrorCode(raw: unknown): string {
+  const message = raw instanceof Error ? raw.message : String(raw ?? '')
+  if (!message) return ''
+  for (const code of SSH_ERROR_CODES) {
+    if (message === code || message.endsWith(`: ${code}`) || message.endsWith(`Error: ${code}`)) {
+      return code
+    }
+  }
+  const match = message.match(/\b([A-Z][A-Z0-9_]{2,})\b/g)
+  if (match) {
+    for (let i = match.length - 1; i >= 0; i--) {
+      if ((SSH_ERROR_CODES as readonly string[]).includes(match[i])) return match[i]
+    }
+  }
+  return message
+}
+
+function mapSshError(
+  raw: unknown,
+  t: (key: string, opts?: Record<string, unknown>) => string
+): string {
+  const code = extractSshErrorCode(raw)
+  if (code === 'NO_TUNNELS') return t('sshNoTunnelsToConnect')
+  if (code === 'PORT_CONFLICT') return t('sshPortConflict')
+  if (code === 'PORT_INVALID') return t('sshPortInvalid')
+  if (code === 'HOST_KEY_MISMATCH') return t('sshHostKeyMismatch')
+  if (code === 'AUTH_FAILED') return t('sshAuthFailed')
+  if (code === 'RECONNECT_EXHAUSTED') return t('sshReconnectExhausted')
+  if (code === 'NODE_NOT_FOUND') return t('sshNodeNotFound')
+  if (code === 'TUNNEL_NOT_FOUND') return t('sshTunnelNotFound')
+  return t('sshConnectFail', { msg: code })
 }
 
 interface EditorValues {
@@ -121,15 +187,18 @@ interface TunnelFormProps {
   onAdded: () => void
   onError: (msg: string) => void
   fixedType?: SshTunnelType
+  editing?: SshTunnelSpec | null
   onSubmittingChange?: (submitting: boolean) => void
 }
 
 const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function TunnelForm(
-  { nodeId, onAdded, onError, fixedType, onSubmittingChange },
+  { nodeId, onAdded, onError, fixedType, editing, onSubmittingChange },
   ref
 ) {
   const { t } = useTranslation()
-  const [draft, setDraft] = useState<TunnelDraft>({ ...DEFAULT_DRAFT, type: fixedType ?? 'local' })
+  const [draft, setDraft] = useState<TunnelDraft>(() =>
+    editing ? draftFromSpec(editing) : { ...DEFAULT_DRAFT, type: fixedType ?? 'local' }
+  )
 
   const set = <K extends keyof TunnelDraft>(key: K, value: TunnelDraft[K]): void =>
     setDraft((prev) => ({ ...prev, [key]: value }))
@@ -137,39 +206,48 @@ const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function Tunnel
   const handleAdd = useCallback(async (): Promise<boolean> => {
     onSubmittingChange?.(true)
     try {
-      const spec: SshTunnelSpec =
+      const base =
         draft.type === 'local'
           ? {
-              type: 'local',
+              type: 'local' as const,
               name: draft.name.trim() || undefined,
               localPort: draft.localPort,
+              listenAddr: draft.listenAddr.trim() || '127.0.0.1',
               remoteHost: draft.remoteHost.trim() || '127.0.0.1',
               remotePort: draft.remotePort
             }
           : draft.type === 'remote'
             ? {
-                type: 'remote',
+                type: 'remote' as const,
                 name: draft.name.trim() || undefined,
+                bindAddr: draft.bindAddr.trim() || '127.0.0.1',
                 bindPort: draft.bindPort,
                 targetHost: draft.targetHost.trim() || '127.0.0.1',
                 targetPort: draft.targetPort
               }
             : {
-                type: 'socks5',
+                type: 'socks5' as const,
                 name: draft.name.trim() || undefined,
-                localPort: draft.socksPort
+                localPort: draft.socksPort,
+                listenAddr: draft.listenAddr.trim() || '127.0.0.1'
               }
-      await window.api.ssh.addTunnel(nodeId, spec)
-      setDraft({ ...DEFAULT_DRAFT, type: fixedType ?? draft.type })
+      if (editing?.id) {
+        await window.api.ssh.updateTunnel(nodeId, { ...base, id: editing.id })
+      } else {
+        await window.api.ssh.addTunnel(nodeId, base)
+        setDraft({ ...DEFAULT_DRAFT, type: fixedType ?? draft.type })
+      }
       onAdded()
       return true
-    } catch {
-      onError(t('sshTunnelAddFail'))
+    } catch (err) {
+      const code = extractSshErrorCode(err)
+      if (code === 'PORT_CONFLICT' || code === 'PORT_INVALID') onError(mapSshError(code, t))
+      else onError(editing ? t('sshTunnelUpdateFail') : t('sshTunnelAddFail'))
       return false
     } finally {
       onSubmittingChange?.(false)
     }
-  }, [draft, nodeId, onAdded, onError, t, fixedType, onSubmittingChange])
+  }, [draft, nodeId, onAdded, onError, t, fixedType, editing, onSubmittingChange])
 
   useImperativeHandle(ref, () => ({ submit: () => handleAdd() }), [handleAdd])
 
@@ -220,7 +298,14 @@ const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function Tunnel
               className="w-full"
             />
           </Field>
-          <Field label={t('sshRemoteHost')} className="col-span-2">
+          <Field label={t('sshListenAddr')} hint={t('sshListenAddrHint')}>
+            <Input
+              value={draft.listenAddr}
+              onChange={(e) => set('listenAddr', e.target.value)}
+              placeholder="127.0.0.1"
+            />
+          </Field>
+          <Field label={t('sshRemoteHost')}>
             <Input
               value={draft.remoteHost}
               onChange={(e) => set('remoteHost', e.target.value)}
@@ -251,7 +336,14 @@ const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function Tunnel
                 className="w-full"
               />
             </Field>
-            <Field label={t('sshTargetHost')} className="col-span-2">
+            <Field label={t('sshBindAddr')} hint={t('sshBindAddrHint')}>
+              <Input
+                value={draft.bindAddr}
+                onChange={(e) => set('bindAddr', e.target.value)}
+                placeholder="127.0.0.1"
+              />
+            </Field>
+            <Field label={t('sshTargetHost')}>
               <Input
                 value={draft.targetHost}
                 onChange={(e) => set('targetHost', e.target.value)}
@@ -275,6 +367,13 @@ const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function Tunnel
               value={draft.socksPort}
               onChange={(v) => set('socksPort', v ?? 1080)}
               className="w-full"
+            />
+          </Field>
+          <Field label={t('sshListenAddr')} hint={t('sshListenAddrHint')}>
+            <Input
+              value={draft.listenAddr}
+              onChange={(e) => set('listenAddr', e.target.value)}
+              placeholder="127.0.0.1"
             />
           </Field>
         </div>
@@ -341,6 +440,16 @@ function NodeEditor({
     }
   }, [form, editing, message, onSaved, t])
 
+  const handleClearHostKey = useCallback(async () => {
+    if (!editing) return
+    try {
+      await window.api.ssh.clearHostKey(editing.id)
+      message.success(t('sshHostKeyCleared'))
+    } catch {
+      message.error(t('sshHostKeyClearFail'))
+    }
+  }, [editing, message, t])
+
   const authType = Form.useWatch('authType', form)
 
   return (
@@ -374,6 +483,14 @@ function NodeEditor({
         <Form.Item name="username" label={t('sshUsername')} rules={[{ required: true }]}>
           <Input placeholder="root" />
         </Form.Item>
+        {editing && (
+          <div className="mb-4">
+            <Button size="small" onClick={handleClearHostKey}>
+              {t('sshClearHostKey')}
+            </Button>
+            <p className="text-[10px] text-[var(--text-secondary)] mt-1">{t('sshClearHostKeyHint')}</p>
+          </div>
+        )}
         <Form.Item name="authType" label={t('sshAuthType')}>
           <Radio.Group
             optionType="button"
@@ -438,13 +555,17 @@ function SshTunnel(): React.JSX.Element {
   const [nodes, setNodes] = useState<SshNodeView[]>([])
   const [statuses, setStatuses] = useState<SshSessionStatus[]>([])
   const [tunnels, setTunnels] = useState<SshTunnelSpec[]>([])
-  const [logs, setLogs] = useState<SshLogEntry[]>([])
+  const [logs, setLogs] = useState<SshLogEntry[]>(cachedSshLogs)
   const [activeTab, setActiveTab] = useState('nodes')
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<SshNodeView | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({})
-  const [addModal, setAddModal] = useState<{ nodeId: string; type: SshTunnelType } | null>(null)
+  const [addModal, setAddModal] = useState<{
+    nodeId: string
+    type: SshTunnelType
+    tunnel?: SshTunnelSpec
+  } | null>(null)
   const [addSubmitting, setAddSubmitting] = useState(false)
   const tunnelFormRef = useRef<TunnelFormHandle>(null)
   const logBoxRef = useRef<HTMLDivElement | null>(null)
@@ -462,6 +583,19 @@ function SshTunnel(): React.JSX.Element {
       .catch(() => {})
   }, [])
 
+  const appendLog = useCallback((entry: SshLogEntry) => {
+    setLogs((prev) => {
+      const next = [...prev.slice(-499), entry]
+      cachedSshLogs = next
+      return next
+    })
+  }, [])
+
+  const clearLogs = useCallback(() => {
+    cachedSshLogs = []
+    setLogs([])
+  }, [])
+
   useEffect(() => {
     let mounted = true
     Promise.all([window.api.ssh.listNodes(), window.api.ssh.status()])
@@ -476,14 +610,14 @@ function SshTunnel(): React.JSX.Element {
       if (mounted) setStatuses(s)
     })
     const offLog = window.api.ssh.onLog((entry) => {
-      if (mounted) setLogs((prev) => [...prev.slice(-499), entry])
+      if (mounted) appendLog(entry)
     })
     return () => {
       mounted = false
       offStatus()
       offLog()
     }
-  }, [])
+  }, [loadTunnels, appendLog])
 
   useEffect(() => {
     const el = logBoxRef.current
@@ -491,20 +625,61 @@ function SshTunnel(): React.JSX.Element {
   }, [logs])
 
   const handleConnect = useCallback(
-    async (node: SshNodeView) => {
+    async (node: SshNodeView, type?: SshTunnelType) => {
       const session = sessionByNode.get(node.id)
+      const isTypeActive = (s: SshSessionStatus | undefined, tunnelType: SshTunnelType): boolean =>
+        !!s?.tunnels.some(
+          (tun) =>
+            tun.type === tunnelType && (tun.status === 'running' || tun.status === 'starting')
+        )
+      const showConnectError = (raw: unknown): void => {
+        message.error(mapSshError(raw, t))
+      }
+      if (type) {
+        if (isTypeActive(session, type)) {
+          try {
+            await window.api.ssh.disconnectType(node.id, type)
+            message.success(t('sshDisconnected'))
+          } catch (err) {
+            showConnectError(err)
+          }
+          return
+        }
+        const typeCount = tunnels.filter((tun) => tun.nodeId === node.id && tun.type === type).length
+        if (typeCount === 0) {
+          message.warning(t('sshNoTunnelsToConnect'))
+          return
+        }
+        try {
+          const status = await window.api.ssh.connect(node.id, type)
+          if (status.state === 'error') showConnectError(status.error ?? '')
+        } catch (err) {
+          showConnectError(err)
+        }
+        return
+      }
       if (session?.state === 'connected') {
-        await window.api.ssh.disconnect(node.id)
-        message.success(t('sshDisconnected'))
+        try {
+          await window.api.ssh.disconnect(node.id)
+          message.success(t('sshDisconnected'))
+        } catch (err) {
+          showConnectError(err)
+        }
+        return
+      }
+      const nodeCount = tunnels.filter((tun) => tun.nodeId === node.id).length
+      if (nodeCount === 0) {
+        message.warning(t('sshNoTunnelsToConnect'))
         return
       }
       try {
-        await window.api.ssh.connect(node.id)
+        const status = await window.api.ssh.connect(node.id)
+        if (status.state === 'error') showConnectError(status.error ?? '')
       } catch (err) {
-        message.error(t('sshConnectFail', { msg: (err as Error)?.message ?? '' }))
+        showConnectError(err)
       }
     },
-    [sessionByNode, message, t]
+    [sessionByNode, tunnels, message, t]
   )
 
   const toggleExpanded = useCallback((nodeId: string) => {
@@ -519,8 +694,8 @@ function SshTunnel(): React.JSX.Element {
         } else {
           await window.api.ssh.startTunnel(nodeId, tunnelId)
         }
-      } catch {
-        message.error(t('sshTunnelToggleFail'))
+      } catch (err) {
+        message.error(mapSshError(err, t))
       }
     },
     [message, t]
@@ -534,7 +709,7 @@ function SshTunnel(): React.JSX.Element {
         if (res.ok) {
           message.success(t('sshTestOk', { ms: res.latencyMs }))
         } else {
-          message.error(t('sshTestFail', { msg: res.error ?? '' }))
+          message.error(mapSshError(res.error ?? '', t))
         }
       } catch {
         message.error(t('sshTestFail', { msg: '' }))
@@ -583,6 +758,7 @@ function SshTunnel(): React.JSX.Element {
   const tunnelSummary = (spec: SshTunnelSpec, live?: SshTunnelState): string => {
     if (spec.type === 'local') {
       return t('sshFlowLocal', {
+        listenAddr: live?.listenAddr || spec.listenAddr || '127.0.0.1',
         localPort: spec.localPort,
         remoteHost: spec.remoteHost,
         remotePort: spec.remotePort
@@ -596,7 +772,10 @@ function SshTunnel(): React.JSX.Element {
         targetPort: spec.targetPort
       })
     }
-    return t('sshFlowSocks', { localPort: spec.localPort })
+    return t('sshFlowSocks', {
+      listenAddr: live?.listenAddr || spec.listenAddr || '127.0.0.1',
+      localPort: spec.localPort
+    })
   }
 
   const nodesTab = (
@@ -649,6 +828,16 @@ function SshTunnel(): React.JSX.Element {
                         {t('sshConnected')}
                       </span>
                     )}
+                    {state === 'connecting' && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-600">
+                        {t('sshConnecting')}
+                      </span>
+                    )}
+                    {state === 'error' && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500">
+                        {t('sshError')}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] font-mono text-[var(--text-secondary)] mt-0.5 flex items-center gap-2">
                     <span>
@@ -659,13 +848,15 @@ function SshTunnel(): React.JSX.Element {
                     </span>
                   </div>
                   {session?.error && (
-                    <div className="text-[11px] text-red-500 mt-1 truncate">{session.error}</div>
+                    <div className="text-[11px] text-red-500 mt-1 truncate">
+                      {mapSshError(session.error, t)}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => handleTest(node)}
-                    disabled={testing || connected}
+                    disabled={testing || connected || connecting}
                     title={t('sshTest')}
                     className={BTN_CLS}
                   >
@@ -677,7 +868,7 @@ function SshTunnel(): React.JSX.Element {
                       setEditing(node)
                       setEditorOpen(true)
                     }}
-                    disabled={connected}
+                    disabled={connected || connecting}
                     title={t('sshEdit')}
                     className={BTN_CLS}
                   >
@@ -685,7 +876,7 @@ function SshTunnel(): React.JSX.Element {
                   </button>
                   <button
                     onClick={() => handleDeleteNode(node)}
-                    disabled={connected}
+                    disabled={connected || connecting}
                     title={t('sshDelete')}
                     className={BTN_CLS}
                   >
@@ -754,6 +945,12 @@ function SshTunnel(): React.JSX.Element {
             (t) => t.nodeId === node.id && (!filterType || t.type === filterType)
           )
           const liveMap = new Map(session?.tunnels.map((t) => [t.id, t]) ?? [])
+          const typeRunning =
+            !!filterType &&
+            !!session?.tunnels.some(
+              (tun) =>
+                tun.type === filterType && (tun.status === 'running' || tun.status === 'starting')
+            )
           return (
             <section key={node.id} className={CARD_CLS}>
               <div
@@ -773,10 +970,17 @@ function SshTunnel(): React.JSX.Element {
                       ? t('sshConnected')
                       : state === 'connecting'
                         ? t('sshConnecting')
-                        : t('sshDisconnected')}
+                        : state === 'error'
+                          ? t('sshError')
+                          : t('sshDisconnected')}
                     {' · '}
                     {t('sshTunnelCount', { count: nodeTunnels.length })}
                   </div>
+                  {state === 'error' && session?.error && (
+                    <div className="text-[11px] text-red-500 mt-0.5 truncate">
+                      {mapSshError(session.error, t)}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={(e) => {
@@ -791,21 +995,21 @@ function SshTunnel(): React.JSX.Element {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleConnect(node)
+                    handleConnect(node, filterType)
                   }}
                   disabled={connecting}
-                  className={connected ? BTN_CLS : ACCENT_BTN_CLS}
+                  className={connected && typeRunning ? BTN_CLS : ACCENT_BTN_CLS}
                 >
                   {connecting ? (
                     <LoadingOutlined />
-                  ) : connected ? (
+                  ) : connected && typeRunning ? (
                     <StopOutlined />
                   ) : (
                     <PlayCircleOutlined />
                   )}
                   {connecting
                     ? t('sshConnecting')
-                    : connected
+                    : connected && typeRunning
                       ? t('sshDisconnect')
                       : t('sshConnect')}
                 </button>
@@ -872,6 +1076,20 @@ function SshTunnel(): React.JSX.Element {
                             )}
                             <span className={`w-2 h-2 rounded-full shrink-0 ${dotCls}`} />
                             <button
+                              onClick={() =>
+                                setAddModal({
+                                  nodeId: node.id,
+                                  type: spec.type,
+                                  tunnel: spec
+                                })
+                              }
+                              disabled={starting}
+                              title={t('sshEdit')}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer border-none transition-all duration-150 bg-[var(--bg-warm)] text-[var(--text-secondary)] border border-[var(--border-subtle)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)] disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <EditOutlined />
+                            </button>
+                            <button
                               onClick={() => handleDeleteTunnel(node.id, spec)}
                               title={t('sshDelete')}
                               className="w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer border-none transition-all duration-150 bg-[var(--bg-warm)] text-[var(--text-secondary)] border border-[var(--border-subtle)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]"
@@ -900,7 +1118,7 @@ function SshTunnel(): React.JSX.Element {
     <section className={CARD_CLS}>
       <div className="px-5 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
         <span className={LABEL_CLS}>{t('sshLogs')}</span>
-        <button onClick={() => setLogs([])} disabled={logs.length === 0} className={BTN_CLS}>
+        <button onClick={clearLogs} disabled={logs.length === 0} className={BTN_CLS}>
           <DeleteOutlined />
           {t('sshClearLogs')}
         </button>
@@ -935,7 +1153,12 @@ function SshTunnel(): React.JSX.Element {
     </section>
   )
 
-  const tunnelAddLabel = (type: SshTunnelType): string => {
+  const tunnelModalLabel = (type: SshTunnelType, editing?: boolean): string => {
+    if (editing) {
+      if (type === 'local') return t('sshEditLocal')
+      if (type === 'remote') return t('sshEditRemote')
+      return t('sshEditSocks')
+    }
     if (type === 'local') return t('sshAddLocal')
     if (type === 'remote') return t('sshAddRemote')
     return t('sshAddSocks')
@@ -987,7 +1210,11 @@ function SshTunnel(): React.JSX.Element {
 
       <Modal
         open={!!addModal}
-        title={addModal ? tunnelAddLabel(addModal.type) : t('sshAddTunnel')}
+        title={
+          addModal
+            ? tunnelModalLabel(addModal.type, !!addModal.tunnel)
+            : t('sshAddTunnel')
+        }
         onCancel={() => setAddModal(null)}
         footer={
           <>
@@ -999,7 +1226,9 @@ function SshTunnel(): React.JSX.Element {
                 tunnelFormRef.current?.submit()
               }}
             >
-              {addModal ? tunnelAddLabel(addModal.type) : t('sshAddTunnel')}
+              {addModal
+                ? tunnelModalLabel(addModal.type, !!addModal.tunnel)
+                : t('sshAddTunnel')}
             </Button>
           </>
         }
@@ -1008,14 +1237,23 @@ function SshTunnel(): React.JSX.Element {
       >
         {addModal && (
           <TunnelForm
+            key={addModal.tunnel?.id ?? `new-${addModal.type}-${addModal.nodeId}`}
             ref={tunnelFormRef}
             nodeId={addModal.nodeId}
             fixedType={addModal.type}
+            editing={addModal.tunnel}
             onSubmittingChange={setAddSubmitting}
             onAdded={() => {
               loadTunnels()
               const nodeConnected = sessionByNode.get(addModal.nodeId)?.state === 'connected'
-              message.success(nodeConnected ? t('sshTunnelAdded') : t('sshTunnelSavedOffline'))
+              const isEdit = !!addModal.tunnel
+              message.success(
+                isEdit
+                  ? t('sshTunnelUpdated')
+                  : nodeConnected
+                    ? t('sshTunnelAdded')
+                    : t('sshTunnelSavedOffline')
+              )
               setAddModal(null)
             }}
             onError={(m) => {
