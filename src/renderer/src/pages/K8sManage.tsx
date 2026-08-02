@@ -804,7 +804,7 @@ function K8sManage(): React.JSX.Element {
     {
       title: t('k8sColLocalPort'),
       dataIndex: 'localPort',
-      width: 100,
+      width: 150,
       render: (p: number) => `127.0.0.1:${p}`
     },
     { title: t('k8sColRemotePort'), dataIndex: 'remotePort', width: 100 },

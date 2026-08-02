@@ -484,6 +484,10 @@
   scrollbar-gutter: stable;
 }
 
+.k8s-page-body .ant-table-body {
+  overflow-y: auto !important;
+}
+
 .k8s-page-body .ant-table-header table {
   border-collapse: separate;
 }
