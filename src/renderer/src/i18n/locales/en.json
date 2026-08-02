@@ -279,7 +279,7 @@
   "sshTunnelRemoved": "Tunnel removed",
   "sshTunnelAddFail": "Failed to add tunnel. Make sure the node is connected and the port is free.",
   "sshDeleteTunnelConfirm": "Delete this tunnel?",
-  "sshFlowLocal": "Local :{{localPort}} → {{remoteHost}}:{{remotePort}}",
-  "sshFlowRemote": "Public :{{bindPort}} ← Local {{targetHost}}:{{targetPort}}",
-  "sshFlowSocks": "Local :{{localPort}}"
+  "sshFlowLocal": "127.0.0.1:{{localPort}} → {{remoteHost}}:{{remotePort}}",
+  "sshFlowRemote": "{{bindAddr}}:{{bindPort}} → {{targetHost}}:{{targetPort}}",
+  "sshFlowSocks": "127.0.0.1:{{localPort}}"
 }

@@ -535,6 +535,7 @@ function SshTunnel(): React.JSX.Element {
     }
     if (spec.type === 'remote') {
       return t('sshFlowRemote', {
+        bindAddr: spec.bindAddr || '127.0.0.1',
         bindPort: live?.bindPort ?? spec.bindPort,
         targetHost: spec.targetHost,
         targetPort: spec.targetPort

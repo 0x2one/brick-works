@@ -279,7 +279,7 @@
   "sshTunnelRemoved": "隧道已删除",
   "sshTunnelAddFail": "添加隧道失败，请确认节点已连接且端口可用",
   "sshDeleteTunnelConfirm": "确定删除该隧道？",
-  "sshFlowLocal": "本地 :{{localPort}} → {{remoteHost}}:{{remotePort}}",
-  "sshFlowRemote": "公网 :{{bindPort}} ← 本机 {{targetHost}}:{{targetPort}}",
-  "sshFlowSocks": "本地 :{{localPort}}"
+  "sshFlowLocal": "127.0.0.1:{{localPort}} → {{remoteHost}}:{{remotePort}}",
+  "sshFlowRemote": "{{bindAddr}}:{{bindPort}} → {{targetHost}}:{{targetPort}}",
+  "sshFlowSocks": "127.0.0.1:{{localPort}}"
 }
