@@ -919,59 +919,63 @@ function SshClient(): React.JSX.Element {
                       onClick={() => openOrFocusTab(node)}
                       onDoubleClick={() => openOrFocusTab(node, true)}
                     >
-                      <div className="flex items-start gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <CloudServerOutlined
-                          className={`mt-0.5 ${active ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}
+                          className={`shrink-0 ${active ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+                          <div className="text-sm font-medium text-[var(--text-primary)] truncate leading-tight">
                             {node.name}
                           </div>
-                          <div className="text-[10px] font-mono text-[var(--text-secondary)] truncate">
+                          <div className="text-[10px] font-mono text-[var(--text-secondary)] truncate leading-tight mt-0.5">
                             {node.username}@{node.host}:{node.port}
                           </div>
                         </div>
                       </div>
-                      <div
-                        className="mt-1.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          className={BTN_ICON}
-                          title={t('sshTest')}
-                          disabled={testing}
-                          onClick={() => void handleTest(node)}
-                        >
-                          {testing ? <LoadingOutlined /> : <ApiOutlined />}
-                        </button>
-                        <button
-                          type="button"
-                          className={BTN_ICON}
-                          title={t('sshClientNewSession')}
-                          onClick={() => openOrFocusTab(node, true)}
-                        >
-                          <CodeOutlined />
-                        </button>
-                        <button
-                          type="button"
-                          className={BTN_ICON}
-                          title={t('sshEdit')}
-                          onClick={() => {
-                            setEditing(node)
-                            setEditorOpen(true)
-                          }}
-                        >
-                          <EditOutlined />
-                        </button>
-                        <button
-                          type="button"
-                          className={BTN_ICON}
-                          title={t('sshDelete')}
-                          onClick={() => handleDeleteNode(node)}
-                        >
-                          <DeleteOutlined />
-                        </button>
+                      <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-[grid-template-rows] duration-150 ease-out">
+                        <div className="overflow-hidden min-h-0">
+                          <div
+                            className="flex items-center justify-end gap-0.5 pt-1.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              className={BTN_ICON}
+                              title={t('sshTest')}
+                              disabled={testing}
+                              onClick={() => void handleTest(node)}
+                            >
+                              {testing ? <LoadingOutlined /> : <ApiOutlined />}
+                            </button>
+                            <button
+                              type="button"
+                              className={BTN_ICON}
+                              title={t('sshClientNewSession')}
+                              onClick={() => openOrFocusTab(node, true)}
+                            >
+                              <CodeOutlined />
+                            </button>
+                            <button
+                              type="button"
+                              className={BTN_ICON}
+                              title={t('sshEdit')}
+                              onClick={() => {
+                                setEditing(node)
+                                setEditorOpen(true)
+                              }}
+                            >
+                              <EditOutlined />
+                            </button>
+                            <button
+                              type="button"
+                              className={BTN_ICON}
+                              title={t('sshDelete')}
+                              onClick={() => handleDeleteNode(node)}
+                            >
+                              <DeleteOutlined />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )
