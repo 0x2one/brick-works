@@ -211,6 +211,7 @@
   "annoZoomIn": "放大",
   "annoZoomOut": "缩小",
   "annoFitWidth": "适应宽度",
+  "annoFitHeight": "适应高度",
   "annoPage": "第 {{current}} / {{total}} 页",
   "annoPageJump": "跳转页码",
   "annoAnnotateMode": "标注模式",

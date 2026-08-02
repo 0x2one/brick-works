@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, ColorPicker, Input, InputNumber, Modal, Popconfirm, Slider } from 'antd'
 import {
@@ -6,6 +14,7 @@ import {
   ZoomInOutlined,
   ZoomOutOutlined,
   ColumnWidthOutlined,
+  ColumnHeightOutlined,
   LeftOutlined,
   RightOutlined,
   HighlightOutlined,
@@ -213,6 +222,15 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
     const avail = el.clientWidth - 48 - SCROLLBAR_MARGIN
     if (avail <= 0) return
     const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, avail / natural.width))
+    setZoom(Math.floor(z * 1000) / 1000)
+  }, [natural])
+
+  const fitHeight = useCallback(() => {
+    const el = scrollRef.current
+    if (!el || !natural) return
+    const avail = el.clientHeight - 48 - SCROLLBAR_MARGIN
+    if (avail <= 0) return
+    const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, avail / natural.height))
     setZoom(Math.floor(z * 1000) / 1000)
   }, [natural])
 
@@ -461,12 +479,61 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
   }, [natural, color])
 
   /* ── zoom / page ── */
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+  const zoomAnchorRef = useRef<{
+    naturalX: number
+    naturalY: number
+    clientX: number
+    clientY: number
+  } | null>(null)
+
+  const captureZoomAnchor = (clientX: number, clientY: number): void => {
+    const stage = stageRef.current
+    const prev = zoomRef.current
+    if (!stage || prev <= 0) return
+    const rect = stage.getBoundingClientRect()
+    zoomAnchorRef.current = {
+      naturalX: (clientX - rect.left) / prev,
+      naturalY: (clientY - rect.top) / prev,
+      clientX,
+      clientY
+    }
+  }
+
+  const applyZoom = useCallback((nextZoom: number, anchor?: { x: number; y: number }) => {
+    const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(nextZoom * 100) / 100))
+    if (clamped === zoomRef.current) return
+    if (anchor) {
+      captureZoomAnchor(anchor.x, anchor.y)
+    } else {
+      const scroller = scrollRef.current
+      if (scroller) {
+        const rect = scroller.getBoundingClientRect()
+        captureZoomAnchor(rect.left + rect.width / 2, rect.top + rect.height / 2)
+      }
+    }
+    setZoom(clamped)
+  }, [])
+
+  useLayoutEffect(() => {
+    const anchor = zoomAnchorRef.current
+    if (!anchor) return
+    zoomAnchorRef.current = null
+    const scroller = scrollRef.current
+    const stage = stageRef.current
+    if (!scroller || !stage) return
+    const rect = stage.getBoundingClientRect()
+    scroller.scrollLeft += rect.left + anchor.naturalX * zoom - anchor.clientX
+    scroller.scrollTop += rect.top + anchor.naturalY * zoom - anchor.clientY
+  }, [zoom])
+
   const handleZoomIn = useCallback(() => {
-    setZoom((z) => Math.min(MAX_ZOOM, Math.round((z + 0.1) * 100) / 100))
-  }, [])
+    applyZoom(zoomRef.current + 0.1)
+  }, [applyZoom])
   const handleZoomOut = useCallback(() => {
-    setZoom((z) => Math.max(MIN_ZOOM, Math.round((z - 0.1) * 100) / 100))
-  }, [])
+    applyZoom(zoomRef.current - 0.1)
+  }, [applyZoom])
 
   const gotoPage = useCallback(
     (p: number) => {
@@ -477,6 +544,74 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
     },
     [numPages]
   )
+
+  const currentPageRef = useRef(currentPage)
+  const numPagesRef = useRef(numPages)
+  const wheelFlipLockRef = useRef(false)
+  currentPageRef.current = currentPage
+  numPagesRef.current = numPages
+
+  /* Ctrl / Cmd + wheel zooms the preview toward cursor */
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !docType) return
+
+    const onWheel = (e: WheelEvent): void => {
+      if (!e.ctrlKey && !e.metaKey) return
+      if (e.deltaY === 0) return
+      e.preventDefault()
+      const direction = e.deltaY > 0 ? -1 : 1
+      applyZoom(zoomRef.current + direction * 0.1, { x: e.clientX, y: e.clientY })
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [docType, fileKey, applyZoom])
+
+  /* Wheel flips PDF pages at scroll edges (or always when content fits) */
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || docType !== 'pdf' || numPages <= 1) return
+
+    const onWheel = (e: WheelEvent): void => {
+      if (e.ctrlKey || e.metaKey) return
+      if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return
+
+      const goingDown = e.deltaY > 0
+      const goingUp = e.deltaY < 0
+      if (!goingDown && !goingUp) return
+
+      const { scrollTop, scrollHeight, clientHeight } = el
+      const canScroll = scrollHeight > clientHeight + 2
+      const atTop = scrollTop <= 2
+      const atBottom = scrollTop + clientHeight >= scrollHeight - 2
+      const shouldFlip = !canScroll || (goingDown && atBottom) || (goingUp && atTop)
+      if (!shouldFlip) return
+
+      const page = currentPageRef.current
+      const total = numPagesRef.current
+      if (goingDown && page >= total) return
+      if (goingUp && page <= 1) return
+
+      e.preventDefault()
+      if (wheelFlipLockRef.current) return
+      wheelFlipLockRef.current = true
+      gotoPage(page + (goingDown ? 1 : -1))
+      if (goingDown) {
+        el.scrollTop = 0
+      } else {
+        requestAnimationFrame(() => {
+          el.scrollTop = el.scrollHeight
+        })
+      }
+      window.setTimeout(() => {
+        wheelFlipLockRef.current = false
+      }, 280)
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [docType, numPages, gotoPage])
 
   const commitPage = useCallback(() => {
     const v = parseInt(pageInput, 10)
@@ -521,7 +656,7 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
                   min={MIN_ZOOM * 100}
                   max={MAX_ZOOM * 100}
                   value={zoomPercent}
-                  onChange={(v) => setZoom(v / 100)}
+                  onChange={(v) => applyZoom(v / 100)}
                   tooltip={{ formatter: (v) => `${v}%` }}
                   style={{ width: 140 }}
                 />
@@ -534,6 +669,9 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
               </button>
               <button onClick={fitWidth} title={t('annoFitWidth')} className={ICON_BTN_CLS}>
                 <ColumnWidthOutlined />
+              </button>
+              <button onClick={fitHeight} title={t('annoFitHeight')} className={ICON_BTN_CLS}>
+                <ColumnHeightOutlined />
               </button>
 
               {docType === 'pdf' && (

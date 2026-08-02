@@ -211,6 +211,7 @@
   "annoZoomIn": "Zoom In",
   "annoZoomOut": "Zoom Out",
   "annoFitWidth": "Fit Width",
+  "annoFitHeight": "Fit Height",
   "annoPage": "Page {{current}} / {{total}}",
   "annoPageJump": "Jump to page",
   "annoAnnotateMode": "Annotate",
