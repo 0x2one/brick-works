@@ -376,6 +376,7 @@
   "k8sNotConnected": "请先添加并连接集群",
   "k8sAllNamespaces": "全部命名空间",
   "k8sRefresh": "刷新",
+  "k8sSearchName": "按名称搜索",
   "k8sLoadFail": "加载资源失败",
   "k8sPickKubeconfig": "选择 kubeconfig",
   "k8sUseDefault": "使用默认 ~/.kube/config",

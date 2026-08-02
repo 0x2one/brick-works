@@ -30,7 +30,8 @@ import {
   CodeOutlined,
   ApiOutlined,
   StopOutlined,
-  ArrowDownOutlined
+  ArrowDownOutlined,
+  SearchOutlined
 } from '@ant-design/icons'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -51,6 +52,13 @@ function statusColor(state: K8sConnectionState): string {
   if (state === 'connecting') return 'processing'
   if (state === 'error') return 'error'
   return 'default'
+}
+
+function matchName(name: string, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const n = name.toLowerCase()
+  return q.split(/\s+/).every((token) => n.includes(token))
 }
 
 function toBase64(str: string): string {
@@ -143,11 +151,18 @@ function K8sManage(): React.JSX.Element {
   const [activeTab, setActiveTab] = useState('pods')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
+  const [nameQuery, setNameQuery] = useState('')
   const [tableScrollY, setTableScrollY] = useState(360)
   const bodyRef = useRef<HTMLDivElement>(null)
 
   const connected = status?.state === 'connected'
   const bodyScrollable = !connected || activeTab === 'network'
+
+  const filteredPods = pods.filter((p) => matchName(p.name, nameQuery))
+  const filteredWorkloads = workloads.filter((w) => matchName(w.name, nameQuery))
+  const filteredServices = services.filter((s) => matchName(s.name, nameQuery))
+  const filteredIngresses = ingresses.filter((i) => matchName(i.name, nameQuery))
+  const filteredPortForwards = portForwards.filter((pf) => matchName(pf.pod, nameQuery))
 
   useEffect(() => {
     const el = bodyRef.current
@@ -192,16 +207,17 @@ function K8sManage(): React.JSX.Element {
 
   const footerTotal =
     activeTab === 'pods'
-      ? pods.length
+      ? filteredPods.length
       : activeTab === 'workloads'
-        ? workloads.length
+        ? filteredWorkloads.length
         : activeTab === 'portforwards'
-          ? portForwards.length
+          ? filteredPortForwards.length
           : activeTab === 'network'
-            ? services.length
+            ? filteredServices.length
             : 0
 
-  const showFooterPager = connected && activeTab !== 'network'
+  const showFooterPager =
+    connected && activeTab !== 'network' && footerTotal > pageSize
 
   const refreshClusters = useCallback(async () => {
     const list = await window.api.k8s.listClusters()
@@ -657,10 +673,10 @@ function K8sManage(): React.JSX.Element {
     {
       title: t('k8sColActions'),
       key: 'actions',
-      width: 220,
+      width: 136,
       fixed: 'right',
       render: (_, pod) => (
-        <Space size={4}>
+        <Space size={0}>
           <Button
             type="text"
             size="small"
@@ -788,10 +804,13 @@ function K8sManage(): React.JSX.Element {
   ]
 
   const tabDefs: Array<{ key: string; label: string }> = [
-    { key: 'pods', label: `${t('k8sTabPods')} (${pods.length})` },
-    { key: 'workloads', label: `${t('k8sTabWorkloads')} (${workloads.length})` },
+    { key: 'pods', label: `${t('k8sTabPods')} (${filteredPods.length})` },
+    { key: 'workloads', label: `${t('k8sTabWorkloads')} (${filteredWorkloads.length})` },
     { key: 'network', label: t('k8sTabNetwork') },
-    { key: 'portforwards', label: `${t('k8sTabPortForwards')} (${portForwards.length})` }
+    {
+      key: 'portforwards',
+      label: `${t('k8sTabPortForwards')} (${filteredPortForwards.length})`
+    }
   ]
 
   return (
@@ -801,7 +820,7 @@ function K8sManage(): React.JSX.Element {
 
         <div className="flex flex-wrap items-center gap-2 px-6 pb-3">
           <Select
-            className="min-w-[220px] max-w-[320px]"
+            className="w-[220px] max-w-full"
             placeholder={t('k8sSelectCluster')}
             value={selectedClusterId}
             onChange={setSelectedClusterId}
@@ -837,7 +856,7 @@ function K8sManage(): React.JSX.Element {
             </Button>
           )}
           <Select
-            className="min-w-[160px]"
+            className="w-[130px] max-w-full"
             value={namespace}
             disabled={!connected}
             onChange={(v) => {
@@ -857,6 +876,18 @@ function K8sManage(): React.JSX.Element {
           >
             {t('k8sRefresh')}
           </Button>
+          <Input
+            allowClear
+            disabled={!connected}
+            prefix={<SearchOutlined className="text-[var(--text-secondary)]" />}
+            placeholder={t('k8sSearchName')}
+            value={nameQuery}
+            onChange={(e) => {
+              setNameQuery(e.target.value)
+              setPage(1)
+            }}
+            style={{ width: 200, maxWidth: 200 }}
+          />
         </div>
 
         {connected && (
@@ -905,7 +936,7 @@ function K8sManage(): React.JSX.Element {
                 size="small"
                 rowKey={(r) => `${r.namespace}/${r.name}`}
                 columns={podColumns}
-                dataSource={paged(pods)}
+                dataSource={paged(filteredPods)}
                 loading={loading}
                 pagination={false}
                 scroll={{ x: 1100, y: tableScrollY }}
@@ -916,7 +947,7 @@ function K8sManage(): React.JSX.Element {
                 size="small"
                 rowKey={(r) => `${r.kind}/${r.namespace}/${r.name}`}
                 columns={workloadColumns}
-                dataSource={paged(workloads)}
+                dataSource={paged(filteredWorkloads)}
                 loading={loading}
                 pagination={false}
                 scroll={{ y: tableScrollY }}
@@ -926,26 +957,26 @@ function K8sManage(): React.JSX.Element {
               <div className="flex flex-col gap-6">
                 <div>
                   <div className="text-xs font-semibold mb-2 text-[var(--text-secondary)]">
-                    Services ({services.length})
+                    Services ({filteredServices.length})
                   </div>
                   <Table
                     size="small"
                     rowKey={(r) => `${r.namespace}/${r.name}`}
                     columns={serviceColumns}
-                    dataSource={services}
+                    dataSource={filteredServices}
                     loading={loading}
                     pagination={false}
                   />
                 </div>
                 <div>
                   <div className="text-xs font-semibold mb-2 text-[var(--text-secondary)]">
-                    Ingress ({ingresses.length})
+                    Ingress ({filteredIngresses.length})
                   </div>
                   <Table
                     size="small"
                     rowKey={(r) => `${r.namespace}/${r.name}`}
                     columns={ingressColumns}
-                    dataSource={ingresses}
+                    dataSource={filteredIngresses}
                     loading={loading}
                     pagination={false}
                   />
@@ -957,7 +988,7 @@ function K8sManage(): React.JSX.Element {
                 size="small"
                 rowKey="id"
                 columns={pfColumns}
-                dataSource={paged(portForwards)}
+                dataSource={paged(filteredPortForwards)}
                 pagination={false}
                 scroll={{ y: tableScrollY }}
                 locale={{ emptyText: t('k8sNoPortForwards') }}
@@ -975,6 +1006,7 @@ function K8sManage(): React.JSX.Element {
             current={page}
             pageSize={pageSize}
             total={footerTotal}
+            hideOnSinglePage
             showSizeChanger
             pageSizeOptions={[20, 50, 100]}
             onChange={(p, ps) => {

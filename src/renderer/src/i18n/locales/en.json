@@ -376,6 +376,7 @@
   "k8sNotConnected": "Add and connect a cluster first",
   "k8sAllNamespaces": "All namespaces",
   "k8sRefresh": "Refresh",
+  "k8sSearchName": "Search by name",
   "k8sLoadFail": "Failed to load resources",
   "k8sPickKubeconfig": "Choose kubeconfig",
   "k8sUseDefault": "Use default ~/.kube/config",
