@@ -384,6 +384,7 @@ function SshClient(): React.JSX.Element {
   const [uploading, setUploading] = useState(false)
   const [createOpen, setCreateOpen] = useState<'file' | 'dir' | null>(null)
   const [createName, setCreateName] = useState('')
+  const [copyTipVisible, setCopyTipVisible] = useState(false)
 
   const termHostsRef = useRef<Map<string, HTMLDivElement>>(new Map())
   const termsRef = useRef<Map<string, TermRuntime>>(new Map())
@@ -392,6 +393,24 @@ function SshClient(): React.JSX.Element {
   const connectShellRef = useRef<(tabId: string, reconnect?: boolean) => Promise<void>>(
     async () => {}
   )
+  const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyTipHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const notifyCopiedRef = useRef<() => void>(() => {})
+
+  useEffect(() => {
+    notifyCopiedRef.current = () => {
+      setCopyTipVisible(true)
+      if (copyTipHideTimerRef.current) clearTimeout(copyTipHideTimerRef.current)
+      copyTipHideTimerRef.current = setTimeout(() => setCopyTipVisible(false), 1200)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current)
+      if (copyTipHideTimerRef.current) clearTimeout(copyTipHideTimerRef.current)
+    }
+  }, [])
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? null,
@@ -607,6 +626,19 @@ function SshClient(): React.JSX.Element {
       const rt: TermRuntime = { term, fit, shellSessionId: null }
       termsRef.current.set(tab.id, rt)
 
+      term.onSelectionChange(() => {
+        const text = term.getSelection()
+        if (!text) return
+        void navigator.clipboard
+          .writeText(text)
+          .then(() => {
+            if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current)
+            copyToastTimerRef.current = setTimeout(() => {
+              notifyCopiedRef.current()
+            }, 280)
+          })
+          .catch(() => {})
+      })
       term.onData((data) => {
         const cur = termsRef.current.get(tab.id)
         if (!cur) return
@@ -876,7 +908,12 @@ function SshClient(): React.JSX.Element {
   const crumbs = pathSegments(activeTab?.remotePath || '/')
 
   return (
-    <div className="ssh-client-page flex flex-1 min-h-0 overflow-hidden">
+    <div className="ssh-client-page relative flex flex-1 min-h-0 overflow-hidden">
+      {copyTipVisible && (
+        <div className="ssh-client-copy-hint pointer-events-none absolute right-3 bottom-3 z-50">
+          {t('sshClientCopied')}
+        </div>
+      )}
       {showSidebar && (
         <aside
           className={`shrink-0 border-r border-[var(--border-subtle)] bg-[var(--surface)] flex flex-col min-h-0 transition-[width] duration-150 ${

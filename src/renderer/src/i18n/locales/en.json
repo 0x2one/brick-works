@@ -275,6 +275,7 @@
   "sshClientShellClosed": "Session closed",
   "sshClientPressEnterReconnect": "Press Enter to reconnect",
   "sshClientReconnecting": "Reconnecting…",
+  "sshClientCopied": "Copied to clipboard",
   "sshClientShellFail": "Failed to open SSH console",
   "sshClientEmptyWorkspace": "Select a node on the left to open a session",
   "sshClientCollapseSidebar": "Collapse node panel",

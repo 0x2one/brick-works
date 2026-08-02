@@ -275,6 +275,7 @@
   "sshClientShellClosed": "会话已结束",
   "sshClientPressEnterReconnect": "按回车重新连接",
   "sshClientReconnecting": "正在重新连接…",
+  "sshClientCopied": "文本已复制",
   "sshClientShellFail": "无法打开 SSH 控制台",
   "sshClientEmptyWorkspace": "从左侧选择节点以打开会话",
   "sshClientCollapseSidebar": "收缩节点栏",

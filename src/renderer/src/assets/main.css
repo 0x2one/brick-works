@@ -546,6 +546,20 @@
   width: 100%;
 }
 
+/* Tiny “copied” tip for SSH console selection */
+.ssh-client-copy-hint {
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 400;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  opacity: 0.92;
+}
+
 /* ── Animations ── */
 
 @keyframes fadeUp {
