@@ -398,18 +398,17 @@ function NodeEditor({
   const [form] = Form.useForm<EditorValues>()
 
   useEffect(() => {
-    if (open) {
-      form.setFieldsValue({
-        name: editing?.name ?? '',
-        host: editing?.host ?? '',
-        port: editing?.port ?? 22,
-        username: editing?.username ?? '',
-        authType: editing?.authType ?? 'password',
-        password: '',
-        privateKeyPath: editing?.privateKeyPath ?? '',
-        passphrase: ''
-      })
-    }
+    if (!open) return
+    form.setFieldsValue({
+      name: editing?.name ?? '',
+      host: editing?.host ?? '',
+      port: editing?.port ?? 22,
+      username: editing?.username ?? '',
+      authType: editing?.authType ?? 'password',
+      password: '',
+      privateKeyPath: editing?.privateKeyPath ?? '',
+      passphrase: ''
+    })
   }, [open, editing, form])
 
   const handleChooseKey = useCallback(async () => {
@@ -449,8 +448,6 @@ function NodeEditor({
       message.error(t('sshHostKeyClearFail'))
     }
   }, [editing, message, t])
-
-  const authType = Form.useWatch('authType', form)
 
   return (
     <Modal
@@ -501,49 +498,61 @@ function NodeEditor({
             ]}
           />
         </Form.Item>
-        {authType === 'password' && (
-          <Form.Item
-            name="password"
-            label={t('sshPassword')}
-            rules={
-              editing?.hasPassword ? [] : [{ required: true, message: t('sshPasswordRequired') }]
+        <Form.Item noStyle shouldUpdate={(prev, cur) => prev.authType !== cur.authType}>
+          {() => {
+            const authType = form.getFieldValue('authType') as EditorValues['authType']
+            if (authType === 'password') {
+              return (
+                <Form.Item
+                  name="password"
+                  label={t('sshPassword')}
+                  rules={
+                    editing?.hasPassword
+                      ? []
+                      : [{ required: true, message: t('sshPasswordRequired') }]
+                  }
+                  extra={editing?.hasPassword ? t('sshKeepSecret') : undefined}
+                >
+                  <Input.Password autoComplete="new-password" />
+                </Form.Item>
+              )
             }
-            extra={editing?.hasPassword ? t('sshKeepSecret') : undefined}
-          >
-            <Input.Password autoComplete="new-password" />
-          </Form.Item>
-        )}
-        {authType === 'privateKey' && (
-          <>
-            <Form.Item
-              name="privateKeyPath"
-              label={t('sshKeyPath')}
-              rules={[{ required: true, message: t('sshKeyRequired') }]}
-            >
-              <Input
-                readOnly
-                placeholder="~/.ssh/id_rsa"
-                addonAfter={
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<FolderOpenOutlined />}
-                    onClick={handleChooseKey}
+            if (authType === 'privateKey') {
+              return (
+                <>
+                  <Form.Item
+                    name="privateKeyPath"
+                    label={t('sshKeyPath')}
+                    rules={[{ required: true, message: t('sshKeyRequired') }]}
                   >
-                    {t('sshChooseKey')}
-                  </Button>
-                }
-              />
-            </Form.Item>
-            <Form.Item
-              name="passphrase"
-              label={t('sshPassphrase')}
-              extra={editing?.hasPassphrase ? t('sshKeepSecret') : undefined}
-            >
-              <Input.Password autoComplete="new-password" />
-            </Form.Item>
-          </>
-        )}
+                    <Input
+                      readOnly
+                      placeholder="~/.ssh/id_rsa"
+                      addonAfter={
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<FolderOpenOutlined />}
+                          onClick={handleChooseKey}
+                        >
+                          {t('sshChooseKey')}
+                        </Button>
+                      }
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name="passphrase"
+                    label={t('sshPassphrase')}
+                    extra={editing?.hasPassphrase ? t('sshKeepSecret') : undefined}
+                  >
+                    <Input.Password autoComplete="new-password" />
+                  </Form.Item>
+                </>
+              )
+            }
+            return null
+          }}
+        </Form.Item>
       </Form>
     </Modal>
   )

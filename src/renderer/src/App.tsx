@@ -11,7 +11,8 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ThunderboltOutlined,
-  DeploymentUnitOutlined
+  DeploymentUnitOutlined,
+  CloudServerOutlined
 } from '@ant-design/icons'
 import TitleBar from './components/TitleBar'
 import DevTools from './pages/DevTools'
@@ -20,6 +21,7 @@ import About from './pages/About'
 import MemoSticky from './pages/MemoSticky'
 import LanTransfer from './pages/LanTransfer'
 import SshTunnel from './pages/SshTunnel'
+import K8sManage from './pages/K8sManage'
 
 const { Sider, Content } = Layout
 
@@ -47,6 +49,11 @@ function AppLayout(): React.JSX.Element {
       key: '/ssh-tunnel',
       icon: <DeploymentUnitOutlined />,
       label: <NavLink to="/ssh-tunnel">{t('sshTunnel')}</NavLink>
+    },
+    {
+      key: '/k8s',
+      icon: <CloudServerOutlined />,
+      label: <NavLink to="/k8s">{t('k8sManage')}</NavLink>
     },
     {
       key: '/dev-tools',
@@ -87,9 +94,9 @@ function AppLayout(): React.JSX.Element {
           className="!bg-transparent !border-e-0"
         />
       </Sider>
-      <Layout className="layout-right">
+      <Layout className="layout-right flex flex-col min-h-0">
         <TitleBar />
-        <Content className="overflow-auto content-area">
+        <Content className="overflow-auto content-area flex flex-col flex-1 min-h-0">
           <Outlet />
         </Content>
       </Layout>
@@ -106,6 +113,7 @@ function App(): React.JSX.Element {
         <Route path="/memo-sticky" element={<MemoSticky />} />
         <Route path="/lan-transfer" element={<LanTransfer />} />
         <Route path="/ssh-tunnel" element={<SshTunnel />} />
+        <Route path="/k8s" element={<K8sManage />} />
         <Route path="/about" element={<About />} />
         <Route path="/" element={<Navigate to="/dev-tools" replace />} />
       </Route>

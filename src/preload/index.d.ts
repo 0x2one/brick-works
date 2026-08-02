@@ -41,11 +41,51 @@ interface SshApi {
   onLog: (callback: (entry: SshLogEntry) => void) => () => void
 }
 
+interface K8sApi {
+  listClusters: () => Promise<K8sCluster[]>
+  saveCluster: (input: K8sClusterInput) => Promise<K8sCluster>
+  deleteCluster: (id: string) => Promise<boolean>
+  chooseKubeconfig: () => Promise<string | null>
+  defaultKubeconfig: () => Promise<string>
+  parseContexts: (kubeconfigPath: string) => Promise<K8sContextInfo[]>
+  parseContextsFromContent: (content: string) => Promise<K8sContextInfo[]>
+  status: () => Promise<K8sStatus>
+  connect: (clusterId: string) => Promise<K8sStatus>
+  disconnect: () => Promise<K8sStatus>
+  listNamespaces: () => Promise<string[]>
+  listPods: (namespace: string) => Promise<K8sPodRow[]>
+  listWorkloads: (namespace: string) => Promise<K8sWorkloadRow[]>
+  listNetwork: (
+    namespace: string
+  ) => Promise<{ services: K8sServiceRow[]; ingresses: K8sIngressRow[] }>
+  startLogs: (opts: K8sStartLogsOpts) => Promise<{ sessionId: string }>
+  stopLogs: (sessionId: string) => Promise<boolean>
+  downloadLogs: (opts: {
+    namespace: string
+    pod: string
+    container?: string
+    tailLines?: number
+  }) => Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>
+  startExec: (opts: K8sStartExecOpts) => Promise<{ sessionId: string }>
+  writeExec: (sessionId: string, dataBase64: string) => Promise<boolean>
+  resizeExec: (sessionId: string, cols: number, rows: number) => Promise<boolean>
+  stopExec: (sessionId: string) => Promise<boolean>
+  startPortForward: (opts: K8sStartPortForwardOpts) => Promise<K8sPortForwardStatus>
+  stopPortForward: (id: string) => Promise<boolean>
+  listPortForwards: () => Promise<K8sPortForwardStatus[]>
+  onStatusChange: (callback: (status: K8sStatus) => void) => () => void
+  onLogChunk: (callback: (chunk: K8sLogChunk) => void) => () => void
+  onExecData: (callback: (data: K8sExecData) => void) => () => void
+  onExecExit: (callback: (data: K8sExecExit) => void) => () => void
+  onPortForwardStatus: (callback: (list: K8sPortForwardStatus[]) => void) => () => void
+}
+
 interface Api {
   fetchImage: (url: string) => Promise<string | null>
   windowControls: WindowControls
   lan: LanApi
   ssh: SshApi
+  k8s: K8sApi
 }
 
 declare global {

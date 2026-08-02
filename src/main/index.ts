@@ -1,10 +1,13 @@
 import { app, shell, BrowserWindow, dialog, ipcMain, nativeImage, net } from 'electron'
 import { join } from 'path'
+import { promises as fsp } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import iconPng from '../../resources/icon.png?asset'
 import { createLanServer, type LanStatus } from './lan-server'
 import { createSshStore, type SshNodeInput } from './ssh-store'
 import { createSshManager, type SshTunnelSpec, type SshTunnelType } from './ssh-manager'
+import { createK8sStore, defaultKubeconfigPath, type K8sClusterInput } from './k8s-store'
+import { createK8sManager } from './k8s-manager'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -250,7 +253,11 @@ function isValidPort(port: unknown, allowZero = false): boolean {
   return port >= 1 && port <= 65535
 }
 
-function validateTunnelSpec(spec: SshTunnelSpec, nodeId: string, excludeId?: string): string | null {
+function validateTunnelSpec(
+  spec: SshTunnelSpec,
+  nodeId: string,
+  excludeId?: string
+): string | null {
   if (!spec || typeof spec !== 'object') return 'INVALID'
   if (spec.type !== 'local' && spec.type !== 'remote' && spec.type !== 'socks5') {
     return 'TYPE_INVALID'
@@ -335,9 +342,180 @@ ipcMain.handle('ssh:stopTunnel', (_event, nodeId: string, tunnelId: string) =>
   sshManager.stopTunnel(nodeId, tunnelId)
 )
 
+/* ── K8s management ── */
+
+const k8sStore = createK8sStore()
+const k8sManager = createK8sManager()
+
+function broadcastK8sStatus(): void {
+  mainWindow?.webContents.send('k8s:status-change', k8sManager.getStatus())
+}
+
+k8sManager.onStatusChange(() => broadcastK8sStatus())
+k8sManager.onLogChunk((chunk) => {
+  mainWindow?.webContents.send('k8s:log-chunk', chunk)
+})
+k8sManager.onExecData((data) => {
+  mainWindow?.webContents.send('k8s:exec-data', data)
+})
+k8sManager.onExecExit((data) => {
+  mainWindow?.webContents.send('k8s:exec-exit', data)
+})
+k8sManager.onPortForwardStatus((list) => {
+  mainWindow?.webContents.send('k8s:portforward-status', list)
+})
+
+ipcMain.handle('k8s:listClusters', () => k8sStore.list())
+
+ipcMain.handle('k8s:saveCluster', (_event, input: K8sClusterInput) => {
+  if (!input?.name?.trim()) throw new Error('NAME_REQUIRED')
+  if (!input.kubeconfigPath?.trim() && !input.kubeconfigContent?.trim()) {
+    throw new Error('KUBECONFIG_REQUIRED')
+  }
+  if (!input.context?.trim()) throw new Error('CONTEXT_REQUIRED')
+  return k8sStore.save(input)
+})
+
+ipcMain.handle('k8s:deleteCluster', (_event, id: string) => {
+  const status = k8sManager.getStatus()
+  if (status.clusterId === id) {
+    void k8sManager.disconnect()
+  }
+  return k8sStore.remove(id)
+})
+
+ipcMain.handle('k8s:chooseKubeconfig', async () => {
+  const options: Electron.OpenDialogOptions = {
+    title: 'Select kubeconfig',
+    properties: ['openFile'],
+    filters: [
+      { name: 'Kubeconfig', extensions: ['yaml', 'yml', 'config', '*'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  }
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || !result.filePaths[0]) return null
+  return result.filePaths[0]
+})
+
+ipcMain.handle('k8s:defaultKubeconfig', () => defaultKubeconfigPath())
+
+ipcMain.handle('k8s:parseContexts', (_event, kubeconfigPath: string) =>
+  k8sManager.parseContexts(kubeconfigPath)
+)
+
+ipcMain.handle('k8s:parseContextsFromContent', (_event, content: string) =>
+  k8sManager.parseContextsFromContent(content)
+)
+
+ipcMain.handle('k8s:status', () => k8sManager.getStatus())
+
+ipcMain.handle('k8s:connect', async (_event, clusterId: string) => {
+  const cluster = k8sStore.get(clusterId)
+  if (!cluster) throw new Error('CLUSTER_NOT_FOUND')
+  return k8sManager.connect(cluster)
+})
+
+ipcMain.handle('k8s:disconnect', () => k8sManager.disconnect())
+
+ipcMain.handle('k8s:listNamespaces', () => k8sManager.listNamespaces())
+
+ipcMain.handle('k8s:listPods', (_event, namespace: string) =>
+  k8sManager.listPods(namespace === 'all' ? 'all' : namespace)
+)
+
+ipcMain.handle('k8s:listWorkloads', (_event, namespace: string) =>
+  k8sManager.listWorkloads(namespace === 'all' ? 'all' : namespace)
+)
+
+ipcMain.handle('k8s:listNetwork', (_event, namespace: string) =>
+  k8sManager.listNetwork(namespace === 'all' ? 'all' : namespace)
+)
+
+ipcMain.handle(
+  'k8s:startLogs',
+  (
+    _event,
+    opts: {
+      namespace: string
+      pod: string
+      container?: string
+      tailLines?: number
+      follow?: boolean
+    }
+  ) => k8sManager.startLogs(opts)
+)
+
+ipcMain.handle('k8s:stopLogs', (_event, sessionId: string) => k8sManager.stopLogs(sessionId))
+
+ipcMain.handle(
+  'k8s:downloadLogs',
+  async (
+    _event,
+    opts: { namespace: string; pod: string; container?: string; tailLines?: number }
+  ) => {
+    try {
+      const content = await k8sManager.fetchLogs(opts)
+      const saveOpts: Electron.SaveDialogOptions = {
+        title: 'Save Pod Logs',
+        defaultPath: `${opts.pod}.log`,
+        filters: [{ name: 'Log', extensions: ['log', 'txt'] }]
+      }
+      const result = mainWindow
+        ? await dialog.showSaveDialog(mainWindow, saveOpts)
+        : await dialog.showSaveDialog(saveOpts)
+      if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+      await fsp.writeFile(result.filePath, content, 'utf-8')
+      return { ok: true, path: result.filePath }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+)
+
+ipcMain.handle(
+  'k8s:startExec',
+  (
+    _event,
+    opts: { namespace: string; pod: string; container?: string; cols?: number; rows?: number }
+  ) => k8sManager.startExec(opts)
+)
+
+ipcMain.handle('k8s:writeExec', (_event, sessionId: string, dataBase64: string) =>
+  k8sManager.writeExec(sessionId, dataBase64)
+)
+
+ipcMain.handle('k8s:resizeExec', (_event, sessionId: string, cols: number, rows: number) =>
+  k8sManager.resizeExec(sessionId, cols, rows)
+)
+
+ipcMain.handle('k8s:stopExec', (_event, sessionId: string) => k8sManager.stopExec(sessionId))
+
+ipcMain.handle(
+  'k8s:startPortForward',
+  (_event, opts: { namespace: string; pod: string; localPort: number; remotePort: number }) => {
+    const localPort = Number(opts.localPort)
+    const remotePort = Number(opts.remotePort)
+    if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) {
+      throw new Error('LOCAL_PORT_INVALID')
+    }
+    if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
+      throw new Error('REMOTE_PORT_INVALID')
+    }
+    return k8sManager.startPortForward({ ...opts, localPort, remotePort })
+  }
+)
+
+ipcMain.handle('k8s:stopPortForward', (_event, id: string) => k8sManager.stopPortForward(id))
+
+ipcMain.handle('k8s:listPortForwards', () => k8sManager.listPortForwards())
+
 app.on('will-quit', () => {
   lanServer?.stop()
   sshManager.stop()
+  k8sManager.stop()
 })
 
 app.whenReady().then(() => {
@@ -354,6 +532,11 @@ app.whenReady().then(() => {
   sshStore
     .init()
     .then(() => broadcastSshStatus())
+    .catch(() => {})
+
+  k8sStore
+    .init()
+    .then(() => broadcastK8sStatus())
     .catch(() => {})
 
   app.on('activate', function () {

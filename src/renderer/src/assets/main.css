@@ -472,6 +472,26 @@
   transform: scale(1.15);
 }
 
+/* ── K8s Manage ── */
+
+.k8s-page {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.k8s-page-body {
+  scrollbar-gutter: stable;
+}
+
+.k8s-page-body .ant-table-header table {
+  border-collapse: separate;
+}
+
+.k8s-page-body .ant-table-header .ant-table-cell {
+  background: var(--content-bg);
+}
+
 /* ── Animations ── */
 
 @keyframes fadeUp {

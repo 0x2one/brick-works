@@ -75,6 +75,80 @@ const api = {
         ipcRenderer.removeListener('ssh:log', handler)
       }
     }
+  },
+  k8s: {
+    listClusters: () => ipcRenderer.invoke('k8s:listClusters'),
+    saveCluster: (input: K8sClusterInput) => ipcRenderer.invoke('k8s:saveCluster', input),
+    deleteCluster: (id: string) => ipcRenderer.invoke('k8s:deleteCluster', id),
+    chooseKubeconfig: () => ipcRenderer.invoke('k8s:chooseKubeconfig'),
+    defaultKubeconfig: () => ipcRenderer.invoke('k8s:defaultKubeconfig'),
+    parseContexts: (kubeconfigPath: string) =>
+      ipcRenderer.invoke('k8s:parseContexts', kubeconfigPath),
+    parseContextsFromContent: (content: string) =>
+      ipcRenderer.invoke('k8s:parseContextsFromContent', content),
+    status: () => ipcRenderer.invoke('k8s:status'),
+    connect: (clusterId: string) => ipcRenderer.invoke('k8s:connect', clusterId),
+    disconnect: () => ipcRenderer.invoke('k8s:disconnect'),
+    listNamespaces: () => ipcRenderer.invoke('k8s:listNamespaces'),
+    listPods: (namespace: string) => ipcRenderer.invoke('k8s:listPods', namespace),
+    listWorkloads: (namespace: string) => ipcRenderer.invoke('k8s:listWorkloads', namespace),
+    listNetwork: (namespace: string) => ipcRenderer.invoke('k8s:listNetwork', namespace),
+    startLogs: (opts: K8sStartLogsOpts) => ipcRenderer.invoke('k8s:startLogs', opts),
+    stopLogs: (sessionId: string) => ipcRenderer.invoke('k8s:stopLogs', sessionId),
+    downloadLogs: (opts: {
+      namespace: string
+      pod: string
+      container?: string
+      tailLines?: number
+    }) => ipcRenderer.invoke('k8s:downloadLogs', opts),
+    startExec: (opts: K8sStartExecOpts) => ipcRenderer.invoke('k8s:startExec', opts),
+    writeExec: (sessionId: string, dataBase64: string) =>
+      ipcRenderer.invoke('k8s:writeExec', sessionId, dataBase64),
+    resizeExec: (sessionId: string, cols: number, rows: number) =>
+      ipcRenderer.invoke('k8s:resizeExec', sessionId, cols, rows),
+    stopExec: (sessionId: string) => ipcRenderer.invoke('k8s:stopExec', sessionId),
+    startPortForward: (opts: K8sStartPortForwardOpts) =>
+      ipcRenderer.invoke('k8s:startPortForward', opts),
+    stopPortForward: (id: string) => ipcRenderer.invoke('k8s:stopPortForward', id),
+    listPortForwards: () => ipcRenderer.invoke('k8s:listPortForwards'),
+    onStatusChange: (callback: (status: K8sStatus) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: K8sStatus): void =>
+        callback(status)
+      ipcRenderer.on('k8s:status-change', handler)
+      return () => {
+        ipcRenderer.removeListener('k8s:status-change', handler)
+      }
+    },
+    onLogChunk: (callback: (chunk: K8sLogChunk) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, chunk: K8sLogChunk): void =>
+        callback(chunk)
+      ipcRenderer.on('k8s:log-chunk', handler)
+      return () => {
+        ipcRenderer.removeListener('k8s:log-chunk', handler)
+      }
+    },
+    onExecData: (callback: (data: K8sExecData) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: K8sExecData): void => callback(data)
+      ipcRenderer.on('k8s:exec-data', handler)
+      return () => {
+        ipcRenderer.removeListener('k8s:exec-data', handler)
+      }
+    },
+    onExecExit: (callback: (data: K8sExecExit) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: K8sExecExit): void => callback(data)
+      ipcRenderer.on('k8s:exec-exit', handler)
+      return () => {
+        ipcRenderer.removeListener('k8s:exec-exit', handler)
+      }
+    },
+    onPortForwardStatus: (callback: (list: K8sPortForwardStatus[]) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, list: K8sPortForwardStatus[]): void =>
+        callback(list)
+      ipcRenderer.on('k8s:portforward-status', handler)
+      return () => {
+        ipcRenderer.removeListener('k8s:portforward-status', handler)
+      }
+    }
   }
 }
 
