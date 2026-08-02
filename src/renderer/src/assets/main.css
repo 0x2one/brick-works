@@ -472,47 +472,6 @@
   transform: scale(1.15);
 }
 
-/* ── SSH Tunnel Tabs: pin header, scroll only the pane ── */
-
-.ssh-tabs {
-  display: flex;
-  flex-direction: column;
-}
-
-.ssh-tabs .ant-tabs-nav {
-  flex: none;
-  padding-inline: 24px;
-}
-
-.ssh-tabs .ant-tabs-body-holder {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-}
-
-.ssh-tabs .ant-tabs-body-holder > .ant-tabs-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.ssh-tabs .ant-tabs-content {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.ssh-tabs .ant-tabs-content-active {
-  display: flex;
-  flex-direction: column;
-}
-
-.ssh-tab-pane {
-  flex: 1;
-  min-height: 0;
-}
-
 /* ── Animations ── */
 
 @keyframes fadeUp {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Modal, Form, Input, InputNumber, Radio, Segmented, Tabs, Empty, Button } from 'antd'
+import { App, Modal, Form, Input, InputNumber, Radio, Segmented, Empty, Button } from 'antd'
 import {
   PlusOutlined,
   ApiOutlined,
@@ -848,87 +848,49 @@ function SshTunnel(): React.JSX.Element {
     </section>
   )
 
-  return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 56px)' }}>
-      <p className="text-xs text-[var(--text-secondary)] pt-6 px-6 pb-2">{t('sshDesc')}</p>
+  const tabDefs: Array<{ key: string; icon: React.ReactNode; label: string }> = [
+    { key: 'nodes', icon: <CloudServerOutlined />, label: t('sshTabNodes') },
+    { key: 'local', icon: <ArrowRightOutlined />, label: t('sshTypeLocal') },
+    { key: 'remote', icon: <ArrowLeftOutlined />, label: t('sshTypeRemote') },
+    { key: 'socks5', icon: <GlobalOutlined />, label: t('sshTypeSocks5') },
+    { key: 'logs', icon: <FileTextOutlined />, label: t('sshTabLogs') }
+  ]
 
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        className="ssh-tabs flex-1 min-h-0"
-        items={[
-          {
-            key: 'nodes',
-            label: (
-              <span className="flex items-center gap-1.5">
-                <CloudServerOutlined />
-                {t('sshTabNodes')}
-              </span>
-            ),
-            children: (
-              <div className="ssh-tab-pane overflow-auto">
-                <div className="max-w-[760px] ml-6">{nodesTab}</div>
-              </div>
+  return (
+    <div className="flex flex-col">
+      <div className="sticky top-0 z-10 bg-[var(--content-bg)]">
+        <p className="text-xs text-[var(--text-secondary)] pt-6 px-6 pb-2">{t('sshDesc')}</p>
+        <div className="flex items-center border-b border-[var(--border-subtle)] px-6">
+          {tabDefs.map((tab) => {
+            const active = activeTab === tab.key
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`relative px-3 py-2 text-sm flex items-center gap-1.5 transition-colors cursor-pointer border-none bg-transparent ${
+                  active
+                    ? 'text-[var(--text-primary)] font-medium'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+                {active && (
+                  <span className="absolute left-3 right-3 -bottom-px h-0.5 rounded-full bg-[var(--accent)]" />
+                )}
+              </button>
             )
-          },
-          {
-            key: 'local',
-            label: (
-              <span className="flex items-center gap-1.5">
-                <ArrowRightOutlined />
-                {t('sshTypeLocal')}
-              </span>
-            ),
-            children: (
-              <div className="ssh-tab-pane overflow-auto">
-                <div className="max-w-[760px] ml-6">{localTab}</div>
-              </div>
-            )
-          },
-          {
-            key: 'remote',
-            label: (
-              <span className="flex items-center gap-1.5">
-                <ArrowLeftOutlined />
-                {t('sshTypeRemote')}
-              </span>
-            ),
-            children: (
-              <div className="ssh-tab-pane overflow-auto">
-                <div className="max-w-[760px] ml-6">{remoteTab}</div>
-              </div>
-            )
-          },
-          {
-            key: 'socks5',
-            label: (
-              <span className="flex items-center gap-1.5">
-                <GlobalOutlined />
-                {t('sshTypeSocks5')}
-              </span>
-            ),
-            children: (
-              <div className="ssh-tab-pane overflow-auto">
-                <div className="max-w-[760px] ml-6">{socksTab}</div>
-              </div>
-            )
-          },
-          {
-            key: 'logs',
-            label: (
-              <span className="flex items-center gap-1.5">
-                <FileTextOutlined />
-                {t('sshTabLogs')}
-              </span>
-            ),
-            children: (
-              <div className="ssh-tab-pane overflow-auto">
-                <div className="max-w-[760px] ml-6">{logsTab}</div>
-              </div>
-            )
-          }
-        ]}
-      />
+          })}
+        </div>
+      </div>
+
+      <div className="max-w-[760px] ml-6 pr-6 pb-6">
+        {activeTab === 'nodes' && nodesTab}
+        {activeTab === 'local' && localTab}
+        {activeTab === 'remote' && remoteTab}
+        {activeTab === 'socks5' && socksTab}
+        {activeTab === 'logs' && logsTab}
+      </div>
 
       <NodeEditor
         open={editorOpen}
