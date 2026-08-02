@@ -394,6 +394,7 @@
   "k8sContextRequired": "Context is required",
   "k8sClusterSaved": "Cluster saved",
   "k8sDeleteCluster": "Delete",
+  "k8sDeleteClusterConfirm": "Delete cluster \"{{name}}\"? This cannot be undone.",
   "k8sClusterDeleted": "Cluster deleted",
   "k8sTabPods": "Pods",
   "k8sTabWorkloads": "Workloads",

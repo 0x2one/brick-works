@@ -394,6 +394,7 @@
   "k8sContextRequired": "请选择 context",
   "k8sClusterSaved": "集群已保存",
   "k8sDeleteCluster": "删除集群",
+  "k8sDeleteClusterConfirm": "确认删除集群「{{name}}」？此操作不可恢复。",
   "k8sClusterDeleted": "集群已删除",
   "k8sTabPods": "Pods",
   "k8sTabWorkloads": "工作负载",

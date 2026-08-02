@@ -502,11 +502,22 @@ function K8sManage(): React.JSX.Element {
     await refreshClusters()
   }
 
-  const deleteCluster = async (id: string): Promise<void> => {
-    await window.api.k8s.deleteCluster(id)
-    if (selectedClusterId === id) setSelectedClusterId(undefined)
-    await refreshClusters()
-    message.success(t('k8sClusterDeleted'))
+  const deleteCluster = (id: string): void => {
+    const cluster = clusters.find((c) => c.id === id)
+    Modal.confirm({
+      title: t('k8sDeleteCluster'),
+      content: t('k8sDeleteClusterConfirm', {
+        name: cluster ? `${cluster.name} (${cluster.context})` : id
+      }),
+      okText: t('k8sDeleteCluster'),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        await window.api.k8s.deleteCluster(id)
+        if (selectedClusterId === id) setSelectedClusterId(undefined)
+        await refreshClusters()
+        message.success(t('k8sClusterDeleted'))
+      }
+    })
   }
 
   const stopLogs = useCallback(async () => {
@@ -958,7 +969,7 @@ function K8sManage(): React.JSX.Element {
             <Button
               danger
               icon={<DeleteOutlined />}
-              onClick={() => void deleteCluster(selectedClusterId)}
+              onClick={() => deleteCluster(selectedClusterId)}
             >
               {t('k8sDeleteCluster')}
             </Button>
