@@ -96,11 +96,26 @@ function K8sManage(): React.JSX.Element {
   const [logText, setLogText] = useState('')
   const [logSessionId, setLogSessionId] = useState<string | null>(null)
   const logPreRef = useRef<HTMLPreElement>(null)
+  const logAutoScrollRef = useRef(logAutoScroll)
+  const ignoreLogScrollRef = useRef(false)
+  logAutoScrollRef.current = logAutoScroll
 
   const scrollLogsToBottom = (): void => {
     const el = logPreRef.current
     if (!el) return
+    ignoreLogScrollRef.current = true
     el.scrollTop = el.scrollHeight
+    requestAnimationFrame(() => {
+      ignoreLogScrollRef.current = false
+    })
+  }
+
+  const onLogScroll = (): void => {
+    if (ignoreLogScrollRef.current || !logAutoScrollRef.current) return
+    const el = logPreRef.current
+    if (!el) return
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+    if (distance > 24) setLogAutoScroll(false)
   }
 
   const toggleLogAutoScroll = (): void => {
@@ -1093,9 +1108,10 @@ function K8sManage(): React.JSX.Element {
             <Switch size="small" checked={logWrap} onChange={setLogWrap} />
             <Button
               size="small"
+              type={logAutoScroll ? 'primary' : 'default'}
               icon={<ArrowDownOutlined />}
-              title={t('k8sLogScrollBottom')}
-              onClick={scrollLogsToBottom}
+              title={t('k8sLogAutoScroll')}
+              onClick={toggleLogAutoScroll}
             />
             <Button
               size="small"
@@ -1107,6 +1123,7 @@ function K8sManage(): React.JSX.Element {
       >
         <pre
           ref={logPreRef}
+          onScroll={onLogScroll}
           className={`m-0 p-3 rounded-lg text-xs overflow-auto flex-1 min-h-0 ${
             logWrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'
           }`}

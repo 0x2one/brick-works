@@ -420,7 +420,7 @@
   "k8sPortForward": "Port Forward",
   "k8sFollow": "Follow",
   "k8sLogWrap": "Wrap",
-  "k8sLogScrollBottom": "Scroll to bottom",
+  "k8sLogAutoScroll": "Auto scroll to bottom",
   "k8sLogWaiting": "Waiting for logs...",
   "k8sLogDownloaded": "Logs saved",
   "k8sLogFail": "Failed to fetch logs",

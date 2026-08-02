@@ -420,7 +420,7 @@
   "k8sPortForward": "端口转发",
   "k8sFollow": "Follow",
   "k8sLogWrap": "换行",
-  "k8sLogScrollBottom": "滚动到底部",
+  "k8sLogAutoScroll": "自动滚动到底部",
   "k8sLogWaiting": "等待日志...",
   "k8sLogDownloaded": "日志已保存",
   "k8sLogFail": "获取日志失败",
