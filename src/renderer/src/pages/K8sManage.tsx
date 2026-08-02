@@ -37,6 +37,7 @@ import {
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { useTheme } from '../theme/ThemeProvider'
 
 const LS_K8S_NAME_QUERY = 'brickworks:k8sNameQuery'
 const LS_K8S_EXEC_SHELL = 'brickworks:k8sExecShell'
@@ -44,6 +45,13 @@ const LS_K8S_EXEC_SHELL = 'brickworks:k8sExecShell'
 function readCssVar(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
   return value || fallback
+}
+
+function applyTermTheme(term: Terminal): void {
+  term.options.theme = {
+    background: readCssVar('--bg-warm', '#f3f0eb'),
+    foreground: readCssVar('--text-primary', '#2a2520')
+  }
 }
 
 function loadExecShell(): 'bash' | 'sh' {
@@ -85,6 +93,7 @@ function toBase64(str: string): string {
 function K8sManage(): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
+  const { resolved: themeResolved } = useTheme()
 
   const [clusters, setClusters] = useState<K8sCluster[]>([])
   const [status, setStatus] = useState<K8sStatus | null>(null)
@@ -585,14 +594,12 @@ function K8sManage(): React.JSX.Element {
     if (!host) return
 
     destroyTerminal()
-    const bg = readCssVar('--bg-warm', '#f3f0eb')
-    const fg = readCssVar('--text-primary', '#2a2520')
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 13,
-      fontFamily: 'Consolas, "Courier New", monospace',
-      theme: { background: bg, foreground: fg }
+      fontFamily: 'Consolas, "Courier New", monospace'
     })
+    applyTermTheme(term)
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(host)
@@ -652,6 +659,15 @@ function K8sManage(): React.JSX.Element {
       destroyTerminal()
     }
   }, [execReady, execOpen, execPod, execContainer, execShell, t])
+
+  useEffect(() => {
+    if (!execOpen) return
+    const term = terminalRef.current
+    if (!term) return
+    // Defer so ThemeProvider's data-theme update is applied first
+    const id = window.setTimeout(() => applyTermTheme(term), 0)
+    return () => window.clearTimeout(id)
+  }, [themeResolved, execOpen, execReady])
 
   const openPortForward = (pod: K8sPodRow): void => {
     setPfPod(pod)
