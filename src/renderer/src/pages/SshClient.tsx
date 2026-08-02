@@ -384,6 +384,10 @@ function SshClient(): React.JSX.Element {
   const termHostsRef = useRef<Map<string, HTMLDivElement>>(new Map())
   const termsRef = useRef<Map<string, TermRuntime>>(new Map())
   const tabsRef = useRef<SessionTab[]>([])
+  const connectingTabsRef = useRef<Set<string>>(new Set())
+  const connectShellRef = useRef<(tabId: string, reconnect?: boolean) => Promise<void>>(
+    async () => {}
+  )
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? null,
@@ -414,6 +418,7 @@ function SshClient(): React.JSX.Element {
       // ignore
     }
     termsRef.current.delete(tabId)
+    connectingTabsRef.current.delete(tabId)
   }, [])
 
   const stopTabShell = useCallback(
@@ -455,6 +460,66 @@ function SshClient(): React.JSX.Element {
     [stopTabShell, maximized]
   )
 
+  const connectShell = useCallback(
+    async (tabId: string, reconnect = false): Promise<void> => {
+      const rt = termsRef.current.get(tabId)
+      const tab = tabsRef.current.find((item) => item.id === tabId)
+      if (!rt || !tab) return
+      if (rt.shellSessionId || connectingTabsRef.current.has(tabId)) return
+
+      connectingTabsRef.current.add(tabId)
+      setTabs((prev) =>
+        prev.map((item) => (item.id === tabId ? { ...item, connecting: true } : item))
+      )
+      if (reconnect) {
+        rt.term.writeln(`\x1b[33m[${t('sshClientReconnecting')}]\x1b[0m`)
+      }
+
+      try {
+        rt.fit.fit()
+        const { sessionId } = await window.api.ssh.startShell({
+          nodeId: tab.nodeId,
+          cols: rt.term.cols,
+          rows: rt.term.rows
+        })
+        const still = tabsRef.current.some((item) => item.id === tabId)
+        if (!still) {
+          await window.api.ssh.stopShell(sessionId)
+          destroyTerm(tabId)
+          return
+        }
+        rt.shellSessionId = sessionId
+        setTabs((prev) =>
+          prev.map((item) =>
+            item.id === tabId ? { ...item, shellSessionId: sessionId, connecting: false } : item
+          )
+        )
+        await window.api.ssh.resizeShell(sessionId, rt.term.cols, rt.term.rows)
+        window.setTimeout(() => {
+          const cur = termsRef.current.get(tabId)
+          if (!cur?.shellSessionId) return
+          cur.fit.fit()
+          void window.api.ssh.resizeShell(cur.shellSessionId, cur.term.cols, cur.term.rows)
+          cur.term.focus()
+        }, 80)
+        rt.term.focus()
+      } catch (err) {
+        rt.term.writeln(`\x1b[31m${mapSshError(err, t)}\x1b[0m`)
+        rt.term.writeln(`\x1b[33m[${t('sshClientPressEnterReconnect')}]\x1b[0m`)
+        setTabs((prev) =>
+          prev.map((item) => (item.id === tabId ? { ...item, connecting: false } : item))
+        )
+      } finally {
+        connectingTabsRef.current.delete(tabId)
+      }
+    },
+    [destroyTerm, t]
+  )
+
+  useEffect(() => {
+    connectShellRef.current = connectShell
+  }, [connectShell])
+
   useEffect(() => {
     const offData = window.api.ssh.onShellData((payload) => {
       for (const rt of termsRef.current.values()) {
@@ -475,9 +540,11 @@ function SshClient(): React.JSX.Element {
             tab.id === id ? { ...tab, shellSessionId: null, connecting: false } : tab
           )
         )
+        if (payload.reason === 'stopped') return
         rt.term.writeln(
           `\r\n\x1b[33m[${t('sshClientShellClosed')}${payload.reason ? `: ${payload.reason}` : ''}]\x1b[0m`
         )
+        rt.term.writeln(`\x1b[33m[${t('sshClientPressEnterReconnect')}]\x1b[0m`)
         return
       }
     })
@@ -523,10 +590,6 @@ function SshClient(): React.JSX.Element {
         return
       }
 
-      setTabs((prev) =>
-        prev.map((item) => (item.id === tab.id ? { ...item, connecting: true } : item))
-      )
-
       const term = new Terminal({
         cursorBlink: true,
         fontSize: 13,
@@ -540,50 +603,26 @@ function SshClient(): React.JSX.Element {
       const rt: TermRuntime = { term, fit, shellSessionId: null }
       termsRef.current.set(tab.id, rt)
 
-      try {
-        const { sessionId } = await window.api.ssh.startShell({
-          nodeId: tab.nodeId,
-          cols: term.cols,
-          rows: term.rows
-        })
-        const still = tabsRef.current.some((item) => item.id === tab.id)
-        if (!still) {
-          await window.api.ssh.stopShell(sessionId)
-          destroyTerm(tab.id)
+      term.onData((data) => {
+        const cur = termsRef.current.get(tab.id)
+        if (!cur) return
+        if (cur.shellSessionId) {
+          void window.api.ssh.writeShell(cur.shellSessionId, toBase64(data))
           return
         }
-        rt.shellSessionId = sessionId
-        setTabs((prev) =>
-          prev.map((item) =>
-            item.id === tab.id ? { ...item, shellSessionId: sessionId, connecting: false } : item
-          )
-        )
-        term.onData((data) => {
-          const sid = termsRef.current.get(tab.id)?.shellSessionId
-          if (sid) void window.api.ssh.writeShell(sid, toBase64(data))
-        })
-        term.onResize(({ cols, rows }) => {
-          const sid = termsRef.current.get(tab.id)?.shellSessionId
-          if (sid) void window.api.ssh.resizeShell(sid, cols, rows)
-        })
-        fit.fit()
-        await window.api.ssh.resizeShell(sessionId, term.cols, term.rows)
-        window.setTimeout(() => {
-          const cur = termsRef.current.get(tab.id)
-          if (!cur?.shellSessionId) return
-          cur.fit.fit()
-          void window.api.ssh.resizeShell(cur.shellSessionId, cur.term.cols, cur.term.rows)
-          cur.term.focus()
-        }, 80)
-        term.focus()
-      } catch (err) {
-        term.writeln(`\x1b[31m${mapSshError(err, t)}\x1b[0m`)
-        setTabs((prev) =>
-          prev.map((item) => (item.id === tab.id ? { ...item, connecting: false } : item))
-        )
-      }
+        if (connectingTabsRef.current.has(tab.id)) return
+        if (data === '\r' || data === '\n') {
+          void connectShellRef.current(tab.id, true)
+        }
+      })
+      term.onResize(({ cols, rows }) => {
+        const sid = termsRef.current.get(tab.id)?.shellSessionId
+        if (sid) void window.api.ssh.resizeShell(sid, cols, rows)
+      })
+
+      await connectShellRef.current(tab.id, false)
     },
-    [destroyTerm, t]
+    []
   )
 
   useEffect(() => {

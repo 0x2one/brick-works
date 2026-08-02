@@ -273,6 +273,8 @@
   "sshClientNodes": "Nodes",
   "sshClientFiles": "File Manager",
   "sshClientShellClosed": "Session closed",
+  "sshClientPressEnterReconnect": "Press Enter to reconnect",
+  "sshClientReconnecting": "Reconnecting…",
   "sshClientShellFail": "Failed to open SSH console",
   "sshClientEmptyWorkspace": "Select a node on the left to open a session",
   "sshClientCollapseSidebar": "Collapse node panel",
