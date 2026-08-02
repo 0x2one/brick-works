@@ -951,6 +951,15 @@ function SshTunnel(): React.JSX.Element {
               (tun) =>
                 tun.type === filterType && (tun.status === 'running' || tun.status === 'starting')
             )
+          const displayState =
+            connecting
+              ? 'connecting'
+              : typeRunning
+                ? 'connected'
+                : state === 'error'
+                  ? 'error'
+                  : 'disconnected'
+          const typeConnected = typeRunning
           return (
             <section key={node.id} className={CARD_CLS}>
               <div
@@ -960,23 +969,23 @@ function SshTunnel(): React.JSX.Element {
                 <span className="w-4 flex items-center justify-center text-[var(--text-secondary)] text-xs shrink-0">
                   {expanded ? <DownOutlined /> : <RightOutlined />}
                 </span>
-                <span className={`w-2 h-2 rounded-full shrink-0 ${STATE_DOT_CLS[state]}`} />
+                <span className={`w-2 h-2 rounded-full shrink-0 ${STATE_DOT_CLS[displayState]}`} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-[var(--text-primary)] truncate">
                     {node.name}
                   </div>
                   <div className="text-[11px] text-[var(--text-secondary)]">
-                    {state === 'connected'
+                    {displayState === 'connected'
                       ? t('sshConnected')
-                      : state === 'connecting'
+                      : displayState === 'connecting'
                         ? t('sshConnecting')
-                        : state === 'error'
+                        : displayState === 'error'
                           ? t('sshError')
                           : t('sshDisconnected')}
                     {' · '}
                     {t('sshTunnelCount', { count: nodeTunnels.length })}
                   </div>
-                  {state === 'error' && session?.error && (
+                  {displayState === 'error' && session?.error && (
                     <div className="text-[11px] text-red-500 mt-0.5 truncate">
                       {mapSshError(session.error, t)}
                     </div>
@@ -998,18 +1007,18 @@ function SshTunnel(): React.JSX.Element {
                     handleConnect(node, filterType)
                   }}
                   disabled={connecting}
-                  className={connected && typeRunning ? BTN_CLS : ACCENT_BTN_CLS}
+                  className={typeConnected ? BTN_CLS : ACCENT_BTN_CLS}
                 >
                   {connecting ? (
                     <LoadingOutlined />
-                  ) : connected && typeRunning ? (
+                  ) : typeConnected ? (
                     <StopOutlined />
                   ) : (
                     <PlayCircleOutlined />
                   )}
                   {connecting
                     ? t('sshConnecting')
-                    : connected && typeRunning
+                    : typeConnected
                       ? t('sshDisconnect')
                       : t('sshConnect')}
                 </button>
