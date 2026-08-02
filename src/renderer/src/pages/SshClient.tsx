@@ -1,0 +1,1324 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import {
+  App,
+  Modal,
+  Form,
+  Input,
+  InputNumber,
+  Radio,
+  Empty,
+  Button,
+  Table,
+  Breadcrumb,
+  Spin,
+  Dropdown,
+  Tooltip
+} from 'antd'
+import type { MenuProps } from 'antd'
+import {
+  PlusOutlined,
+  ApiOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  CloudServerOutlined,
+  FolderOpenOutlined,
+  FolderOutlined,
+  FileOutlined,
+  LinkOutlined,
+  LoadingOutlined,
+  DownloadOutlined,
+  ReloadOutlined,
+  HomeOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  CloseOutlined,
+  ExpandOutlined,
+  CompressOutlined,
+  UploadOutlined,
+  FileAddOutlined,
+  FolderAddOutlined,
+  CodeOutlined
+} from '@ant-design/icons'
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import '@xterm/xterm/css/xterm.css'
+import { useTheme } from '../theme/ThemeProvider'
+
+const BTN_ICON =
+  'h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer ' +
+  'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] ' +
+  'disabled:opacity-40 disabled:cursor-not-allowed'
+
+const BTN_TEXT =
+  'h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs border-none cursor-pointer ' +
+  'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] ' +
+  'disabled:opacity-40 disabled:cursor-not-allowed'
+
+const BTN_TEXT_ACTIVE =
+  'h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs border-none cursor-pointer ' +
+  'bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25'
+
+const TITLE_BAR_CLS =
+  'h-10 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--border-subtle)] bg-[var(--surface)]'
+
+const SSH_ERROR_CODES = [
+  'HOST_KEY_MISMATCH',
+  'AUTH_FAILED',
+  'NODE_NOT_FOUND',
+  'SFTP_FAILED',
+  'SFTP_LIST_FAILED',
+  'SFTP_DOWNLOAD_FAILED',
+  'SFTP_UPLOAD_FAILED',
+  'SFTP_MKDIR_FAILED',
+  'SFTP_WRITE_FAILED',
+  'SHELL_FAILED'
+] as const
+
+type MaximizeMode = null | 'console' | 'files'
+
+interface SessionTab {
+  id: string
+  nodeId: string
+  title: string
+  subtitle: string
+  shellSessionId: string | null
+  filesOpen: boolean
+  remotePath: string
+  connecting: boolean
+}
+
+interface TermRuntime {
+  term: Terminal
+  fit: FitAddon
+  shellSessionId: string | null
+}
+
+interface EditorValues {
+  name: string
+  host: string
+  port: number
+  username: string
+  authType: 'password' | 'privateKey'
+  password?: string
+  privateKeyPath?: string
+  passphrase?: string
+}
+
+function extractSshErrorCode(raw: unknown): string {
+  const message = raw instanceof Error ? raw.message : String(raw ?? '')
+  if (!message) return ''
+  for (const code of SSH_ERROR_CODES) {
+    if (message === code || message.endsWith(`: ${code}`) || message.endsWith(`Error: ${code}`)) {
+      return code
+    }
+  }
+  return message
+}
+
+function mapSshError(
+  raw: unknown,
+  t: (key: string, opts?: Record<string, unknown>) => string
+): string {
+  const code = extractSshErrorCode(raw)
+  if (code === 'HOST_KEY_MISMATCH') return t('sshHostKeyMismatch')
+  if (code === 'AUTH_FAILED') return t('sshAuthFailed')
+  if (code === 'NODE_NOT_FOUND') return t('sshNodeNotFound')
+  if (code === 'SFTP_FAILED' || code === 'SFTP_LIST_FAILED') return t('sshClientSftpFail')
+  if (code === 'SFTP_DOWNLOAD_FAILED') return t('sshClientDownloadFail')
+  if (code === 'SFTP_UPLOAD_FAILED') return t('sshClientUploadFail')
+  if (code === 'SFTP_MKDIR_FAILED' || code === 'SFTP_WRITE_FAILED') return t('sshClientCreateFail')
+  if (code === 'SHELL_FAILED') return t('sshClientShellFail')
+  return t('sshConnectFail', { msg: code })
+}
+
+function readCssVar(name: string, fallback: string): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return value || fallback
+}
+
+function applyTermTheme(term: Terminal): void {
+  term.options.theme = {
+    background: readCssVar('--bg-warm', '#f3f0eb'),
+    foreground: readCssVar('--text-primary', '#2a2520')
+  }
+}
+
+function toBase64(str: string): string {
+  const bytes = new TextEncoder().encode(str)
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary)
+}
+
+function formatSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '-'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+function pathSegments(path: string): Array<{ name: string; path: string }> {
+  const cleaned = path.replace(/\/+$/, '') || '/'
+  if (cleaned === '/') return [{ name: '/', path: '/' }]
+  const parts = cleaned.split('/').filter(Boolean)
+  const segs: Array<{ name: string; path: string }> = [{ name: '/', path: '/' }]
+  let cur = ''
+  for (const part of parts) {
+    cur += `/${part}`
+    segs.push({ name: part, path: cur })
+  }
+  return segs
+}
+
+function posixJoin(base: string, name: string): string {
+  if (base === '/' || base === '') return `/${name}`
+  return `${base.replace(/\/+$/, '')}/${name}`
+}
+
+function newTabId(): string {
+  return `tab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function NodeEditor({
+  open,
+  editing,
+  onCancel,
+  onSaved
+}: {
+  open: boolean
+  editing: SshNodeView | null
+  onCancel: () => void
+  onSaved: (node: SshNodeView) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const { message } = App.useApp()
+  const [form] = Form.useForm<EditorValues>()
+
+  useEffect(() => {
+    if (!open) return
+    form.setFieldsValue({
+      name: editing?.name ?? '',
+      host: editing?.host ?? '',
+      port: editing?.port ?? 22,
+      username: editing?.username ?? '',
+      authType: editing?.authType ?? 'password',
+      password: '',
+      privateKeyPath: editing?.privateKeyPath ?? '',
+      passphrase: ''
+    })
+  }, [open, editing, form])
+
+  const handleChooseKey = useCallback(async () => {
+    const path = await window.api.ssh.chooseKeyFile()
+    if (path) form.setFieldValue('privateKeyPath', path)
+  }, [form])
+
+  const handleOk = useCallback(async () => {
+    try {
+      const values = await form.validateFields()
+      const node = await window.api.ssh.saveNode({
+        id: editing?.id,
+        name: values.name,
+        host: values.host,
+        port: values.port,
+        username: values.username,
+        authType: values.authType,
+        password: values.authType === 'password' ? values.password : undefined,
+        privateKeyPath: values.authType === 'privateKey' ? values.privateKeyPath : undefined,
+        passphrase: values.authType === 'privateKey' ? values.passphrase : undefined
+      })
+      message.success(t('sshSaved'))
+      onSaved(node)
+    } catch (err) {
+      if ((err as { errorFields?: unknown }).errorFields) return
+      const msg = (err as Error)?.message ?? ''
+      message.error(t('sshNodeSaveFail', { msg }))
+    }
+  }, [form, editing, message, onSaved, t])
+
+  const handleClearHostKey = useCallback(async () => {
+    if (!editing) return
+    try {
+      await window.api.ssh.clearHostKey(editing.id)
+      message.success(t('sshHostKeyCleared'))
+    } catch {
+      message.error(t('sshHostKeyClearFail'))
+    }
+  }, [editing, message, t])
+
+  return (
+    <Modal
+      open={open}
+      title={editing ? t('sshNodeEdit') : t('sshNodeNew')}
+      onCancel={onCancel}
+      onOk={handleOk}
+      okText={t('sshSave')}
+      cancelText={t('sshCancel')}
+      destroyOnHidden
+      width={460}
+    >
+      <Form form={form} layout="vertical" className="mt-2">
+        <Form.Item name="name" label={t('sshName')} rules={[{ required: true }]}>
+          <Input placeholder="cloud-server" />
+        </Form.Item>
+        <div className="grid grid-cols-3 gap-3">
+          <Form.Item
+            name="host"
+            label={t('sshHost')}
+            rules={[{ required: true }]}
+            className="col-span-2"
+          >
+            <Input placeholder="example.com" />
+          </Form.Item>
+          <Form.Item name="port" label={t('sshPort')} rules={[{ required: true }]}>
+            <InputNumber min={1} max={65535} className="w-full" />
+          </Form.Item>
+        </div>
+        <Form.Item name="username" label={t('sshUsername')} rules={[{ required: true }]}>
+          <Input placeholder="root" />
+        </Form.Item>
+        {editing && (
+          <div className="mb-4">
+            <Button size="small" onClick={handleClearHostKey}>
+              {t('sshClearHostKey')}
+            </Button>
+            <p className="text-[10px] text-[var(--text-secondary)] mt-1">
+              {t('sshClearHostKeyHint')}
+            </p>
+          </div>
+        )}
+        <Form.Item name="authType" label={t('sshAuthType')}>
+          <Radio.Group
+            optionType="button"
+            buttonStyle="solid"
+            options={[
+              { label: t('sshAuthPassword'), value: 'password' },
+              { label: t('sshAuthKey'), value: 'privateKey' }
+            ]}
+          />
+        </Form.Item>
+        <Form.Item noStyle shouldUpdate={(prev, cur) => prev.authType !== cur.authType}>
+          {() => {
+            const authType = form.getFieldValue('authType') as EditorValues['authType']
+            if (authType === 'password') {
+              return (
+                <Form.Item
+                  name="password"
+                  label={t('sshPassword')}
+                  rules={
+                    editing?.hasPassword
+                      ? []
+                      : [{ required: true, message: t('sshPasswordRequired') }]
+                  }
+                  extra={editing?.hasPassword ? t('sshKeepSecret') : undefined}
+                >
+                  <Input.Password autoComplete="new-password" />
+                </Form.Item>
+              )
+            }
+            if (authType === 'privateKey') {
+              return (
+                <>
+                  <Form.Item
+                    name="privateKeyPath"
+                    label={t('sshKeyPath')}
+                    rules={[{ required: true, message: t('sshKeyRequired') }]}
+                  >
+                    <Input
+                      readOnly
+                      placeholder="~/.ssh/id_rsa"
+                      addonAfter={
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<FolderOpenOutlined />}
+                          onClick={handleChooseKey}
+                        >
+                          {t('sshChooseKey')}
+                        </Button>
+                      }
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name="passphrase"
+                    label={t('sshPassphrase')}
+                    extra={editing?.hasPassphrase ? t('sshKeepSecret') : undefined}
+                  >
+                    <Input.Password autoComplete="new-password" />
+                  </Form.Item>
+                </>
+              )
+            }
+            return null
+          }}
+        </Form.Item>
+      </Form>
+    </Modal>
+  )
+}
+
+function SshClient(): React.JSX.Element {
+  const { t } = useTranslation()
+  const { message, modal } = App.useApp()
+  const { resolved: themeResolved } = useTheme()
+
+  const [nodes, setNodes] = useState<SshNodeView[]>([])
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editing, setEditing] = useState<SshNodeView | null>(null)
+  const [testingId, setTestingId] = useState<string | null>(null)
+
+  const [tabs, setTabs] = useState<SessionTab[]>([])
+  const [activeTabId, setActiveTabId] = useState<string | null>(null)
+  const [maximized, setMaximized] = useState<MaximizeMode>(null)
+
+  const [entriesByTab, setEntriesByTab] = useState<Record<string, SshSftpEntry[]>>({})
+  const [filesLoading, setFilesLoading] = useState(false)
+  const [downloadingPath, setDownloadingPath] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [createOpen, setCreateOpen] = useState<'file' | 'dir' | null>(null)
+  const [createName, setCreateName] = useState('')
+
+  const termHostsRef = useRef<Map<string, HTMLDivElement>>(new Map())
+  const termsRef = useRef<Map<string, TermRuntime>>(new Map())
+  const tabsRef = useRef<SessionTab[]>([])
+
+  const activeTab = useMemo(
+    () => tabs.find((tab) => tab.id === activeTabId) ?? null,
+    [tabs, activeTabId]
+  )
+
+  useEffect(() => {
+    tabsRef.current = tabs
+  }, [tabs])
+
+  const loadNodes = useCallback(() => {
+    window.api.ssh
+      .listNodes()
+      .then(setNodes)
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    loadNodes()
+  }, [loadNodes])
+
+  const destroyTerm = useCallback((tabId: string) => {
+    const rt = termsRef.current.get(tabId)
+    if (!rt) return
+    try {
+      rt.term.dispose()
+    } catch {
+      // ignore
+    }
+    termsRef.current.delete(tabId)
+  }, [])
+
+  const stopTabShell = useCallback(
+    async (tab: SessionTab): Promise<void> => {
+      const rt = termsRef.current.get(tab.id)
+      const sid = rt?.shellSessionId ?? tab.shellSessionId
+      if (sid) await window.api.ssh.stopShell(sid)
+      destroyTerm(tab.id)
+    },
+    [destroyTerm]
+  )
+
+  const closeTab = useCallback(
+    async (tabId: string): Promise<void> => {
+      const tab = tabsRef.current.find((item) => item.id === tabId)
+      if (!tab) return
+      await stopTabShell(tab)
+      if (tab.filesOpen) {
+        const othersOpen = tabsRef.current.some(
+          (item) => item.id !== tabId && item.nodeId === tab.nodeId && item.filesOpen
+        )
+        if (!othersOpen) await window.api.ssh.sftpDisconnect(tab.nodeId)
+      }
+      setTabs((prev) => {
+        const next = prev.filter((item) => item.id !== tabId)
+        setActiveTabId((cur) => {
+          if (cur !== tabId) return cur
+          return next[next.length - 1]?.id ?? null
+        })
+        return next
+      })
+      setEntriesByTab((prev) => {
+        const next = { ...prev }
+        delete next[tabId]
+        return next
+      })
+      if (maximized) setMaximized(null)
+    },
+    [stopTabShell, maximized]
+  )
+
+  useEffect(() => {
+    const offData = window.api.ssh.onShellData((payload) => {
+      for (const rt of termsRef.current.values()) {
+        if (rt.shellSessionId !== payload.sessionId) continue
+        const binary = atob(payload.data)
+        const bytes = new Uint8Array(binary.length)
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+        rt.term.write(bytes)
+        return
+      }
+    })
+    const offExit = window.api.ssh.onShellExit((payload) => {
+      for (const [id, rt] of termsRef.current) {
+        if (rt.shellSessionId !== payload.sessionId) continue
+        rt.shellSessionId = null
+        setTabs((prev) =>
+          prev.map((tab) =>
+            tab.id === id ? { ...tab, shellSessionId: null, connecting: false } : tab
+          )
+        )
+        rt.term.writeln(
+          `\r\n\x1b[33m[${t('sshClientShellClosed')}${payload.reason ? `: ${payload.reason}` : ''}]\x1b[0m`
+        )
+        return
+      }
+    })
+    return () => {
+      offData()
+      offExit()
+    }
+  }, [t])
+
+  useEffect(() => {
+    const terms = termsRef.current
+    const tabsSnapshot = tabsRef
+    return () => {
+      for (const [tabId, rt] of terms) {
+        if (rt.shellSessionId) void window.api.ssh.stopShell(rt.shellSessionId)
+        try {
+          rt.term.dispose()
+        } catch {
+          // ignore
+        }
+        terms.delete(tabId)
+      }
+      const nodeIds = new Set(tabsSnapshot.current.map((tab) => tab.nodeId))
+      for (const nodeId of nodeIds) void window.api.ssh.sftpDisconnect(nodeId)
+    }
+  }, [])
+
+  const bootTerminal = useCallback(
+    async (tab: SessionTab): Promise<void> => {
+      const host = termHostsRef.current.get(tab.id)
+      if (!host) return
+      if (termsRef.current.has(tab.id)) {
+        const existing = termsRef.current.get(tab.id)!
+        existing.fit.fit()
+        if (existing.shellSessionId) {
+          await window.api.ssh.resizeShell(
+            existing.shellSessionId,
+            existing.term.cols,
+            existing.term.rows
+          )
+        }
+        existing.term.focus()
+        return
+      }
+
+      setTabs((prev) =>
+        prev.map((item) => (item.id === tab.id ? { ...item, connecting: true } : item))
+      )
+
+      const term = new Terminal({
+        cursorBlink: true,
+        fontSize: 13,
+        fontFamily: 'Consolas, "Courier New", monospace'
+      })
+      applyTermTheme(term)
+      const fit = new FitAddon()
+      term.loadAddon(fit)
+      term.open(host)
+      fit.fit()
+      const rt: TermRuntime = { term, fit, shellSessionId: null }
+      termsRef.current.set(tab.id, rt)
+
+      try {
+        const { sessionId } = await window.api.ssh.startShell({
+          nodeId: tab.nodeId,
+          cols: term.cols,
+          rows: term.rows
+        })
+        const still = tabsRef.current.some((item) => item.id === tab.id)
+        if (!still) {
+          await window.api.ssh.stopShell(sessionId)
+          destroyTerm(tab.id)
+          return
+        }
+        rt.shellSessionId = sessionId
+        setTabs((prev) =>
+          prev.map((item) =>
+            item.id === tab.id ? { ...item, shellSessionId: sessionId, connecting: false } : item
+          )
+        )
+        term.onData((data) => {
+          const sid = termsRef.current.get(tab.id)?.shellSessionId
+          if (sid) void window.api.ssh.writeShell(sid, toBase64(data))
+        })
+        term.onResize(({ cols, rows }) => {
+          const sid = termsRef.current.get(tab.id)?.shellSessionId
+          if (sid) void window.api.ssh.resizeShell(sid, cols, rows)
+        })
+        fit.fit()
+        await window.api.ssh.resizeShell(sessionId, term.cols, term.rows)
+        window.setTimeout(() => {
+          const cur = termsRef.current.get(tab.id)
+          if (!cur?.shellSessionId) return
+          cur.fit.fit()
+          void window.api.ssh.resizeShell(cur.shellSessionId, cur.term.cols, cur.term.rows)
+          cur.term.focus()
+        }, 80)
+        term.focus()
+      } catch (err) {
+        term.writeln(`\x1b[31m${mapSshError(err, t)}\x1b[0m`)
+        setTabs((prev) =>
+          prev.map((item) => (item.id === tab.id ? { ...item, connecting: false } : item))
+        )
+      }
+    },
+    [destroyTerm, t]
+  )
+
+  useEffect(() => {
+    if (!activeTab) return
+    const id = window.requestAnimationFrame(() => {
+      void bootTerminal(activeTab)
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [activeTab, bootTerminal])
+
+  useEffect(() => {
+    for (const rt of termsRef.current.values()) applyTermTheme(rt.term)
+  }, [themeResolved])
+
+  useEffect(() => {
+    const onResize = (): void => {
+      if (!activeTabId) return
+      const rt = termsRef.current.get(activeTabId)
+      if (!rt) return
+      rt.fit.fit()
+      if (rt.shellSessionId) {
+        void window.api.ssh.resizeShell(rt.shellSessionId, rt.term.cols, rt.term.rows)
+      }
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [activeTabId])
+
+  const loadDir = useCallback(
+    async (tabId: string, nodeId: string, path: string) => {
+      setFilesLoading(true)
+      try {
+        const list = await window.api.ssh.sftpList(nodeId, path)
+        setEntriesByTab((prev) => ({
+          ...prev,
+          [tabId]: list.filter((e) => e.name !== '.' && e.name !== '..')
+        }))
+        setTabs((prev) =>
+          prev.map((tab) => (tab.id === tabId ? { ...tab, remotePath: path } : tab))
+        )
+      } catch (err) {
+        message.error(mapSshError(err, t))
+      } finally {
+        setFilesLoading(false)
+      }
+    },
+    [message, t]
+  )
+
+  const openOrFocusTab = useCallback((node: SshNodeView, forceNew = false) => {
+    if (!forceNew) {
+      const existing = tabsRef.current.find((tab) => tab.nodeId === node.id)
+      if (existing) {
+        setActiveTabId(existing.id)
+        setMaximized(null)
+        return
+      }
+    }
+    const tab: SessionTab = {
+      id: newTabId(),
+      nodeId: node.id,
+      title: node.name,
+      subtitle: `${node.username}@${node.host}:${node.port}`,
+      shellSessionId: null,
+      filesOpen: false,
+      remotePath: '/',
+      connecting: true
+    }
+    setTabs((prev) => [...prev, tab])
+    setActiveTabId(tab.id)
+    setMaximized(null)
+  }, [])
+
+  const requestCloseTab = useCallback(
+    (tabId: string) => {
+      const tab = tabsRef.current.find((item) => item.id === tabId)
+      if (!tab) return
+      if (tab.shellSessionId || tab.connecting) {
+        modal.confirm({
+          title: t('sshClientCloseTab'),
+          content: t('sshClientCloseTabConfirm', { name: tab.title }),
+          okText: t('sshClientClose'),
+          cancelText: t('sshCancel'),
+          onOk: () => closeTab(tabId)
+        })
+        return
+      }
+      void closeTab(tabId)
+    },
+    [modal, t, closeTab]
+  )
+
+  const openFiles = useCallback(() => {
+    if (!activeTab) return
+    setTabs((prev) =>
+      prev.map((tab) => (tab.id === activeTab.id ? { ...tab, filesOpen: true } : tab))
+    )
+    setMaximized((m) => (m === 'console' ? null : m))
+    void loadDir(activeTab.id, activeTab.nodeId, activeTab.remotePath || '/')
+  }, [activeTab, loadDir])
+
+  const closeFiles = useCallback(async () => {
+    if (!activeTab) return
+    const tabId = activeTab.id
+    const nodeId = activeTab.nodeId
+    setTabs((prev) => prev.map((tab) => (tab.id === tabId ? { ...tab, filesOpen: false } : tab)))
+    if (maximized === 'files') setMaximized(null)
+    const othersOpen = tabsRef.current.some(
+      (tab) => tab.id !== tabId && tab.nodeId === nodeId && tab.filesOpen
+    )
+    if (!othersOpen) await window.api.ssh.sftpDisconnect(nodeId)
+  }, [activeTab, maximized])
+
+  const handleTest = useCallback(
+    async (node: SshNodeView) => {
+      setTestingId(node.id)
+      try {
+        const res = await window.api.ssh.test(node.id)
+        if (res.ok) message.success(t('sshTestOk', { ms: res.latencyMs }))
+        else message.error(mapSshError(res.error ?? '', t))
+      } catch {
+        message.error(t('sshTestFail', { msg: '' }))
+      } finally {
+        setTestingId(null)
+      }
+    },
+    [message, t]
+  )
+
+  const handleDeleteNode = useCallback(
+    (node: SshNodeView) => {
+      modal.confirm({
+        title: t('sshDelete'),
+        content: t('sshDeleteNodeConfirm', { name: node.name }),
+        okText: t('sshDelete'),
+        cancelText: t('sshCancel'),
+        onOk: async () => {
+          const related = tabsRef.current.filter((tab) => tab.nodeId === node.id)
+          for (const tab of related) await closeTab(tab.id)
+          await window.api.ssh.deleteNode(node.id)
+          setNodes((prev) => prev.filter((n) => n.id !== node.id))
+          message.success(t('sshDeleted'))
+        }
+      })
+    },
+    [modal, message, t, closeTab]
+  )
+
+  const handleDownload = useCallback(
+    async (entry: SshSftpEntry) => {
+      if (!activeTab) return
+      setDownloadingPath(entry.path)
+      try {
+        if (entry.type === 'directory') {
+          const res = await window.api.ssh.sftpDownloadDir(activeTab.nodeId, entry.path)
+          if (res.canceled) return
+          if (res.ok) message.success(t('sshClientDownloadDirOk', { count: res.count ?? 0 }))
+          else message.error(mapSshError(res.error ?? '', t))
+        } else {
+          const res = await window.api.ssh.sftpDownload(activeTab.nodeId, entry.path)
+          if (res.canceled) return
+          if (res.ok) message.success(t('sshClientDownloadOk'))
+          else message.error(mapSshError(res.error ?? '', t))
+        }
+      } catch (err) {
+        message.error(mapSshError(err, t))
+      } finally {
+        setDownloadingPath(null)
+      }
+    },
+    [activeTab, message, t]
+  )
+
+  const handleUpload = useCallback(async () => {
+    if (!activeTab) return
+    setUploading(true)
+    try {
+      const res = await window.api.ssh.sftpUpload(activeTab.nodeId, activeTab.remotePath || '/')
+      if (res.canceled) return
+      if (res.ok) {
+        message.success(t('sshClientUploadOk', { count: res.count ?? 0 }))
+        void loadDir(activeTab.id, activeTab.nodeId, activeTab.remotePath || '/')
+      } else message.error(mapSshError(res.error ?? '', t))
+    } catch (err) {
+      message.error(mapSshError(err, t))
+    } finally {
+      setUploading(false)
+    }
+  }, [activeTab, loadDir, message, t])
+
+  const submitCreate = useCallback(async () => {
+    if (!activeTab || !createOpen) return
+    const name = createName.trim()
+    if (!name || name.includes('/') || name.includes('\\')) {
+      message.error(t('sshClientInvalidName'))
+      return
+    }
+    const remotePath = posixJoin(activeTab.remotePath || '/', name)
+    try {
+      const res =
+        createOpen === 'dir'
+          ? await window.api.ssh.sftpMkdir(activeTab.nodeId, remotePath)
+          : await window.api.ssh.sftpWriteFile(activeTab.nodeId, remotePath, '')
+      if (!res.ok) {
+        message.error(mapSshError(res.error ?? '', t))
+        return
+      }
+      message.success(createOpen === 'dir' ? t('sshClientMkdirOk') : t('sshClientNewFileOk'))
+      setCreateOpen(null)
+      setCreateName('')
+      void loadDir(activeTab.id, activeTab.nodeId, activeTab.remotePath || '/')
+    } catch (err) {
+      message.error(mapSshError(err, t))
+    }
+  }, [activeTab, createOpen, createName, loadDir, message, t])
+
+  const createMenu: MenuProps['items'] = [
+    {
+      key: 'file',
+      icon: <FileAddOutlined />,
+      label: t('sshClientNewFile'),
+      onClick: () => {
+        setCreateName('')
+        setCreateOpen('file')
+      }
+    },
+    {
+      key: 'dir',
+      icon: <FolderAddOutlined />,
+      label: t('sshClientNewFolder'),
+      onClick: () => {
+        setCreateName('')
+        setCreateOpen('dir')
+      }
+    }
+  ]
+
+  const filesOpen = !!activeTab?.filesOpen
+  const showSidebar = maximized === null
+  const showConsole = maximized !== 'files'
+  const showFiles = filesOpen && maximized !== 'console'
+  const entries = activeTab ? (entriesByTab[activeTab.id] ?? []) : []
+  const crumbs = pathSegments(activeTab?.remotePath || '/')
+
+  return (
+    <div className="ssh-client-page flex flex-1 min-h-0 overflow-hidden">
+      {showSidebar && (
+        <aside
+          className={`shrink-0 border-r border-[var(--border-subtle)] bg-[var(--surface)] flex flex-col min-h-0 transition-[width] duration-150 ${
+            sidebarCollapsed ? 'w-12' : 'w-60'
+          }`}
+        >
+          <div className="h-10 shrink-0 flex items-center gap-2 px-2 border-b border-[var(--border-subtle)]">
+            <button
+              type="button"
+              className={BTN_ICON}
+              onClick={() => setSidebarCollapsed((v) => !v)}
+              title={sidebarCollapsed ? t('sshClientExpandSidebar') : t('sshClientCollapseSidebar')}
+            >
+              {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            </button>
+            {!sidebarCollapsed && (
+              <>
+                <span className="text-xs font-semibold text-[var(--text-primary)] flex-1 truncate">
+                  {t('sshClientNodes')}
+                </span>
+                <button
+                  type="button"
+                  className={BTN_ICON}
+                  title={t('sshAddNode')}
+                  onClick={() => {
+                    setEditing(null)
+                    setEditorOpen(true)
+                  }}
+                >
+                  <PlusOutlined />
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-auto">
+            {nodes.length === 0 ? (
+              !sidebarCollapsed && (
+                <Empty
+                  description={t('sshNoNodes')}
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  className="py-8 px-2"
+                >
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      setEditing(null)
+                      setEditorOpen(true)
+                    }}
+                  >
+                    {t('sshAddNode')}
+                  </Button>
+                </Empty>
+              )
+            ) : (
+              <div className="py-2">
+                {nodes.map((node) => {
+                  const active = activeTab?.nodeId === node.id
+                  const testing = testingId === node.id
+                  if (sidebarCollapsed) {
+                    return (
+                      <Tooltip key={node.id} title={node.name} placement="right">
+                        <button
+                          type="button"
+                          onClick={() => openOrFocusTab(node)}
+                          className={`mx-auto my-1 w-8 h-8 flex items-center justify-center rounded-md cursor-pointer border border-dashed ${
+                            active
+                              ? 'border-[var(--accent)]/40 bg-[var(--accent)]/15 text-[var(--accent)]'
+                              : 'border-[var(--border-subtle)] bg-[var(--bg-warm)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]/40'
+                          }`}
+                        >
+                          <CloudServerOutlined />
+                        </button>
+                      </Tooltip>
+                    )
+                  }
+                  return (
+                    <div
+                      key={node.id}
+                      className={`group mx-1.5 mb-1.5 rounded-lg px-2.5 py-2 cursor-pointer border border-dashed transition-colors ${
+                        active
+                          ? 'border-[var(--accent)]/45 bg-[var(--accent)]/10'
+                          : 'border-[var(--border-subtle)] bg-[var(--bg-warm)] hover:border-[var(--text-secondary)]/35 hover:bg-[var(--bg-warm)]'
+                      }`}
+                      onClick={() => openOrFocusTab(node)}
+                      onDoubleClick={() => openOrFocusTab(node, true)}
+                    >
+                      <div className="flex items-start gap-2">
+                        <CloudServerOutlined
+                          className={`mt-0.5 ${active ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+                            {node.name}
+                          </div>
+                          <div className="text-[10px] font-mono text-[var(--text-secondary)] truncate">
+                            {node.username}@{node.host}:{node.port}
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        className="mt-1.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className={BTN_ICON}
+                          title={t('sshTest')}
+                          disabled={testing}
+                          onClick={() => void handleTest(node)}
+                        >
+                          {testing ? <LoadingOutlined /> : <ApiOutlined />}
+                        </button>
+                        <button
+                          type="button"
+                          className={BTN_ICON}
+                          title={t('sshClientNewSession')}
+                          onClick={() => openOrFocusTab(node, true)}
+                        >
+                          <CodeOutlined />
+                        </button>
+                        <button
+                          type="button"
+                          className={BTN_ICON}
+                          title={t('sshEdit')}
+                          onClick={() => {
+                            setEditing(node)
+                            setEditorOpen(true)
+                          }}
+                        >
+                          <EditOutlined />
+                        </button>
+                        <button
+                          type="button"
+                          className={BTN_ICON}
+                          title={t('sshDelete')}
+                          onClick={() => handleDeleteNode(node)}
+                        >
+                          <DeleteOutlined />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </aside>
+      )}
+
+      <section className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-[var(--content-bg)]">
+        {tabs.length > 0 && (
+          <div className="shrink-0 flex items-center gap-1 px-2 py-1.5 border-b border-[var(--border-subtle)] overflow-x-auto">
+            {tabs.map((tab) => {
+              const active = tab.id === activeTabId
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTabId(tab.id)
+                    setMaximized(null)
+                  }}
+                  className={`shrink-0 h-8 pl-3 pr-1.5 rounded-lg text-xs flex items-center gap-1.5 border cursor-pointer transition-colors ${
+                    active
+                      ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                      : 'bg-[var(--bg-warm)] text-[var(--text-primary)] border-[var(--border-subtle)] hover:border-[var(--text-secondary)]'
+                  }`}
+                >
+                  <span className="max-w-[140px] truncate">{tab.title}</span>
+                  {tab.connecting && <LoadingOutlined className="text-[10px]" />}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className={`h-5 w-5 rounded flex items-center justify-center ${
+                      active ? 'hover:bg-white/20' : 'hover:bg-[var(--border-subtle)]'
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      requestCloseTab(tab.id)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation()
+                        requestCloseTab(tab.id)
+                      }
+                    }}
+                  >
+                    <CloseOutlined className="text-[10px]" />
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {!activeTab ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Empty
+              description={t('sshClientEmptyWorkspace')}
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="shrink-0 flex min-w-0">
+              {showConsole && (
+                <div
+                  className={`${TITLE_BAR_CLS} ${showFiles ? 'flex-1 min-w-0 border-r border-[var(--border-subtle)]' : 'flex-1 min-w-0'}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+                      {activeTab.title}
+                    </div>
+                    <div className="text-[10px] font-mono text-[var(--text-secondary)] truncate">
+                      {activeTab.subtitle}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={filesOpen ? BTN_TEXT_ACTIVE : BTN_TEXT}
+                    onClick={() => (filesOpen ? void closeFiles() : openFiles())}
+                    title={t('sshClientFiles')}
+                  >
+                    <FolderOpenOutlined />
+                    {t('sshClientFiles')}
+                  </button>
+                  <button
+                    type="button"
+                    className={BTN_ICON}
+                    title={
+                      maximized === 'console'
+                        ? t('sshClientExitFullscreen')
+                        : t('sshClientFullscreen')
+                    }
+                    onClick={() => setMaximized((m) => (m === 'console' ? null : 'console'))}
+                  >
+                    {maximized === 'console' ? <CompressOutlined /> : <ExpandOutlined />}
+                  </button>
+                  <button
+                    type="button"
+                    className={BTN_ICON}
+                    title={t('sshClientClose')}
+                    onClick={() => requestCloseTab(activeTab.id)}
+                  >
+                    <CloseOutlined />
+                  </button>
+                </div>
+              )}
+              {showFiles && (
+                <div
+                  className={`${TITLE_BAR_CLS} ${maximized === 'files' ? 'flex-1' : 'w-[380px] shrink-0'}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+                      {t('sshClientFiles')}
+                    </div>
+                    <div className="text-[10px] font-mono text-[var(--text-secondary)] truncate">
+                      {activeTab.title}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={BTN_TEXT}
+                    disabled={uploading}
+                    onClick={() => void handleUpload()}
+                    title={t('sshClientUpload')}
+                  >
+                    {uploading ? <LoadingOutlined /> : <UploadOutlined />}
+                    {t('sshClientUpload')}
+                  </button>
+                  <Dropdown menu={{ items: createMenu }} trigger={['click']}>
+                    <button type="button" className={BTN_TEXT} title={t('sshClientNew')}>
+                      <PlusOutlined />
+                      {t('sshClientNew')}
+                    </button>
+                  </Dropdown>
+                  <button
+                    type="button"
+                    className={BTN_ICON}
+                    title={
+                      maximized === 'files'
+                        ? t('sshClientExitFullscreen')
+                        : t('sshClientFullscreen')
+                    }
+                    onClick={() => setMaximized((m) => (m === 'files' ? null : 'files'))}
+                  >
+                    {maximized === 'files' ? <CompressOutlined /> : <ExpandOutlined />}
+                  </button>
+                  <button
+                    type="button"
+                    className={BTN_ICON}
+                    title={t('sshClientClose')}
+                    onClick={() => void closeFiles()}
+                  >
+                    <CloseOutlined />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-h-0 flex overflow-hidden">
+              {showConsole && (
+                <div
+                  className={`min-w-0 min-h-0 relative bg-[var(--bg-warm)] ${
+                    showFiles ? 'flex-1 border-r border-[var(--border-subtle)]' : 'flex-1'
+                  }`}
+                >
+                  {tabs.map((tab) => (
+                    <div
+                      key={tab.id}
+                      ref={(el) => {
+                        if (el) termHostsRef.current.set(tab.id, el)
+                        else termHostsRef.current.delete(tab.id)
+                      }}
+                      className="absolute inset-0 p-1"
+                      style={{ display: tab.id === activeTabId ? 'block' : 'none' }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {showFiles && (
+                <div
+                  className={`min-h-0 flex flex-col bg-[var(--content-bg)] ${
+                    maximized === 'files' ? 'flex-1' : 'w-[380px] shrink-0'
+                  }`}
+                >
+                  <div className="shrink-0 px-3 py-2 border-b border-[var(--border-subtle)] flex items-center gap-2">
+                    <HomeOutlined className="text-[var(--text-secondary)]" />
+                    <Breadcrumb
+                      className="flex-1 min-w-0"
+                      items={crumbs.map((c) => ({
+                        title: (
+                          <button
+                            type="button"
+                            className="bg-transparent border-none p-0 cursor-pointer text-[var(--text-primary)] hover:text-[var(--accent)]"
+                            onClick={() => void loadDir(activeTab.id, activeTab.nodeId, c.path)}
+                          >
+                            {c.name}
+                          </button>
+                        )
+                      }))}
+                    />
+                    <button
+                      type="button"
+                      className={BTN_ICON}
+                      title={t('sshClientRefresh')}
+                      disabled={filesLoading}
+                      onClick={() =>
+                        void loadDir(activeTab.id, activeTab.nodeId, activeTab.remotePath || '/')
+                      }
+                    >
+                      {filesLoading ? <LoadingOutlined /> : <ReloadOutlined />}
+                    </button>
+                  </div>
+                  <div className="flex-1 min-h-0 overflow-auto">
+                    <Spin spinning={filesLoading} className="min-h-full">
+                      <Table
+                        size="small"
+                        pagination={false}
+                        rowKey="path"
+                        dataSource={entries}
+                        locale={{ emptyText: t('sshClientDirEmpty') }}
+                        onRow={(record) => ({
+                          onDoubleClick: () => {
+                            if (record.type === 'directory') {
+                              void loadDir(activeTab.id, activeTab.nodeId, record.path)
+                            }
+                          }
+                        })}
+                        columns={[
+                          {
+                            title: t('sshClientColName'),
+                            dataIndex: 'name',
+                            ellipsis: true,
+                            render: (_: string, row: SshSftpEntry) => (
+                              <button
+                                type="button"
+                                className="bg-transparent border-none p-0 cursor-pointer flex items-center gap-1.5 text-left text-[var(--text-primary)] hover:text-[var(--accent)] max-w-full"
+                                onClick={() => {
+                                  if (row.type === 'directory') {
+                                    void loadDir(activeTab.id, activeTab.nodeId, row.path)
+                                  }
+                                }}
+                              >
+                                {row.type === 'directory' ? (
+                                  <FolderOutlined />
+                                ) : row.type === 'symlink' ? (
+                                  <LinkOutlined />
+                                ) : (
+                                  <FileOutlined />
+                                )}
+                                <span className="font-mono text-xs truncate">{row.name}</span>
+                              </button>
+                            )
+                          },
+                          {
+                            title: t('sshClientColSize'),
+                            dataIndex: 'size',
+                            width: 72,
+                            render: (size: number, row: SshSftpEntry) =>
+                              row.type === 'directory' ? '-' : formatSize(size)
+                          },
+                          {
+                            title: '',
+                            width: 40,
+                            render: (_: unknown, row: SshSftpEntry) => (
+                              <button
+                                type="button"
+                                className={BTN_ICON}
+                                disabled={downloadingPath === row.path}
+                                title={
+                                  row.type === 'directory'
+                                    ? t('sshClientDownloadDir')
+                                    : t('sshClientDownloadFile')
+                                }
+                                onClick={() => void handleDownload(row)}
+                              >
+                                {downloadingPath === row.path ? (
+                                  <LoadingOutlined />
+                                ) : (
+                                  <DownloadOutlined />
+                                )}
+                              </button>
+                            )
+                          }
+                        ]}
+                      />
+                    </Spin>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <NodeEditor
+        open={editorOpen}
+        editing={editing}
+        onCancel={() => setEditorOpen(false)}
+        onSaved={(node) => {
+          setNodes((prev) => {
+            const idx = prev.findIndex((n) => n.id === node.id)
+            if (idx === -1) return [...prev, node]
+            const next = [...prev]
+            next[idx] = node
+            return next
+          })
+          setTabs((prev) =>
+            prev.map((tab) =>
+              tab.nodeId === node.id
+                ? {
+                    ...tab,
+                    title: node.name,
+                    subtitle: `${node.username}@${node.host}:${node.port}`
+                  }
+                : tab
+            )
+          )
+          setEditorOpen(false)
+        }}
+      />
+
+      <Modal
+        open={!!createOpen}
+        title={createOpen === 'dir' ? t('sshClientNewFolder') : t('sshClientNewFile')}
+        onCancel={() => {
+          setCreateOpen(null)
+          setCreateName('')
+        }}
+        onOk={() => void submitCreate()}
+        okText={t('sshSave')}
+        cancelText={t('sshCancel')}
+        destroyOnHidden
+      >
+        <Input
+          autoFocus
+          value={createName}
+          placeholder={createOpen === 'dir' ? 'new-folder' : 'new-file.txt'}
+          onChange={(e) => setCreateName(e.target.value)}
+          onPressEnter={() => void submitCreate()}
+        />
+      </Modal>
+    </div>
+  )
+}
+
+export default SshClient

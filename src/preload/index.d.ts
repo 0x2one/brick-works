@@ -39,6 +39,32 @@ interface SshApi {
   stopTunnel: (nodeId: string, tunnelId: string) => Promise<SshSessionStatus>
   onStatusChange: (callback: (statuses: SshSessionStatus[]) => void) => () => void
   onLog: (callback: (entry: SshLogEntry) => void) => () => void
+  startShell: (opts: SshShellStartOpts) => Promise<{ sessionId: string }>
+  writeShell: (sessionId: string, dataBase64: string) => Promise<boolean>
+  resizeShell: (sessionId: string, cols: number, rows: number) => Promise<boolean>
+  stopShell: (sessionId: string) => Promise<boolean>
+  sftpList: (nodeId: string, remotePath: string) => Promise<SshSftpEntry[]>
+  sftpDownload: (
+    nodeId: string,
+    remotePath: string
+  ) => Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>
+  sftpDownloadDir: (
+    nodeId: string,
+    remotePath: string
+  ) => Promise<{ ok: boolean; path?: string; count?: number; canceled?: boolean; error?: string }>
+  sftpUpload: (
+    nodeId: string,
+    remoteDir: string
+  ) => Promise<{ ok: boolean; count?: number; canceled?: boolean; error?: string }>
+  sftpMkdir: (nodeId: string, remotePath: string) => Promise<{ ok: boolean; error?: string }>
+  sftpWriteFile: (
+    nodeId: string,
+    remotePath: string,
+    content?: string
+  ) => Promise<{ ok: boolean; error?: string }>
+  sftpDisconnect: (nodeId: string) => Promise<boolean>
+  onShellData: (callback: (data: SshShellData) => void) => () => void
+  onShellExit: (callback: (data: SshShellExit) => void) => () => void
 }
 
 interface K8sApi {

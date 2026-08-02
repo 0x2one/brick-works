@@ -74,6 +74,41 @@ const api = {
       return () => {
         ipcRenderer.removeListener('ssh:log', handler)
       }
+    },
+    startShell: (opts: SshShellStartOpts) => ipcRenderer.invoke('ssh:startShell', opts),
+    writeShell: (sessionId: string, dataBase64: string) =>
+      ipcRenderer.invoke('ssh:writeShell', sessionId, dataBase64),
+    resizeShell: (sessionId: string, cols: number, rows: number) =>
+      ipcRenderer.invoke('ssh:resizeShell', sessionId, cols, rows),
+    stopShell: (sessionId: string) => ipcRenderer.invoke('ssh:stopShell', sessionId),
+    sftpList: (nodeId: string, remotePath: string) =>
+      ipcRenderer.invoke('ssh:sftpList', nodeId, remotePath),
+    sftpDownload: (nodeId: string, remotePath: string) =>
+      ipcRenderer.invoke('ssh:sftpDownload', nodeId, remotePath),
+    sftpDownloadDir: (nodeId: string, remotePath: string) =>
+      ipcRenderer.invoke('ssh:sftpDownloadDir', nodeId, remotePath),
+    sftpUpload: (nodeId: string, remoteDir: string) =>
+      ipcRenderer.invoke('ssh:sftpUpload', nodeId, remoteDir),
+    sftpMkdir: (nodeId: string, remotePath: string) =>
+      ipcRenderer.invoke('ssh:sftpMkdir', nodeId, remotePath),
+    sftpWriteFile: (nodeId: string, remotePath: string, content?: string) =>
+      ipcRenderer.invoke('ssh:sftpWriteFile', nodeId, remotePath, content),
+    sftpDisconnect: (nodeId: string) => ipcRenderer.invoke('ssh:sftpDisconnect', nodeId),
+    onShellData: (callback: (data: SshShellData) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: SshShellData): void =>
+        callback(data)
+      ipcRenderer.on('ssh:shell-data', handler)
+      return () => {
+        ipcRenderer.removeListener('ssh:shell-data', handler)
+      }
+    },
+    onShellExit: (callback: (data: SshShellExit) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: SshShellExit): void =>
+        callback(data)
+      ipcRenderer.on('ssh:shell-exit', handler)
+      return () => {
+        ipcRenderer.removeListener('ssh:shell-exit', handler)
+      }
     }
   },
   k8s: {

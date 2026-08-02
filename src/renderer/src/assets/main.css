@@ -528,6 +528,24 @@
   pointer-events: auto;
 }
 
+/* ── SSH Client workspace ── */
+
+.content-area:has(.ssh-client-page) {
+  overflow: hidden;
+}
+
+.ssh-client-page {
+  height: 100%;
+  min-height: 0;
+}
+
+.ssh-client-page .xterm,
+.ssh-client-page .xterm-viewport,
+.ssh-client-page .xterm-screen {
+  height: 100%;
+  width: 100%;
+}
+
 /* ── Animations ── */
 
 @keyframes fadeUp {

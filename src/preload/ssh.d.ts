@@ -79,3 +79,32 @@ interface SshTunnelSpec {
   targetHost?: string
   targetPort?: number
 }
+
+interface SshShellStartOpts {
+  nodeId: string
+  cols?: number
+  rows?: number
+  term?: string
+}
+
+interface SshShellData {
+  sessionId: string
+  data: string
+}
+
+interface SshShellExit {
+  sessionId: string
+  reason?: string
+}
+
+interface SshSftpEntry {
+  name: string
+  path: string
+  type: 'file' | 'directory' | 'symlink' | 'other'
+  size: number
+  modifyTime: number
+  accessTime: number
+  owner?: number
+  group?: number
+  mode?: number
+}

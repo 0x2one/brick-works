@@ -17,6 +17,7 @@ const pathToLabelKey: Record<string, string> = {
   '/memo-sticky': 'memoSticky',
   '/lan-transfer': 'lanTransfer',
   '/ssh-tunnel': 'sshTunnel',
+  '/ssh-client': 'sshClient',
   '/k8s': 'k8sManage'
 }
 

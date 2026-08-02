@@ -1,11 +1,12 @@
 import { app, shell, BrowserWindow, dialog, ipcMain, nativeImage, net } from 'electron'
-import { join } from 'path'
+import { join, basename } from 'path'
 import { promises as fsp } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import iconPng from '../../resources/icon.png?asset'
 import { createLanServer, type LanStatus } from './lan-server'
 import { createSshStore, type SshNodeInput } from './ssh-store'
 import { createSshManager, type SshTunnelSpec, type SshTunnelType } from './ssh-manager'
+import { createSshClientManager, type SshShellStartOpts } from './ssh-client-manager'
 import { createK8sStore, defaultKubeconfigPath, type K8sClusterInput } from './k8s-store'
 import { createK8sManager } from './k8s-manager'
 
@@ -161,6 +162,10 @@ const sshStore = createSshStore()
 const sshManager = createSshManager({
   verifyHostKey: (host, port, key) => sshStore.verifyHostKey(host, port, key)
 })
+const sshClientManager = createSshClientManager({
+  getNode: (nodeId) => sshStore.get(nodeId) ?? undefined,
+  verifyHostKey: (host, port, key) => sshStore.verifyHostKey(host, port, key)
+})
 
 function broadcastSshStatus(): void {
   mainWindow?.webContents.send('ssh:status-change', sshManager.getStatus())
@@ -169,6 +174,12 @@ function broadcastSshStatus(): void {
 sshManager.onStatusChange(() => broadcastSshStatus())
 sshManager.onLog((entry) => {
   mainWindow?.webContents.send('ssh:log', entry)
+})
+sshClientManager.onShellData((data) => {
+  mainWindow?.webContents.send('ssh:shell-data', data)
+})
+sshClientManager.onShellExit((data) => {
+  mainWindow?.webContents.send('ssh:shell-exit', data)
 })
 
 function validateNodeInput(input: SshNodeInput): string | null {
@@ -195,6 +206,7 @@ ipcMain.handle('ssh:saveNode', (_event, input: SshNodeInput) => {
 
 ipcMain.handle('ssh:deleteNode', (_event, id: string) => {
   sshManager.disconnect(id)
+  sshClientManager.disconnectNode(id)
   return sshStore.remove(id)
 })
 
@@ -340,6 +352,92 @@ ipcMain.handle('ssh:startTunnel', async (_event, nodeId: string, tunnelId: strin
 
 ipcMain.handle('ssh:stopTunnel', (_event, nodeId: string, tunnelId: string) =>
   sshManager.stopTunnel(nodeId, tunnelId)
+)
+
+ipcMain.handle('ssh:startShell', (_event, opts: SshShellStartOpts) => {
+  if (!opts?.nodeId) throw new Error('NODE_NOT_FOUND')
+  return sshClientManager.startShell(opts)
+})
+
+ipcMain.handle('ssh:writeShell', (_event, sessionId: string, dataBase64: string) =>
+  sshClientManager.writeShell(sessionId, dataBase64)
+)
+
+ipcMain.handle('ssh:resizeShell', (_event, sessionId: string, cols: number, rows: number) =>
+  sshClientManager.resizeShell(sessionId, cols, rows)
+)
+
+ipcMain.handle('ssh:stopShell', (_event, sessionId: string) =>
+  sshClientManager.stopShell(sessionId)
+)
+
+ipcMain.handle('ssh:sftpList', (_event, nodeId: string, remotePath: string) => {
+  if (!nodeId) throw new Error('NODE_NOT_FOUND')
+  return sshClientManager.sftpList(nodeId, remotePath || '/')
+})
+
+ipcMain.handle('ssh:sftpDownload', async (_event, nodeId: string, remotePath: string) => {
+  if (!nodeId || !remotePath) throw new Error('INVALID')
+  const name = basename(remotePath.replace(/\/+$/, '') || 'download')
+  const saveOpts: Electron.SaveDialogOptions = {
+    title: 'Save File',
+    defaultPath: name
+  }
+  const result = mainWindow
+    ? await dialog.showSaveDialog(mainWindow, saveOpts)
+    : await dialog.showSaveDialog(saveOpts)
+  if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+  const res = await sshClientManager.sftpDownloadFile(nodeId, remotePath, result.filePath)
+  return res.ok ? { ok: true, path: result.filePath } : { ok: false, error: res.error }
+})
+
+ipcMain.handle('ssh:sftpDownloadDir', async (_event, nodeId: string, remotePath: string) => {
+  if (!nodeId || !remotePath) throw new Error('INVALID')
+  const options: Electron.OpenDialogOptions = {
+    title: '选择下载目录',
+    properties: ['openDirectory', 'createDirectory']
+  }
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true }
+  const localDir = result.filePaths[0]
+  const res = await sshClientManager.sftpDownloadDir(nodeId, remotePath, localDir)
+  return res.ok
+    ? { ok: true, path: localDir, count: res.count }
+    : { ok: false, error: res.error, count: res.count }
+})
+
+ipcMain.handle('ssh:sftpDisconnect', (_event, nodeId: string) => {
+  sshClientManager.disconnectSftp(nodeId)
+  return true
+})
+
+ipcMain.handle('ssh:sftpUpload', async (_event, nodeId: string, remoteDir: string) => {
+  if (!nodeId) throw new Error('NODE_NOT_FOUND')
+  const options: Electron.OpenDialogOptions = {
+    title: '选择要上传的文件',
+    properties: ['openFile', 'multiSelections']
+  }
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+  const res = await sshClientManager.sftpUploadFiles(nodeId, remoteDir || '/', result.filePaths)
+  return res.ok ? { ok: true, count: res.count } : { ok: false, error: res.error, count: res.count }
+})
+
+ipcMain.handle('ssh:sftpMkdir', async (_event, nodeId: string, remotePath: string) => {
+  if (!nodeId || !remotePath) throw new Error('INVALID')
+  return sshClientManager.sftpMkdir(nodeId, remotePath)
+})
+
+ipcMain.handle(
+  'ssh:sftpWriteFile',
+  async (_event, nodeId: string, remotePath: string, content?: string) => {
+    if (!nodeId || !remotePath) throw new Error('INVALID')
+    return sshClientManager.sftpWriteFile(nodeId, remotePath, content)
+  }
 )
 
 /* ── K8s management ── */
@@ -554,6 +652,7 @@ ipcMain.handle('k8s:listPortForwards', () => k8sManager.listPortForwards())
 app.on('will-quit', () => {
   lanServer?.stop()
   sshManager.stop()
+  sshClientManager.stop()
   k8sManager.stop()
 })
 
