@@ -44,10 +44,6 @@ const ACCENT_BTN_CLS =
   'px-4 h-8 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none ' +
   'bg-[var(--accent)] text-white hover:brightness-110 active:brightness-90 disabled:opacity-40 disabled:cursor-not-allowed'
 
-const INPUT_CLS =
-  'w-full px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] ' +
-  'text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent)] transition-colors duration-150'
-
 const STATE_DOT_CLS: Record<string, string> = {
   connected: 'bg-green-500',
   connecting: 'bg-amber-400 animate-pulse',
@@ -94,6 +90,26 @@ interface EditorValues {
   password?: string
   privateKeyPath?: string
   passphrase?: string
+}
+
+function Field({
+  label,
+  hint,
+  children,
+  className
+}: {
+  label: string
+  hint?: string
+  children: React.ReactNode
+  className?: string
+}): React.JSX.Element {
+  return (
+    <div className={className}>
+      <span className={LABEL_CLS}>{label}</span>
+      {children}
+      {hint && <p className="text-[10px] text-[var(--text-secondary)] mt-1">{hint}</p>}
+    </div>
+  )
 }
 
 interface TunnelFormHandle {
@@ -158,10 +174,10 @@ const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function Tunnel
   useImperativeHandle(ref, () => ({ submit: () => handleAdd() }), [handleAdd])
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {!fixedType && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={LABEL_CLS + ' mb-0'}>{t('sshTunnelType')}</span>
+        <div>
+          <span className={LABEL_CLS}>{t('sshTunnelType')}</span>
           <Segmented
             size="small"
             value={draft.type}
@@ -175,91 +191,93 @@ const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function Tunnel
         </div>
       )}
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <input
-          type="text"
+      <Field label={t('sshName')}>
+        <Input
           value={draft.name}
           onChange={(e) => set('name', e.target.value)}
           placeholder={t('sshTunnelNamePlaceholder')}
-          className={INPUT_CLS + ' w-40!'}
+          allowClear
         />
-        {draft.type === 'local' && (
-          <>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-[var(--text-secondary)]">本地</span>
-              <InputNumber
-                size="small"
-                min={1}
-                max={65535}
-                value={draft.localPort}
-                onChange={(v) => set('localPort', v ?? 8080)}
-              />
-            </div>
-            <ArrowRightOutlined className="text-[var(--text-secondary)] text-xs" />
-            <input
-              type="text"
-              value={draft.remoteHost}
-              onChange={(e) => set('remoteHost', e.target.value)}
-              placeholder="127.0.0.1"
-              className={INPUT_CLS + ' w-36!'}
-            />
+      </Field>
+
+      {draft.type === 'local' && (
+        <div className="grid grid-cols-2 gap-4">
+          <Field label={t('sshLocalPort')}>
             <InputNumber
-              size="small"
+              min={1}
+              max={65535}
+              value={draft.localPort}
+              onChange={(v) => set('localPort', v ?? 8080)}
+              className="w-full"
+            />
+          </Field>
+          <Field label={t('sshRemotePort')}>
+            <InputNumber
               min={1}
               max={65535}
               value={draft.remotePort}
               onChange={(v) => set('remotePort', v ?? 80)}
+              className="w-full"
             />
-          </>
-        )}
-        {draft.type === 'remote' && (
-          <>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-[var(--text-secondary)]">服务器</span>
+          </Field>
+          <Field label={t('sshRemoteHost')} className="col-span-2">
+            <Input
+              value={draft.remoteHost}
+              onChange={(e) => set('remoteHost', e.target.value)}
+              placeholder="127.0.0.1"
+            />
+          </Field>
+        </div>
+      )}
+
+      {draft.type === 'remote' && (
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label={t('sshBindPort')} hint={t('sshBindPortHint')}>
               <InputNumber
-                size="small"
                 min={0}
                 max={65535}
                 value={draft.bindPort}
                 onChange={(v) => set('bindPort', v ?? 8080)}
+                className="w-full"
               />
-            </div>
-            <ArrowLeftOutlined className="text-[var(--text-secondary)] text-xs" />
-            <input
-              type="text"
-              value={draft.targetHost}
-              onChange={(e) => set('targetHost', e.target.value)}
-              placeholder="127.0.0.1"
-              className={INPUT_CLS + ' w-36!'}
-            />
+            </Field>
+            <Field label={t('sshTargetPort')}>
+              <InputNumber
+                min={1}
+                max={65535}
+                value={draft.targetPort}
+                onChange={(v) => set('targetPort', v ?? 3000)}
+                className="w-full"
+              />
+            </Field>
+            <Field label={t('sshTargetHost')} className="col-span-2">
+              <Input
+                value={draft.targetHost}
+                onChange={(e) => set('targetHost', e.target.value)}
+                placeholder="127.0.0.1"
+              />
+            </Field>
+          </div>
+          <p className="text-[11px] flex items-center gap-1.5 text-[var(--text-secondary)]">
+            <WarningOutlined style={{ color: 'var(--accent)' }} />
+            {t('sshGatewayPorts')}
+          </p>
+        </>
+      )}
+
+      {draft.type === 'socks5' && (
+        <div className="grid grid-cols-2 gap-4">
+          <Field label={t('sshSocksPort')}>
             <InputNumber
-              size="small"
-              min={1}
-              max={65535}
-              value={draft.targetPort}
-              onChange={(v) => set('targetPort', v ?? 3000)}
-            />
-          </>
-        )}
-        {draft.type === 'socks5' && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-[var(--text-secondary)]">本地</span>
-            <InputNumber
-              size="small"
               min={1}
               max={65535}
               value={draft.socksPort}
               onChange={(v) => set('socksPort', v ?? 1080)}
+              className="w-full"
             />
-          </div>
-        )}
-      </div>
-
-      {draft.type === 'remote' && (
-        <p className="text-[11px] flex items-center gap-1.5 text-[var(--text-secondary)]">
-          <WarningOutlined style={{ color: 'var(--accent)' }} />
-          {t('sshGatewayPorts')}
-        </p>
+          </Field>
+        </div>
       )}
     </div>
   )
