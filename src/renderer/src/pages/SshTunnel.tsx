@@ -1,0 +1,893 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { App, Modal, Form, Input, InputNumber, Radio, Segmented, Tabs, Empty, Button } from 'antd'
+import {
+  PlusOutlined,
+  ApiOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  PlayCircleOutlined,
+  StopOutlined,
+  CloudServerOutlined,
+  SwapOutlined,
+  FileTextOutlined,
+  FolderOpenOutlined,
+  LoadingOutlined,
+  CloseOutlined,
+  ArrowRightOutlined,
+  ArrowLeftOutlined,
+  WarningOutlined
+} from '@ant-design/icons'
+
+const LABEL_CLS =
+  'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
+
+const CARD_CLS =
+  'rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] overflow-hidden'
+
+const BTN_CLS =
+  'px-3 h-8 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none ' +
+  'bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)] ' +
+  'disabled:opacity-40 disabled:cursor-not-allowed'
+
+const ACCENT_BTN_CLS =
+  'px-4 h-8 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none ' +
+  'bg-[var(--accent)] text-white hover:brightness-110 active:brightness-90 disabled:opacity-40 disabled:cursor-not-allowed'
+
+const INPUT_CLS =
+  'w-full px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] ' +
+  'text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent)] transition-colors duration-150'
+
+const STATE_DOT_CLS: Record<string, string> = {
+  connected: 'bg-green-500',
+  connecting: 'bg-amber-400 animate-pulse',
+  error: 'bg-red-500',
+  disconnected: 'bg-[var(--border-subtle)]'
+}
+
+const TYPE_BADGE_CLS: Record<SshTunnelType, string> = {
+  local: 'text-sky-600 bg-sky-500/10',
+  remote: 'text-emerald-600 bg-emerald-500/10',
+  socks5: 'text-purple-600 bg-purple-500/10'
+}
+
+function formatTime(ts: number): string {
+  const d = new Date(ts)
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+interface TunnelDraft {
+  type: SshTunnelType
+  name: string
+  localPort: number
+  remoteHost: string
+  remotePort: number
+  bindPort: number
+  targetHost: string
+  targetPort: number
+  socksPort: number
+}
+
+const DEFAULT_DRAFT: TunnelDraft = {
+  type: 'local',
+  name: '',
+  localPort: 8080,
+  remoteHost: '127.0.0.1',
+  remotePort: 80,
+  bindPort: 8080,
+  targetHost: '127.0.0.1',
+  targetPort: 3000,
+  socksPort: 1080
+}
+
+interface EditorValues {
+  name: string
+  host: string
+  port: number
+  username: string
+  authType: 'password' | 'privateKey'
+  password?: string
+  privateKeyPath?: string
+  passphrase?: string
+}
+
+function TunnelForm({
+  nodeId,
+  onAdded,
+  onError
+}: {
+  nodeId: string
+  onAdded: () => void
+  onError: (msg: string) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const [draft, setDraft] = useState<TunnelDraft>(DEFAULT_DRAFT)
+  const [submitting, setSubmitting] = useState(false)
+
+  const set = <K extends keyof TunnelDraft>(key: K, value: TunnelDraft[K]): void =>
+    setDraft((prev) => ({ ...prev, [key]: value }))
+
+  const handleAdd = useCallback(async () => {
+    setSubmitting(true)
+    try {
+      const spec: SshTunnelSpec =
+        draft.type === 'local'
+          ? {
+              type: 'local',
+              name: draft.name.trim() || undefined,
+              localPort: draft.localPort,
+              remoteHost: draft.remoteHost.trim() || '127.0.0.1',
+              remotePort: draft.remotePort
+            }
+          : draft.type === 'remote'
+            ? {
+                type: 'remote',
+                name: draft.name.trim() || undefined,
+                bindPort: draft.bindPort,
+                targetHost: draft.targetHost.trim() || '127.0.0.1',
+                targetPort: draft.targetPort
+              }
+            : {
+                type: 'socks5',
+                name: draft.name.trim() || undefined,
+                localPort: draft.socksPort
+              }
+      await window.api.ssh.addTunnel(nodeId, spec)
+      setDraft({ ...DEFAULT_DRAFT, type: draft.type })
+      onAdded()
+    } catch {
+      onError(t('sshTunnelAddFail'))
+    } finally {
+      setSubmitting(false)
+    }
+  }, [draft, nodeId, onAdded, onError, t])
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-[var(--border-subtle)] px-5 py-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={LABEL_CLS + ' mb-0'}>{t('sshTunnelType')}</span>
+        <Segmented
+          size="small"
+          value={draft.type}
+          onChange={(v) => set('type', v as SshTunnelType)}
+          options={[
+            { label: t('sshTypeLocal'), value: 'local' },
+            { label: t('sshTypeRemote'), value: 'remote' },
+            { label: t('sshTypeSocks5'), value: 'socks5' }
+          ]}
+        />
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="text"
+          value={draft.name}
+          onChange={(e) => set('name', e.target.value)}
+          placeholder={t('sshTunnelNamePlaceholder')}
+          className={INPUT_CLS + ' w-40!'}
+        />
+        {draft.type === 'local' && (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-[var(--text-secondary)]">本地</span>
+              <InputNumber
+                size="small"
+                min={1}
+                max={65535}
+                value={draft.localPort}
+                onChange={(v) => set('localPort', v ?? 8080)}
+              />
+            </div>
+            <ArrowRightOutlined className="text-[var(--text-secondary)] text-xs" />
+            <input
+              type="text"
+              value={draft.remoteHost}
+              onChange={(e) => set('remoteHost', e.target.value)}
+              placeholder="127.0.0.1"
+              className={INPUT_CLS + ' w-36!'}
+            />
+            <InputNumber
+              size="small"
+              min={1}
+              max={65535}
+              value={draft.remotePort}
+              onChange={(v) => set('remotePort', v ?? 80)}
+            />
+          </>
+        )}
+        {draft.type === 'remote' && (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-[var(--text-secondary)]">服务器</span>
+              <InputNumber
+                size="small"
+                min={0}
+                max={65535}
+                value={draft.bindPort}
+                onChange={(v) => set('bindPort', v ?? 8080)}
+              />
+            </div>
+            <ArrowLeftOutlined className="text-[var(--text-secondary)] text-xs" />
+            <input
+              type="text"
+              value={draft.targetHost}
+              onChange={(e) => set('targetHost', e.target.value)}
+              placeholder="127.0.0.1"
+              className={INPUT_CLS + ' w-36!'}
+            />
+            <InputNumber
+              size="small"
+              min={1}
+              max={65535}
+              value={draft.targetPort}
+              onChange={(v) => set('targetPort', v ?? 3000)}
+            />
+          </>
+        )}
+        {draft.type === 'socks5' && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-[var(--text-secondary)]">本地</span>
+            <InputNumber
+              size="small"
+              min={1}
+              max={65535}
+              value={draft.socksPort}
+              onChange={(v) => set('socksPort', v ?? 1080)}
+            />
+          </div>
+        )}
+        <button onClick={handleAdd} disabled={submitting} className={ACCENT_BTN_CLS}>
+          {submitting ? <LoadingOutlined /> : <PlusOutlined />}
+          {t('sshAddTunnel')}
+        </button>
+      </div>
+
+      {draft.type === 'remote' && (
+        <p className="text-[11px] flex items-center gap-1.5 text-[var(--text-secondary)]">
+          <WarningOutlined style={{ color: 'var(--accent)' }} />
+          {t('sshGatewayPorts')}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function NodeEditor({
+  open,
+  editing,
+  onCancel,
+  onSaved
+}: {
+  open: boolean
+  editing: SshNodeView | null
+  onCancel: () => void
+  onSaved: (node: SshNodeView) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const { message } = App.useApp()
+  const [form] = Form.useForm<EditorValues>()
+
+  useEffect(() => {
+    if (open) {
+      form.setFieldsValue({
+        name: editing?.name ?? '',
+        host: editing?.host ?? '',
+        port: editing?.port ?? 22,
+        username: editing?.username ?? '',
+        authType: editing?.authType ?? 'password',
+        password: '',
+        privateKeyPath: editing?.privateKeyPath ?? '',
+        passphrase: ''
+      })
+    }
+  }, [open, editing, form])
+
+  const handleChooseKey = useCallback(async () => {
+    const path = await window.api.ssh.chooseKeyFile()
+    if (path) form.setFieldValue('privateKeyPath', path)
+  }, [form])
+
+  const handleOk = useCallback(async () => {
+    try {
+      const values = await form.validateFields()
+      const node = await window.api.ssh.saveNode({
+        id: editing?.id,
+        name: values.name,
+        host: values.host,
+        port: values.port,
+        username: values.username,
+        authType: values.authType,
+        password: values.authType === 'password' ? values.password : undefined,
+        privateKeyPath: values.authType === 'privateKey' ? values.privateKeyPath : undefined,
+        passphrase: values.authType === 'privateKey' ? values.passphrase : undefined
+      })
+      message.success(t('sshSaved'))
+      onSaved(node)
+    } catch (err) {
+      if ((err as { errorFields?: unknown }).errorFields) return
+      const msg = (err as Error)?.message ?? ''
+      message.error(t('sshNodeSaveFail', { msg }))
+    }
+  }, [form, editing, message, onSaved, t])
+
+  const authType = Form.useWatch('authType', form)
+
+  return (
+    <Modal
+      open={open}
+      title={editing ? t('sshNodeEdit') : t('sshNodeNew')}
+      onCancel={onCancel}
+      onOk={handleOk}
+      okText={t('sshSave')}
+      cancelText={t('sshCancel')}
+      destroyOnHidden
+      width={460}
+    >
+      <Form form={form} layout="vertical" className="mt-2">
+        <Form.Item name="name" label={t('sshName')} rules={[{ required: true }]}>
+          <Input placeholder="cloud-server" />
+        </Form.Item>
+        <div className="grid grid-cols-3 gap-3">
+          <Form.Item
+            name="host"
+            label={t('sshHost')}
+            rules={[{ required: true }]}
+            className="col-span-2"
+          >
+            <Input placeholder="example.com" />
+          </Form.Item>
+          <Form.Item name="port" label={t('sshPort')} rules={[{ required: true }]}>
+            <InputNumber min={1} max={65535} className="w-full" />
+          </Form.Item>
+        </div>
+        <Form.Item name="username" label={t('sshUsername')} rules={[{ required: true }]}>
+          <Input placeholder="root" />
+        </Form.Item>
+        <Form.Item name="authType" label={t('sshAuthType')}>
+          <Radio.Group
+            optionType="button"
+            buttonStyle="solid"
+            options={[
+              { label: t('sshAuthPassword'), value: 'password' },
+              { label: t('sshAuthKey'), value: 'privateKey' }
+            ]}
+          />
+        </Form.Item>
+        {authType === 'password' && (
+          <Form.Item
+            name="password"
+            label={t('sshPassword')}
+            rules={
+              editing?.hasPassword ? [] : [{ required: true, message: t('sshPasswordRequired') }]
+            }
+            extra={editing?.hasPassword ? t('sshKeepSecret') : undefined}
+          >
+            <Input.Password autoComplete="new-password" />
+          </Form.Item>
+        )}
+        {authType === 'privateKey' && (
+          <>
+            <Form.Item
+              name="privateKeyPath"
+              label={t('sshKeyPath')}
+              rules={[{ required: true, message: t('sshKeyRequired') }]}
+            >
+              <Input
+                readOnly
+                placeholder="~/.ssh/id_rsa"
+                addonAfter={
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<FolderOpenOutlined />}
+                    onClick={handleChooseKey}
+                  >
+                    {t('sshChooseKey')}
+                  </Button>
+                }
+              />
+            </Form.Item>
+            <Form.Item
+              name="passphrase"
+              label={t('sshPassphrase')}
+              extra={editing?.hasPassphrase ? t('sshKeepSecret') : undefined}
+            >
+              <Input.Password autoComplete="new-password" />
+            </Form.Item>
+          </>
+        )}
+      </Form>
+    </Modal>
+  )
+}
+
+function SshTunnel(): React.JSX.Element {
+  const { t } = useTranslation()
+  const { message, modal } = App.useApp()
+  const [nodes, setNodes] = useState<SshNodeView[]>([])
+  const [statuses, setStatuses] = useState<SshSessionStatus[]>([])
+  const [tunnels, setTunnels] = useState<SshTunnelSpec[]>([])
+  const [logs, setLogs] = useState<SshLogEntry[]>([])
+  const [activeTab, setActiveTab] = useState('nodes')
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editing, setEditing] = useState<SshNodeView | null>(null)
+  const [testingId, setTestingId] = useState<string | null>(null)
+  const logBoxRef = useRef<HTMLDivElement | null>(null)
+
+  const sessionByNode = useMemo(() => {
+    const map = new Map<string, SshSessionStatus>()
+    for (const s of statuses) map.set(s.nodeId, s)
+    return map
+  }, [statuses])
+
+  const loadTunnels = useCallback(() => {
+    window.api.ssh
+      .listTunnels()
+      .then(setTunnels)
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+    Promise.all([window.api.ssh.listNodes(), window.api.ssh.status()])
+      .then(([nodeList, sshStatuses]) => {
+        if (!mounted) return
+        setNodes(nodeList)
+        setStatuses(sshStatuses)
+      })
+      .catch(() => {})
+    loadTunnels()
+    const offStatus = window.api.ssh.onStatusChange((s) => {
+      if (mounted) setStatuses(s)
+    })
+    const offLog = window.api.ssh.onLog((entry) => {
+      if (mounted) setLogs((prev) => [...prev.slice(-499), entry])
+    })
+    return () => {
+      mounted = false
+      offStatus()
+      offLog()
+    }
+  }, [])
+
+  useEffect(() => {
+    const el = logBoxRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [logs])
+
+  const handleConnect = useCallback(
+    async (node: SshNodeView) => {
+      const session = sessionByNode.get(node.id)
+      if (session?.state === 'connected') {
+        await window.api.ssh.disconnect(node.id)
+        message.success(t('sshDisconnected'))
+        return
+      }
+      try {
+        await window.api.ssh.connect(node.id)
+      } catch (err) {
+        message.error(t('sshConnectFail', { msg: (err as Error)?.message ?? '' }))
+      }
+    },
+    [sessionByNode, message, t]
+  )
+
+  const handleTest = useCallback(
+    async (node: SshNodeView) => {
+      setTestingId(node.id)
+      try {
+        const res = await window.api.ssh.test(node.id)
+        if (res.ok) {
+          message.success(t('sshTestOk', { ms: res.latencyMs }))
+        } else {
+          message.error(t('sshTestFail', { msg: res.error ?? '' }))
+        }
+      } catch {
+        message.error(t('sshTestFail', { msg: '' }))
+      } finally {
+        setTestingId(null)
+      }
+    },
+    [message, t]
+  )
+
+  const handleDeleteNode = useCallback(
+    (node: SshNodeView) => {
+      modal.confirm({
+        title: t('sshDelete'),
+        content: t('sshDeleteNodeConfirm', { name: node.name }),
+        okText: t('sshDelete'),
+        cancelText: t('sshCancel'),
+        onOk: async () => {
+          await window.api.ssh.deleteNode(node.id)
+          setNodes((prev) => prev.filter((n) => n.id !== node.id))
+          loadTunnels()
+          message.success(t('sshDeleted'))
+        }
+      })
+    },
+    [modal, message, t, loadTunnels]
+  )
+
+  const handleDeleteTunnel = useCallback(
+    (nodeId: string, tunnel: SshTunnelSpec) => {
+      modal.confirm({
+        title: t('sshDelete'),
+        content: t('sshDeleteTunnelConfirm'),
+        okText: t('sshDelete'),
+        cancelText: t('sshCancel'),
+        onOk: async () => {
+          await window.api.ssh.removeTunnel(nodeId, tunnel.id!)
+          loadTunnels()
+          message.success(t('sshTunnelRemoved'))
+        }
+      })
+    },
+    [modal, message, t, loadTunnels]
+  )
+
+  const tunnelSummary = (spec: SshTunnelSpec, live?: SshTunnelState): string => {
+    if (spec.type === 'local') {
+      return t('sshFlowLocal', {
+        localPort: spec.localPort,
+        remoteHost: spec.remoteHost,
+        remotePort: spec.remotePort
+      })
+    }
+    if (spec.type === 'remote') {
+      return t('sshFlowRemote', {
+        bindPort: live?.bindPort ?? spec.bindPort,
+        targetHost: spec.targetHost,
+        targetPort: spec.targetPort
+      })
+    }
+    return t('sshFlowSocks', { localPort: spec.localPort })
+  }
+
+  const nodesTab = (
+    <section className={CARD_CLS}>
+      <div className="px-5 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
+        <span className={LABEL_CLS}>{t('sshNodes')}</span>
+        <button
+          onClick={() => {
+            setEditing(null)
+            setEditorOpen(true)
+          }}
+          className={ACCENT_BTN_CLS}
+        >
+          <PlusOutlined />
+          {t('sshAddNode')}
+        </button>
+      </div>
+
+      {nodes.length === 0 ? (
+        <Empty description={t('sshNoNodes')} image={Empty.PRESENTED_IMAGE_SIMPLE} className="py-10">
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setEditing(null)
+              setEditorOpen(true)
+            }}
+          >
+            {t('sshAddNode')}
+          </Button>
+        </Empty>
+      ) : (
+        <div className="divide-y divide-[var(--border-subtle)]">
+          {nodes.map((node) => {
+            const session = sessionByNode.get(node.id)
+            const state = session?.state ?? 'disconnected'
+            const connecting = state === 'connecting'
+            const connected = state === 'connected'
+            const testing = testingId === node.id
+            return (
+              <div key={node.id} className="px-5 py-4 flex items-center gap-3">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${STATE_DOT_CLS[state]}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-[var(--text-primary)]">
+                      {node.name}
+                    </span>
+                    {state === 'connected' && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-600">
+                        {t('sshConnected')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] font-mono text-[var(--text-secondary)] mt-0.5 flex items-center gap-2">
+                    <span>
+                      {node.username}@{node.host}:{node.port}
+                    </span>
+                    <span className="px-1 py-px rounded bg-[var(--bg-warm)] border border-[var(--border-subtle)]">
+                      {node.authType === 'password' ? t('sshAuthPassword') : t('sshAuthKey')}
+                    </span>
+                  </div>
+                  {session?.error && (
+                    <div className="text-[11px] text-red-500 mt-1 truncate">{session.error}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => handleTest(node)}
+                    disabled={testing || connected}
+                    title={t('sshTest')}
+                    className={BTN_CLS}
+                  >
+                    {testing ? <LoadingOutlined /> : <ApiOutlined />}
+                    {t('sshTest')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditing(node)
+                      setEditorOpen(true)
+                    }}
+                    disabled={connected}
+                    title={t('sshEdit')}
+                    className={BTN_CLS}
+                  >
+                    <EditOutlined />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteNode(node)}
+                    disabled={connected}
+                    title={t('sshDelete')}
+                    className={BTN_CLS}
+                  >
+                    <DeleteOutlined />
+                  </button>
+                  <button
+                    onClick={() => handleConnect(node)}
+                    disabled={connecting}
+                    className={connected ? BTN_CLS : ACCENT_BTN_CLS}
+                  >
+                    {connecting ? (
+                      <LoadingOutlined />
+                    ) : connected ? (
+                      <StopOutlined />
+                    ) : (
+                      <PlayCircleOutlined />
+                    )}
+                    {connecting
+                      ? t('sshConnecting')
+                      : connected
+                        ? t('sshDisconnect')
+                        : t('sshConnect')}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+
+  const tunnelsTab =
+    nodes.length === 0 ? (
+      <section className={CARD_CLS}>
+        <div className="px-5 py-3 border-b border-[var(--border-subtle)]">
+          <span className={LABEL_CLS}>{t('sshTunnels')}</span>
+        </div>
+        <Empty description={t('sshNoNodes')} image={Empty.PRESENTED_IMAGE_SIMPLE} className="py-10">
+          <Button
+            type="primary"
+            icon={<CloudServerOutlined />}
+            onClick={() => setActiveTab('nodes')}
+          >
+            {t('sshGoNodes')}
+          </Button>
+        </Empty>
+      </section>
+    ) : (
+      <div className="flex flex-col gap-4">
+        {nodes.map((node) => {
+          const session = sessionByNode.get(node.id)
+          const state = session?.state ?? 'disconnected'
+          const connected = state === 'connected'
+          const connecting = state === 'connecting'
+          const nodeTunnels = tunnels.filter((t) => t.nodeId === node.id)
+          const liveMap = new Map(session?.tunnels.map((t) => [t.id, t]) ?? [])
+          return (
+            <section key={node.id} className={CARD_CLS}>
+              <div className="px-5 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${STATE_DOT_CLS[state]}`} />
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
+                    {node.name}
+                  </span>
+                  <span className="text-[11px] text-[var(--text-secondary)]">
+                    {state === 'connected'
+                      ? t('sshConnected')
+                      : state === 'connecting'
+                        ? t('sshConnecting')
+                        : t('sshDisconnected')}
+                  </span>
+                  <span className="text-[11px] text-[var(--text-secondary)]">
+                    {t('sshTunnelCount', { count: nodeTunnels.length })}
+                  </span>
+                </span>
+                <button
+                  onClick={() => handleConnect(node)}
+                  disabled={connecting}
+                  className={connected ? BTN_CLS : ACCENT_BTN_CLS}
+                >
+                  {connecting ? (
+                    <LoadingOutlined />
+                  ) : connected ? (
+                    <StopOutlined />
+                  ) : (
+                    <PlayCircleOutlined />
+                  )}
+                  {connecting
+                    ? t('sshConnecting')
+                    : connected
+                      ? t('sshDisconnect')
+                      : t('sshConnect')}
+                </button>
+              </div>
+
+              {nodeTunnels.length === 0 ? (
+                <div className="px-5 py-6 text-center text-xs text-[var(--text-secondary)]">
+                  {t('sshTunnelsEmpty')}
+                </div>
+              ) : (
+                <div className="divide-y divide-[var(--border-subtle)]">
+                  {nodeTunnels.map((spec) => {
+                    const live = liveMap.get(spec.id!)
+                    let dotCls = 'bg-[var(--border-subtle)]'
+                    if (connected && live) {
+                      if (live.status === 'running') dotCls = 'bg-green-500'
+                      else if (live.status === 'error') dotCls = 'bg-red-500'
+                      else dotCls = 'bg-amber-400 animate-pulse'
+                    }
+                    return (
+                      <div key={spec.id} className="px-5 py-3 flex items-center gap-3">
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${TYPE_BADGE_CLS[spec.type]}`}
+                        >
+                          {t(
+                            `sshType${spec.type === 'socks5' ? 'Socks5' : spec.type === 'local' ? 'Local' : 'Remote'}`
+                          )}
+                        </span>
+                        <code className="flex-1 min-w-0 text-xs font-mono text-[var(--text-primary)] truncate">
+                          {tunnelSummary(spec, live)}
+                        </code>
+                        {connected && live?.status === 'error' && live.error && (
+                          <span className="text-[11px] text-red-500 truncate">{live.error}</span>
+                        )}
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${dotCls}`} />
+                        <button
+                          onClick={() => handleDeleteTunnel(node.id, spec)}
+                          title={t('sshDelete')}
+                          className={BTN_CLS}
+                        >
+                          <CloseOutlined />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <TunnelForm
+                nodeId={node.id}
+                onAdded={() => {
+                  loadTunnels()
+                  message.success(connected ? t('sshTunnelAdded') : t('sshTunnelSavedOffline'))
+                }}
+                onError={(m) => {
+                  message.error(m)
+                }}
+              />
+            </section>
+          )
+        })}
+      </div>
+    )
+
+  const logsTab = (
+    <section className={CARD_CLS}>
+      <div className="px-5 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
+        <span className={LABEL_CLS}>{t('sshLogs')}</span>
+        <button onClick={() => setLogs([])} disabled={logs.length === 0} className={BTN_CLS}>
+          <DeleteOutlined />
+          {t('sshClearLogs')}
+        </button>
+      </div>
+      <div
+        ref={logBoxRef}
+        className="px-5 py-4 max-h-[420px] overflow-auto font-mono text-xs leading-5"
+      >
+        {logs.length === 0 ? (
+          <div className="text-[var(--text-secondary)] text-center py-8">{t('sshLogEmpty')}</div>
+        ) : (
+          logs.map((log) => (
+            <div key={log.id} className="flex gap-2 py-0.5">
+              <span className="text-[var(--text-secondary)] shrink-0">{formatTime(log.time)}</span>
+              <span
+                className={`shrink-0 w-12 ${
+                  log.level === 'error'
+                    ? 'text-red-500'
+                    : log.level === 'warn'
+                      ? 'text-amber-500'
+                      : 'text-[var(--text-secondary)]'
+                }`}
+              >
+                {log.level}
+              </span>
+              <span className="text-[var(--accent)] shrink-0">[{log.nodeName}]</span>
+              <span className="text-[var(--text-primary)] break-all">{log.message}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  )
+
+  return (
+    <div className="flex flex-col p-6 gap-4" style={{ height: 'calc(100vh - 56px)' }}>
+      <div>
+        <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('sshTunnel')}</h2>
+        <p className="text-xs text-[var(--text-secondary)] mt-1">{t('sshDesc')}</p>
+      </div>
+
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        className="flex-1 min-h-0"
+        items={[
+          {
+            key: 'nodes',
+            label: (
+              <span className="flex items-center gap-1.5">
+                <CloudServerOutlined />
+                {t('sshTabNodes')}
+              </span>
+            ),
+            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{nodesTab}</div>
+          },
+          {
+            key: 'tunnels',
+            label: (
+              <span className="flex items-center gap-1.5">
+                <SwapOutlined />
+                {t('sshTabTunnels')}
+              </span>
+            ),
+            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{tunnelsTab}</div>
+          },
+          {
+            key: 'logs',
+            label: (
+              <span className="flex items-center gap-1.5">
+                <FileTextOutlined />
+                {t('sshTabLogs')}
+              </span>
+            ),
+            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{logsTab}</div>
+          }
+        ]}
+      />
+
+      <NodeEditor
+        open={editorOpen}
+        editing={editing}
+        onCancel={() => setEditorOpen(false)}
+        onSaved={(node) => {
+          setNodes((prev) => {
+            const idx = prev.findIndex((n) => n.id === node.id)
+            if (idx === -1) return [...prev, node]
+            const next = [...prev]
+            next[idx] = node
+            return next
+          })
+          setEditorOpen(false)
+        }}
+      />
+    </div>
+  )
+}
+
+export default SshTunnel

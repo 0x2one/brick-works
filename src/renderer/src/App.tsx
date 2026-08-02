@@ -10,7 +10,8 @@ import {
   BuildOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  DeploymentUnitOutlined
 } from '@ant-design/icons'
 import TitleBar from './components/TitleBar'
 import DevTools from './pages/DevTools'
@@ -18,6 +19,7 @@ import DevToolDetail from './pages/DevToolDetail'
 import About from './pages/About'
 import MemoSticky from './pages/MemoSticky'
 import LanTransfer from './pages/LanTransfer'
+import SshTunnel from './pages/SshTunnel'
 
 const { Sider, Content } = Layout
 
@@ -40,6 +42,11 @@ function AppLayout(): React.JSX.Element {
       key: '/lan-transfer',
       icon: <ThunderboltOutlined />,
       label: <NavLink to="/lan-transfer">{t('lanTransfer')}</NavLink>
+    },
+    {
+      key: '/ssh-tunnel',
+      icon: <DeploymentUnitOutlined />,
+      label: <NavLink to="/ssh-tunnel">{t('sshTunnel')}</NavLink>
     },
     {
       key: '/dev-tools',
@@ -98,6 +105,7 @@ function App(): React.JSX.Element {
         <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
         <Route path="/memo-sticky" element={<MemoSticky />} />
         <Route path="/lan-transfer" element={<LanTransfer />} />
+        <Route path="/ssh-tunnel" element={<SshTunnel />} />
         <Route path="/about" element={<About />} />
         <Route path="/" element={<Navigate to="/dev-tools" replace />} />
       </Route>

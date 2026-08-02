@@ -33,6 +33,38 @@ const api = {
         ipcRenderer.removeListener('lan:status-change', handler)
       }
     }
+  },
+  ssh: {
+    listNodes: () => ipcRenderer.invoke('ssh:listNodes'),
+    saveNode: (input: SshNodeInput) => ipcRenderer.invoke('ssh:saveNode', input),
+    deleteNode: (id: string) => ipcRenderer.invoke('ssh:deleteNode', id),
+    chooseKeyFile: () => ipcRenderer.invoke('ssh:chooseKeyFile'),
+    status: () => ipcRenderer.invoke('ssh:status'),
+    connect: (nodeId: string) => ipcRenderer.invoke('ssh:connect', nodeId),
+    disconnect: (nodeId: string) => ipcRenderer.invoke('ssh:disconnect', nodeId),
+    disconnectAll: () => ipcRenderer.invoke('ssh:disconnectAll'),
+    test: (nodeId: string) => ipcRenderer.invoke('ssh:test', nodeId),
+    listTunnels: () => ipcRenderer.invoke('ssh:listTunnels'),
+    addTunnel: (nodeId: string, spec: SshTunnelSpec) =>
+      ipcRenderer.invoke('ssh:addTunnel', nodeId, spec),
+    removeTunnel: (nodeId: string, tunnelId: string) =>
+      ipcRenderer.invoke('ssh:removeTunnel', nodeId, tunnelId),
+    onStatusChange: (callback: (statuses: SshSessionStatus[]) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, statuses: SshSessionStatus[]): void =>
+        callback(statuses)
+      ipcRenderer.on('ssh:status-change', handler)
+      return () => {
+        ipcRenderer.removeListener('ssh:status-change', handler)
+      }
+    },
+    onLog: (callback: (entry: SshLogEntry) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, entry: SshLogEntry): void =>
+        callback(entry)
+      ipcRenderer.on('ssh:log', handler)
+      return () => {
+        ipcRenderer.removeListener('ssh:log', handler)
+      }
+    }
   }
 }
 
