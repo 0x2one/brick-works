@@ -50,6 +50,13 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolPdfImageAnnotateDesc',
     tags: ['工具', '文档', '图片'],
     route: '/dev-tools/pdf-image-annotate'
+  },
+  {
+    id: 'pdf-merge-split',
+    nameKey: 'devToolPdfMergeSplit',
+    descKey: 'devToolPdfMergeSplitDesc',
+    tags: ['工具', '文档'],
+    route: '/dev-tools/pdf-merge-split'
   }
 ]
 

@@ -9,6 +9,7 @@ import JsonBeautify from './tools/JsonBeautify'
 import CodecConverter from './tools/CodecConverter'
 import TimestampConverter from './tools/TimestampConverter'
 import PdfImageAnnotate from './tools/PdfImageAnnotate'
+import PdfMergeSplit from './tools/PdfMergeSplit'
 
 interface ToolProps {
   breadcrumb?: React.ReactNode
@@ -20,7 +21,8 @@ const toolComponents: Record<string, React.ComponentType<ToolProps>> = {
   'json-beautify': JsonBeautify,
   'codec-converter': CodecConverter,
   'timestamp-converter': TimestampConverter,
-  'pdf-image-annotate': PdfImageAnnotate
+  'pdf-image-annotate': PdfImageAnnotate,
+  'pdf-merge-split': PdfMergeSplit
 }
 
 function DevToolDetail(): React.JSX.Element {
