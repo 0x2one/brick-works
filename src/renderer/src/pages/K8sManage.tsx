@@ -38,6 +38,19 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
+const LS_K8S_NAME_QUERY = 'brickworks:k8sNameQuery'
+const LS_K8S_EXEC_SHELL = 'brickworks:k8sExecShell'
+
+function readCssVar(name: string, fallback: string): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return value || fallback
+}
+
+function loadExecShell(): 'bash' | 'sh' {
+  const raw = localStorage.getItem(LS_K8S_EXEC_SHELL)
+  return raw === 'sh' || raw === 'bash' ? raw : 'bash'
+}
+
 function formatAge(ms: number): string {
   const s = Math.floor(ms / 1000)
   if (s < 60) return `${s}s`
@@ -142,7 +155,7 @@ function K8sManage(): React.JSX.Element {
   const [execReady, setExecReady] = useState(false)
   const [execPod, setExecPod] = useState<K8sPodRow | null>(null)
   const [execContainer, setExecContainer] = useState<string>()
-  const [execShell, setExecShell] = useState<'bash' | 'sh'>('bash')
+  const [execShell, setExecShell] = useState<'bash' | 'sh'>(loadExecShell)
   const [execSessionId, setExecSessionId] = useState<string | null>(null)
   const termRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
@@ -156,7 +169,7 @@ function K8sManage(): React.JSX.Element {
   const [networkSubTab, setNetworkSubTab] = useState<'services' | 'ingress'>('services')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
-  const [nameQuery, setNameQuery] = useState('')
+  const [nameQuery, setNameQuery] = useState(() => localStorage.getItem(LS_K8S_NAME_QUERY) ?? '')
   const [tableScrollY, setTableScrollY] = useState(360)
   const bodyRef = useRef<HTMLDivElement>(null)
 
@@ -557,7 +570,6 @@ function K8sManage(): React.JSX.Element {
   const openExecPicker = (pod: K8sPodRow): void => {
     setExecPod(pod)
     setExecContainer(pod.containers[0])
-    setExecShell('bash')
     setExecPickerOpen(true)
   }
 
@@ -573,14 +585,13 @@ function K8sManage(): React.JSX.Element {
     if (!host) return
 
     destroyTerminal()
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = readCssVar('--bg-warm', '#f3f0eb')
+    const fg = readCssVar('--text-primary', '#2a2520')
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 13,
       fontFamily: 'Consolas, "Courier New", monospace',
-      theme: isDark
-        ? { background: '#1e1e1e', foreground: '#d4d4d4' }
-        : { background: '#fafafa', foreground: '#1f1f1f' }
+      theme: { background: bg, foreground: fg }
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
@@ -978,7 +989,9 @@ function K8sManage(): React.JSX.Element {
             placeholder={t('k8sSearchName')}
             value={nameQuery}
             onChange={(e) => {
-              setNameQuery(e.target.value)
+              const next = e.target.value
+              setNameQuery(next)
+              localStorage.setItem(LS_K8S_NAME_QUERY, next)
               setPage(1)
             }}
             style={{ width: 200, maxWidth: 200 }}
@@ -1329,7 +1342,11 @@ function K8sManage(): React.JSX.Element {
             <span className="text-sm text-[var(--text-secondary)] shrink-0">{t('k8sExecShell')}</span>
             <Segmented
               value={execShell}
-              onChange={(v) => setExecShell(v as 'bash' | 'sh')}
+              onChange={(v) => {
+                const next = v as 'bash' | 'sh'
+                setExecShell(next)
+                localStorage.setItem(LS_K8S_EXEC_SHELL, next)
+              }}
               options={[
                 { value: 'bash', label: 'bash' },
                 { value: 'sh', label: 'sh' }
