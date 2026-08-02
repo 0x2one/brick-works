@@ -99,7 +99,7 @@ function About(): React.JSX.Element {
               <div
                 key={m.key}
                 className="tool-card"
-                onClick={() => navigate(m.route, { viewTransition: true })}
+                onClick={() => navigate(m.route)}
               >
                 <div className="flex items-center gap-3 mb-2">
                   <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-[var(--accent)] text-white text-base shrink-0">

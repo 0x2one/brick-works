@@ -44,20 +44,12 @@ function DevToolDetail(): React.JSX.Element {
 
   const breadcrumb = (
     <div className="flex items-center gap-2 mb-3">
-      <Button
-        type="text"
-        icon={<ArrowLeftOutlined />}
-        onClick={() => navigate('/dev-tools', { viewTransition: true })}
-      >
+      <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/dev-tools')}>
         {t('back')}
       </Button>
       <Breadcrumb
         items={[
-          {
-            title: (
-              <a onClick={() => navigate('/dev-tools', { viewTransition: true })}>{t('devTools')}</a>
-            )
-          },
+          { title: <a onClick={() => navigate('/dev-tools')}>{t('devTools')}</a> },
           { title: t(tool.nameKey) }
         ]}
       />

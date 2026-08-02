@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route, Navigate, useNavigate, useLocation, Outlet } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu } from 'antd'
 import { useTranslation } from 'react-i18next'
 import {
@@ -25,15 +25,34 @@ import K8sManage from './pages/K8sManage'
 
 const { Sider, Content } = Layout
 
+type FadeStage = 'idle' | 'exit' | 'enter'
+
 function AppLayout(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
+  const [displayLocation, setDisplayLocation] = useState(location)
+  const [fadeStage, setFadeStage] = useState<FadeStage>('idle')
 
   useEffect(() => {
     window.api.lan.setLang(i18n.language === 'en' ? 'en' : 'zh')
   }, [i18n.language])
+
+  useEffect(() => {
+    if (location.pathname === displayLocation.pathname || fadeStage === 'exit') return
+    // Skip animation for the initial `/` → default route redirect
+    if (displayLocation.pathname === '/') {
+      setDisplayLocation(location)
+      return
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDisplayLocation(location)
+      setFadeStage('idle')
+      return
+    }
+    setFadeStage('exit')
+  }, [location, displayLocation.pathname, fadeStage])
 
   const menuItems = [
     {
@@ -95,7 +114,7 @@ function AppLayout(): React.JSX.Element {
           className="!bg-transparent !border-e-0"
           onClick={({ key }) => {
             if (typeof key === 'string' && key.startsWith('/') && key !== location.pathname) {
-              navigate(key, { viewTransition: true })
+              navigate(key)
             }
           }}
         />
@@ -103,7 +122,33 @@ function AppLayout(): React.JSX.Element {
       <Layout className="layout-right flex flex-col min-h-0">
         <TitleBar />
         <Content className="overflow-auto content-area flex flex-col flex-1 min-h-0">
-          <Outlet />
+          <div
+            className={`page-fade flex flex-col flex-1 min-h-0${
+              fadeStage === 'exit' ? ' page-fade-exit' : fadeStage === 'enter' ? ' page-fade-enter' : ''
+            }`}
+            onAnimationEnd={(e) => {
+              if (e.target !== e.currentTarget) return
+              if (fadeStage === 'exit') {
+                setDisplayLocation(location)
+                setFadeStage('enter')
+              } else if (fadeStage === 'enter') {
+                setFadeStage('idle')
+              }
+            }}
+          >
+            <Routes location={displayLocation}>
+              <Route path="/dev-tools" element={<DevTools />} />
+              <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
+              <Route path="/memo-sticky" element={<MemoSticky />} />
+              <Route path="/lan-transfer" element={<LanTransfer />} />
+              <Route path="/ssh-tunnel" element={<SshTunnel />} />
+              <Route path="/ssh-client" element={<SshClient />} />
+              <Route path="/k8s" element={<K8sManage />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/" element={<Navigate to="/dev-tools" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
         </Content>
       </Layout>
     </Layout>
@@ -111,22 +156,7 @@ function AppLayout(): React.JSX.Element {
 }
 
 function App(): React.JSX.Element {
-  return (
-    <Routes>
-      <Route element={<AppLayout />}>
-        <Route path="/dev-tools" element={<DevTools />} />
-        <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
-        <Route path="/memo-sticky" element={<MemoSticky />} />
-        <Route path="/lan-transfer" element={<LanTransfer />} />
-        <Route path="/ssh-tunnel" element={<SshTunnel />} />
-        <Route path="/ssh-client" element={<SshClient />} />
-        <Route path="/k8s" element={<K8sManage />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/" element={<Navigate to="/dev-tools" replace />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  )
+  return <AppLayout />
 }
 
 export default App
