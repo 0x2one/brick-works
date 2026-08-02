@@ -45,12 +45,6 @@ const STATE_DOT_CLS: Record<string, string> = {
   disconnected: 'bg-[var(--border-subtle)]'
 }
 
-const TYPE_BADGE_CLS: Record<SshTunnelType, string> = {
-  local: 'text-sky-600 bg-sky-500/10',
-  remote: 'text-emerald-600 bg-emerald-500/10',
-  socks5: 'text-purple-600 bg-purple-500/10'
-}
-
 function formatTime(ts: number): string {
   const d = new Date(ts)
   const pad = (n: number): string => String(n).padStart(2, '0')
@@ -758,18 +752,22 @@ function SshTunnel(): React.JSX.Element {
                     }
                     return (
                       <div key={spec.id} className="px-5 py-3 flex items-center gap-3">
-                        {!filterType && (
-                          <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${TYPE_BADGE_CLS[spec.type]}`}
-                          >
-                            {t(
-                              `sshType${spec.type === 'socks5' ? 'Socks5' : spec.type === 'local' ? 'Local' : 'Remote'}`
-                            )}
-                          </span>
-                        )}
-                        <code className="flex-1 min-w-0 text-xs font-mono text-[var(--text-primary)] truncate">
-                          {tunnelSummary(spec, live)}
-                        </code>
+                        <div className="flex-1 min-w-0">
+                          {spec.name ? (
+                            <>
+                              <div className="text-xs font-medium text-[var(--text-primary)] truncate leading-tight">
+                                {spec.name}
+                              </div>
+                              <div className="text-[11px] font-mono text-[var(--text-secondary)] truncate mt-1">
+                                {tunnelSummary(spec, live)}
+                              </div>
+                            </>
+                          ) : (
+                            <code className="text-xs font-mono text-[var(--text-primary)] truncate">
+                              {tunnelSummary(spec, live)}
+                            </code>
+                          )}
+                        </div>
                         {connected && live?.status === 'error' && live.error && (
                           <span className="text-[11px] text-red-500 truncate">{live.error}</span>
                         )}
