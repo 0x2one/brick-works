@@ -51,7 +51,11 @@ function TitleBar(): React.JSX.Element {
       )}
       <div className="title-bar-drag" />
       <div className="title-bar-controls">
-        <button className="title-bar-btn" onClick={() => navigate('/about')} title={t('about')}>
+        <button
+          className="title-bar-btn"
+          onClick={() => navigate('/about', { viewTransition: true })}
+          title={t('about')}
+        >
           <InfoCircleOutlined />
         </button>
         <button

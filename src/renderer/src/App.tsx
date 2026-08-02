@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { Layout, Menu } from 'antd'
-import { NavLink, useLocation, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ToolOutlined,
@@ -30,6 +29,7 @@ function AppLayout(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => {
     window.api.lan.setLang(i18n.language === 'en' ? 'en' : 'zh')
@@ -39,32 +39,32 @@ function AppLayout(): React.JSX.Element {
     {
       key: '/memo-sticky',
       icon: <PushpinOutlined />,
-      label: <NavLink to="/memo-sticky">{t('memoSticky')}</NavLink>
+      label: t('memoSticky')
     },
     {
       key: '/lan-transfer',
       icon: <ThunderboltOutlined />,
-      label: <NavLink to="/lan-transfer">{t('lanTransfer')}</NavLink>
+      label: t('lanTransfer')
     },
     {
       key: '/ssh-tunnel',
       icon: <DeploymentUnitOutlined />,
-      label: <NavLink to="/ssh-tunnel">{t('sshTunnel')}</NavLink>
+      label: t('sshTunnel')
     },
     {
       key: '/ssh-client',
       icon: <CodeOutlined />,
-      label: <NavLink to="/ssh-client">{t('sshClient')}</NavLink>
+      label: t('sshClient')
     },
     {
       key: '/k8s',
       icon: <CloudServerOutlined />,
-      label: <NavLink to="/k8s">{t('k8sManage')}</NavLink>
+      label: t('k8sManage')
     },
     {
       key: '/dev-tools',
       icon: <ToolOutlined />,
-      label: <NavLink to="/dev-tools">{t('devTools')}</NavLink>
+      label: t('devTools')
     }
   ]
 
@@ -93,6 +93,11 @@ function AppLayout(): React.JSX.Element {
           ]}
           items={menuItems}
           className="!bg-transparent !border-e-0"
+          onClick={({ key }) => {
+            if (typeof key === 'string' && key.startsWith('/') && key !== location.pathname) {
+              navigate(key, { viewTransition: true })
+            }
+          }}
         />
       </Sider>
       <Layout className="layout-right flex flex-col min-h-0">

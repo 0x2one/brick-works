@@ -96,7 +96,11 @@ function About(): React.JSX.Element {
           </SectionHeading>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {MODULES.map((m) => (
-              <div key={m.key} className="tool-card" onClick={() => navigate(m.route)}>
+              <div
+                key={m.key}
+                className="tool-card"
+                onClick={() => navigate(m.route, { viewTransition: true })}
+              >
                 <div className="flex items-center gap-3 mb-2">
                   <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-[var(--accent)] text-white text-base shrink-0">
                     {m.icon}

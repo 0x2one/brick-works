@@ -57,7 +57,7 @@ function DevTools(): React.JSX.Element {
 
   const handleCardClick = (id: string, route: string) => {
     recordUse(id)
-    navigate(route)
+    navigate(route, { viewTransition: true })
   }
 
   return (
