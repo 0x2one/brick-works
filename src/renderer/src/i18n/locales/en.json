@@ -431,7 +431,9 @@
   "k8sExecClosed": "Session closed",
   "k8sPfStarted": "Port forward started",
   "k8sPfStopped": "Port forward stopped",
+  "k8sPfDeleted": "Port forward record deleted",
+  "k8sPfDelete": "Delete record",
   "k8sPfFail": "Port forward failed",
-  "k8sNoPortForwards": "No active port forwards",
+  "k8sNoPortForwards": "No port forward records",
   "k8sStart": "Start"
 }

@@ -671,34 +671,35 @@ function K8sManage(): React.JSX.Element {
     {
       title: t('k8sColName'),
       dataIndex: 'name',
+      width: 200,
       ellipsis: true,
       sorter: (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }),
       defaultSortOrder: 'ascend'
     },
-    { title: t('k8sColNamespace'), dataIndex: 'namespace', width: 120 },
-    { title: t('k8sColReady'), dataIndex: 'ready', width: 80 },
+    { title: t('k8sColNamespace'), dataIndex: 'namespace', width: 120, ellipsis: true },
+    { title: t('k8sColReady'), dataIndex: 'ready', width: 72 },
     {
       title: t('k8sColStatus'),
       dataIndex: 'status',
-      width: 100,
+      width: 96,
       render: (v: string) => (
         <Tag color={v === 'Running' ? 'success' : v === 'Pending' ? 'processing' : 'default'}>
           {v}
         </Tag>
       )
     },
-    { title: t('k8sColRestarts'), dataIndex: 'restarts', width: 80 },
+    { title: t('k8sColRestarts'), dataIndex: 'restarts', width: 72 },
     { title: t('k8sColNode'), dataIndex: 'node', ellipsis: true, width: 140 },
     {
       title: t('k8sColAge'),
       dataIndex: 'ageMs',
-      width: 70,
+      width: 64,
       render: (v: number) => formatAge(v)
     },
     {
       title: t('k8sColActions'),
       key: 'actions',
-      width: 136,
+      width: 128,
       fixed: 'right',
       render: (_, pod) => (
         <Space size={0}>
@@ -734,6 +735,9 @@ function K8sManage(): React.JSX.Element {
       )
     }
   ]
+
+  const podScrollX =
+    200 + 120 + 72 + 96 + 72 + 140 + 64 + 128
 
   const workloadColumns: ColumnsType<K8sWorkloadRow> = [
     { title: t('k8sColKind'), dataIndex: 'kind', width: 120 },
@@ -1020,7 +1024,8 @@ function K8sManage(): React.JSX.Element {
                 dataSource={paged(filteredPods)}
                 loading={loading}
                 pagination={false}
-                scroll={{ x: 1100, y: tableScrollY }}
+                tableLayout="fixed"
+                scroll={{ x: podScrollX, y: tableScrollY }}
               />
             )}
             {activeTab === 'workloads' && (

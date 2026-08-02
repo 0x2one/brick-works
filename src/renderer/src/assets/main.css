@@ -492,6 +492,22 @@
   background: var(--content-bg);
 }
 
+/* Stabilize fixed action column while horizontal scrolling */
+.k8s-page-body .ant-table-cell-fix {
+  background: var(--content-bg);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.k8s-page-body .ant-table-tbody > tr > .ant-table-cell-fix,
+.k8s-page-body .ant-table-thead > tr > .ant-table-cell-fix {
+  background: var(--content-bg);
+}
+
+.k8s-page-body .ant-table-tbody > tr.ant-table-row:hover > .ant-table-cell-fix {
+  background: var(--bg-warm);
+}
+
 /* ── Animations ── */
 
 @keyframes fadeUp {
