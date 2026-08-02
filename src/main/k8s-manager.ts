@@ -756,7 +756,19 @@ export function createK8sManager(store: K8sStore): K8sManager {
 
       const exec = new k8s.Exec(config)
       const shell = opts.shell === 'sh' ? 'sh' : 'bash'
-      const command = shell === 'bash' ? ['/bin/bash'] : ['/bin/sh']
+      // Force a prompt on start: some images' shells wait for the first keystroke otherwise
+      const command =
+        shell === 'bash'
+          ? [
+              '/bin/bash',
+              '-c',
+              'export TERM=xterm-256color; export PS1="\\u@\\h:\\w\\$ "; exec /bin/bash -i'
+            ]
+          : [
+              '/bin/sh',
+              '-c',
+              'export TERM=xterm-256color; export PS1="$PWD\\$ "; exec /bin/sh -i'
+            ]
       const ws = await exec.exec(
         opts.namespace,
         opts.pod,
@@ -774,6 +786,29 @@ export function createK8sManager(store: K8sStore): K8sManager {
         }
       )
       execSessions.set(sessionId, { ws, stdin, stdout })
+
+      const cols = Math.max(2, opts.cols ?? stdout.columns)
+      const rows = Math.max(1, opts.rows ?? stdout.rows)
+      queueMicrotask(() => stdout.setSize(cols, rows))
+      // Wake the shell with Enter, then Ctrl+L so only one prompt remains on screen
+      setTimeout(() => {
+        if (!execSessions.has(sessionId)) return
+        try {
+          stdout.setSize(cols, rows)
+          stdin.write('\r')
+        } catch {
+          // ignore
+        }
+        setTimeout(() => {
+          if (!execSessions.has(sessionId)) return
+          try {
+            stdin.write('\x0c')
+          } catch {
+            // ignore
+          }
+        }, 60)
+      }, 100)
+
       ws.on?.('close', () => {
         if (execSessions.has(sessionId)) {
           for (const cb of execExitListeners) cb({ sessionId })
@@ -793,7 +828,7 @@ export function createK8sManager(store: K8sStore): K8sManager {
     async resizeExec(sessionId, cols, rows) {
       const session = execSessions.get(sessionId)
       if (!session) return false
-      session.stdout.setSize(cols, rows)
+      session.stdout.setSize(Math.max(2, cols), Math.max(1, rows))
       return true
     },
 

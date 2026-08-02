@@ -139,6 +139,7 @@ function K8sManage(): React.JSX.Element {
 
   const [execPickerOpen, setExecPickerOpen] = useState(false)
   const [execOpen, setExecOpen] = useState(false)
+  const [execReady, setExecReady] = useState(false)
   const [execPod, setExecPod] = useState<K8sPodRow | null>(null)
   const [execContainer, setExecContainer] = useState<string>()
   const [execShell, setExecShell] = useState<'bash' | 'sh'>('bash')
@@ -346,14 +347,19 @@ function K8sManage(): React.JSX.Element {
     })
     const offExit = window.api.k8s.onExecExit((data) => {
       if (data.sessionId !== execSessionRef.current) return
-      terminalRef.current?.writeln(`\r\n\x1b[90m[${t('k8sExecClosed')}]\x1b[0m`)
+      execSessionRef.current = null
       setExecSessionId(null)
+      destroyTerminal()
+      setExecReady(false)
+      setExecOpen(false)
+      setExecPod(null)
+      message.info(t('k8sExecClosed'))
     })
     return () => {
       offData()
       offExit()
     }
-  }, [execOpen, t])
+  }, [execOpen, t, message])
 
   const handleConnect = async (): Promise<void> => {
     if (!selectedClusterId) {
@@ -543,6 +549,7 @@ function K8sManage(): React.JSX.Element {
     if (execSessionId) await window.api.k8s.stopExec(execSessionId)
     setExecSessionId(null)
     destroyTerminal()
+    setExecReady(false)
     setExecOpen(false)
     setExecPod(null)
   }
@@ -556,11 +563,15 @@ function K8sManage(): React.JSX.Element {
 
   const confirmExec = (): void => {
     setExecPickerOpen(false)
+    setExecReady(false)
     setExecOpen(true)
   }
 
   useEffect(() => {
-    if (!execOpen || !execPod || !termRef.current) return
+    if (!execReady || !execOpen || !execPod) return
+    const host = termRef.current
+    if (!host) return
+
     destroyTerminal()
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
     const term = new Terminal({
@@ -573,13 +584,11 @@ function K8sManage(): React.JSX.Element {
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
-    term.open(termRef.current)
+    term.open(host)
     terminalRef.current = term
     fitRef.current = fit
-    requestAnimationFrame(() => {
-      fit.fit()
-      requestAnimationFrame(() => fit.fit())
-    })
+    fit.fit()
+    term.focus()
 
     let disposed = false
     let activeSession: string | null = null
@@ -606,13 +615,24 @@ function K8sManage(): React.JSX.Element {
         term.onResize(({ cols, rows }) => {
           void window.api.k8s.resizeExec(sessionId, cols, rows)
         })
+        fit.fit()
+        await window.api.k8s.resizeExec(sessionId, term.cols, term.rows)
+        window.setTimeout(() => {
+          if (disposed) return
+          fit.fit()
+          void window.api.k8s.resizeExec(sessionId, term.cols, term.rows)
+          term.focus()
+        }, 80)
+        term.focus()
       } catch (err) {
         term.writeln(`\x1b[31m${err instanceof Error ? err.message : t('k8sExecFail')}\x1b[0m`)
       }
     }
     void boot()
 
-    const onResize = (): void => fit.fit()
+    const onResize = (): void => {
+      fit.fit()
+    }
     window.addEventListener('resize', onResize)
     return () => {
       disposed = true
@@ -620,7 +640,7 @@ function K8sManage(): React.JSX.Element {
       if (activeSession) void window.api.k8s.stopExec(activeSession)
       destroyTerminal()
     }
-  }, [execOpen, execPod, execContainer, execShell, t])
+  }, [execReady, execOpen, execPod, execContainer, execShell, t])
 
   const openPortForward = (pod: K8sPodRow): void => {
     setPfPod(pod)
@@ -1200,13 +1220,19 @@ function K8sManage(): React.JSX.Element {
       <Drawer
         title={logPod ? `${t('k8sLogs')} · ${logPod.namespace}/${logPod.name}` : t('k8sLogs')}
         placement="bottom"
-        height="70vh"
+        size="70vh"
         open={logOpen}
         onClose={() => void closeLogs()}
         mask={false}
         maskClosable={false}
         destroyOnHidden
-        styles={{ body: { paddingTop: 12, display: 'flex', flexDirection: 'column' } }}
+        focusable={{ trap: false }}
+        rootClassName="k8s-drawer-no-mask"
+        styles={{
+          root: { pointerEvents: 'none' },
+          section: { pointerEvents: 'auto' },
+          body: { paddingTop: 12, display: 'flex', flexDirection: 'column' }
+        }}
         extra={
           <Space>
             {logPod && logPod.containers.length > 1 && (
@@ -1266,7 +1292,7 @@ function K8sManage(): React.JSX.Element {
       <Drawer
         title={t('k8sConsole')}
         placement="bottom"
-        height={220}
+        size={220}
         open={execPickerOpen}
         onClose={() => {
           setExecPickerOpen(false)
@@ -1275,6 +1301,12 @@ function K8sManage(): React.JSX.Element {
         mask={false}
         maskClosable={false}
         destroyOnHidden
+        focusable={{ trap: false }}
+        rootClassName="k8s-drawer-no-mask"
+        styles={{
+          root: { pointerEvents: 'none' },
+          section: { pointerEvents: 'auto' }
+        }}
       >
         {execPod && (
           <p className="text-xs text-[var(--text-secondary)] m-0 mb-3 truncate">
@@ -1319,13 +1351,23 @@ function K8sManage(): React.JSX.Element {
             : t('k8sConsole')
         }
         placement="bottom"
-        height="70vh"
+        size="70vh"
         open={execOpen}
         onClose={() => void closeExec()}
+        afterOpenChange={(open) => {
+          setExecReady(open)
+          if (!open) destroyTerminal()
+        }}
         mask={false}
         maskClosable={false}
         destroyOnHidden
-        styles={{ body: { paddingTop: 12, display: 'flex', flexDirection: 'column' } }}
+        focusable={{ trap: false }}
+        rootClassName="k8s-drawer-no-mask"
+        styles={{
+          root: { pointerEvents: 'none' },
+          section: { pointerEvents: 'auto' },
+          body: { paddingTop: 12, display: 'flex', flexDirection: 'column', minHeight: 0 }
+        }}
         extra={
           execPod && execPod.containers.length > 1 ? (
             <Select
@@ -1344,8 +1386,9 @@ function K8sManage(): React.JSX.Element {
       >
         <div
           ref={termRef}
-          className="rounded-lg overflow-hidden flex-1 min-h-0"
-          style={{ padding: 8, background: 'var(--bg-warm)' }}
+          className="rounded-lg overflow-hidden flex-1 min-h-0 w-full"
+          style={{ padding: 8, background: 'var(--bg-warm)', minHeight: 200 }}
+          onMouseDown={() => terminalRef.current?.focus()}
         />
       </Drawer>
 

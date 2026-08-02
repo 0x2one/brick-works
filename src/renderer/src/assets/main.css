@@ -512,6 +512,22 @@
   background: var(--bg-warm);
 }
 
+/* No-mask bottom drawers: keep panel interactive, pass clicks outside */
+.k8s-drawer-no-mask.ant-drawer {
+  pointer-events: none;
+}
+
+.k8s-drawer-no-mask .ant-drawer-section,
+.k8s-drawer-no-mask .ant-drawer-content {
+  pointer-events: auto;
+}
+
+.k8s-drawer-no-mask .xterm,
+.k8s-drawer-no-mask .xterm-screen,
+.k8s-drawer-no-mask .xterm-helpers {
+  pointer-events: auto;
+}
+
 /* ── Animations ── */
 
 @keyframes fadeUp {
