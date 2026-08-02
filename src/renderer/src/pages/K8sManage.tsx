@@ -91,8 +91,8 @@ function K8sManage(): React.JSX.Element {
   const [logPod, setLogPod] = useState<K8sPodRow | null>(null)
   const [logContainer, setLogContainer] = useState<string>()
   const [logFollow, setLogFollow] = useState(true)
-  const [logWrap, setLogWrap] = useState(true)
-  const [logAutoScroll, setLogAutoScroll] = useState(false)
+  const [logWrap, setLogWrap] = useState(false)
+  const [logAutoScroll, setLogAutoScroll] = useState(true)
   const [logText, setLogText] = useState('')
   const [logSessionId, setLogSessionId] = useState<string | null>(null)
   const logPreRef = useRef<HTMLPreElement>(null)
@@ -489,6 +489,7 @@ function K8sManage(): React.JSX.Element {
     const container = pod.containers[0]
     setLogContainer(container)
     setLogFollow(true)
+    setLogAutoScroll(true)
     setLogOpen(true)
     await startLogs(pod, container, true)
   }
@@ -1079,6 +1080,8 @@ function K8sManage(): React.JSX.Element {
         height="70vh"
         open={logOpen}
         onClose={() => void closeLogs()}
+        mask={false}
+        maskClosable={false}
         destroyOnHidden
         styles={{ body: { paddingTop: 12, display: 'flex', flexDirection: 'column' } }}
         extra={
