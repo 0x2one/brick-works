@@ -154,12 +154,8 @@ export function createK8sStore(): K8sStore {
       version: 1,
       portForwards: [...portForwards.values()]
     }
-    try {
-      mkdirSync(app.getPath('userData'), { recursive: true })
-      writeFileSync(pfFile, JSON.stringify(payload, null, 2), 'utf-8')
-    } catch {
-      // best-effort
-    }
+    mkdirSync(app.getPath('userData'), { recursive: true })
+    writeFileSync(pfFile, JSON.stringify(payload, null, 2), 'utf-8')
   }
 
   return {

@@ -495,7 +495,7 @@ ipcMain.handle('k8s:stopExec', (_event, sessionId: string) => k8sManager.stopExe
 
 ipcMain.handle(
   'k8s:startPortForward',
-  (
+  async (
     _event,
     opts: {
       id?: string
@@ -505,23 +505,36 @@ ipcMain.handle(
       remotePort?: number
     }
   ) => {
-    if (opts.id) {
-      return k8sManager.startPortForward({ id: opts.id })
+    const st = k8sManager.getStatus()
+    if (st.state !== 'connected' || !st.clusterId) {
+      throw new Error('NOT_CONNECTED')
     }
-    const localPort = Number(opts.localPort)
-    const remotePort = Number(opts.remotePort)
-    if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) {
-      throw new Error('LOCAL_PORT_INVALID')
+
+    let id = opts.id?.trim()
+    if (!id) {
+      const localPort = Number(opts.localPort)
+      const remotePort = Number(opts.remotePort)
+      const namespace = opts.namespace?.trim()
+      const pod = opts.pod?.trim()
+      if (!namespace || !pod) throw new Error('PORT_FORWARD_OPTS_REQUIRED')
+      if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) {
+        throw new Error('LOCAL_PORT_INVALID')
+      }
+      if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
+        throw new Error('REMOTE_PORT_INVALID')
+      }
+      // Persist first so records survive even if runtime start fails
+      const record = k8sStore.savePortForward({
+        clusterId: st.clusterId,
+        namespace,
+        pod,
+        localPort,
+        remotePort
+      })
+      id = record.id
     }
-    if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
-      throw new Error('REMOTE_PORT_INVALID')
-    }
-    return k8sManager.startPortForward({
-      namespace: opts.namespace,
-      pod: opts.pod,
-      localPort,
-      remotePort
-    })
+
+    return k8sManager.startPortForward({ id })
   }
 )
 
@@ -537,7 +550,7 @@ app.on('will-quit', () => {
   k8sManager.stop()
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.brickworks')
 
   app.on('browser-window-created', (_, window) => {
@@ -546,17 +559,11 @@ app.whenReady().then(() => {
 
   ipcMain.on('ping', () => console.log('pong'))
 
+  await Promise.all([sshStore.init().catch(() => {}), k8sStore.init().catch(() => {})])
+  broadcastSshStatus()
+  broadcastK8sStatus()
+
   createWindow()
-
-  sshStore
-    .init()
-    .then(() => broadcastSshStatus())
-    .catch(() => {})
-
-  k8sStore
-    .init()
-    .then(() => broadcastK8sStatus())
-    .catch(() => {})
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
