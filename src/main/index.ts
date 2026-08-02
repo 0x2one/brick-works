@@ -95,6 +95,16 @@ ipcMain.handle('window:isMaximized', () => {
   return mainWindow?.isMaximized() ?? false
 })
 
+ipcMain.handle('app:info', () => ({
+  version: app.getVersion(),
+  electron: process.versions.electron,
+  chrome: process.versions.chrome,
+  node: process.versions.node,
+  v8: process.versions.v8,
+  platform: process.platform,
+  arch: process.arch
+}))
+
 /* ── LAN transfer service ── */
 
 let lanDir: string | null = null

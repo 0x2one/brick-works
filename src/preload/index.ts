@@ -3,6 +3,9 @@ import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
   fetchImage: (url: string) => ipcRenderer.invoke('fetch:image', url),
+  app: {
+    info: () => ipcRenderer.invoke('app:info')
+  },
   windowControls: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
     maximize: () => ipcRenderer.invoke('window:maximize'),

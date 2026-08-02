@@ -8,6 +8,16 @@ interface WindowControls {
   onMaximizeChange: (callback: (maximized: boolean) => void) => () => void
 }
 
+interface AppInfo {
+  version: string
+  electron: string
+  chrome: string
+  node: string
+  v8: string
+  platform: string
+  arch: string
+}
+
 interface LanApi {
   getStatus: () => Promise<LanStatus>
   start: (dir?: string, lang?: string) => Promise<LanStatus>
@@ -107,15 +117,30 @@ interface K8sApi {
   onPortForwardStatus: (callback: (list: K8sPortForwardStatus[]) => void) => () => void
 }
 
+interface AppApi {
+  info: () => Promise<AppInfo>
+}
+
 interface Api {
   fetchImage: (url: string) => Promise<string | null>
   windowControls: WindowControls
+  app: AppApi
   lan: LanApi
   ssh: SshApi
   k8s: K8sApi
 }
 
 declare global {
+  interface AppInfo {
+    version: string
+    electron: string
+    chrome: string
+    node: string
+    v8: string
+    platform: string
+    arch: string
+  }
+
   interface Window {
     electron: ElectronAPI
     api: Api

@@ -5,7 +5,6 @@ import { NavLink, useLocation, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ToolOutlined,
-  InfoCircleOutlined,
   PushpinOutlined,
   BuildOutlined,
   MenuFoldOutlined,
@@ -66,11 +65,6 @@ function AppLayout(): React.JSX.Element {
       key: '/dev-tools',
       icon: <ToolOutlined />,
       label: <NavLink to="/dev-tools">{t('devTools')}</NavLink>
-    },
-    {
-      key: '/about',
-      icon: <InfoCircleOutlined />,
-      label: <NavLink to="/about">{t('about')}</NavLink>
     }
   ]
 
