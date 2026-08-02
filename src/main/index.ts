@@ -214,7 +214,7 @@ ipcMain.handle('ssh:status', () => sshManager.getStatus())
 ipcMain.handle('ssh:connect', async (_event, nodeId: string) => {
   const node = sshStore.get(nodeId)
   if (!node) throw new Error('NODE_NOT_FOUND')
-  return sshManager.connect(node)
+  return sshManager.connect(node, sshStore.listTunnels(nodeId))
 })
 
 ipcMain.handle('ssh:disconnect', (_event, nodeId: string) => sshManager.disconnect(nodeId))

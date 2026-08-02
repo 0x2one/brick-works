@@ -142,7 +142,7 @@ function TunnelForm({
   }, [draft, nodeId, onAdded, onError, t, fixedType])
 
   return (
-    <div className="flex flex-col gap-3 border-t border-[var(--border-subtle)] px-5 py-4">
+    <div className="flex flex-col gap-3">
       {!fixedType && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className={LABEL_CLS + ' mb-0'}>{t('sshTunnelType')}</span>
@@ -414,7 +414,7 @@ function SshTunnel(): React.JSX.Element {
   const [editing, setEditing] = useState<SshNodeView | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({})
-  const [formOpenNodes, setFormOpenNodes] = useState<Record<string, boolean>>({})
+  const [addModal, setAddModal] = useState<{ nodeId: string; type: SshTunnelType } | null>(null)
   const logBoxRef = useRef<HTMLDivElement | null>(null)
 
   const sessionByNode = useMemo(() => {
@@ -478,17 +478,6 @@ function SshTunnel(): React.JSX.Element {
   const toggleExpanded = useCallback((nodeId: string) => {
     setExpandedNodes((prev) => ({ ...prev, [nodeId]: !prev[nodeId] }))
   }, [])
-
-  const toggleForm = useCallback(
-    (nodeId: string) => {
-      const opening = !formOpenNodes[nodeId]
-      setFormOpenNodes((prev) => ({ ...prev, [nodeId]: opening }))
-      if (opening) {
-        setExpandedNodes((prev) => ({ ...prev, [nodeId]: true }))
-      }
-    },
-    [formOpenNodes]
-  )
 
   const handleToggleTunnel = useCallback(
     async (nodeId: string, tunnelId: string, running: boolean) => {
@@ -729,21 +718,19 @@ function SshTunnel(): React.JSX.Element {
           const connected = state === 'connected'
           const connecting = state === 'connecting'
           const expanded = !!expandedNodes[node.id]
-          const formOpen = !!formOpenNodes[node.id]
           const nodeTunnels = tunnels.filter(
             (t) => t.nodeId === node.id && (!filterType || t.type === filterType)
           )
           const liveMap = new Map(session?.tunnels.map((t) => [t.id, t]) ?? [])
           return (
             <section key={node.id} className={CARD_CLS}>
-              <div className="px-5 py-3 flex items-center gap-3">
-                <button
-                  onClick={() => toggleExpanded(node.id)}
-                  title={expanded ? t('sshCollapse') : t('sshExpand')}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer border-none bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)] transition-colors"
-                >
-                  {expanded || formOpen ? <DownOutlined /> : <RightOutlined />}
-                </button>
+              <div
+                className="px-5 py-3 flex items-center gap-3 cursor-pointer select-none"
+                onClick={() => toggleExpanded(node.id)}
+              >
+                <span className="w-4 flex items-center justify-center text-[var(--text-secondary)] text-xs shrink-0">
+                  {expanded ? <DownOutlined /> : <RightOutlined />}
+                </span>
                 <span className={`w-2 h-2 rounded-full shrink-0 ${STATE_DOT_CLS[state]}`} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-[var(--text-primary)] truncate">
@@ -759,12 +746,21 @@ function SshTunnel(): React.JSX.Element {
                     {t('sshTunnelCount', { count: nodeTunnels.length })}
                   </div>
                 </div>
-                <button onClick={() => toggleForm(node.id)} className={BTN_CLS}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setAddModal({ nodeId: node.id, type: filterType ?? 'local' })
+                  }}
+                  className={BTN_CLS}
+                >
                   <PlusOutlined />
                   {t('sshAdd')}
                 </button>
                 <button
-                  onClick={() => handleConnect(node)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleConnect(node)
+                  }}
                   disabled={connecting}
                   className={connected ? BTN_CLS : ACCENT_BTN_CLS}
                 >
@@ -783,7 +779,7 @@ function SshTunnel(): React.JSX.Element {
                 </button>
               </div>
 
-              {(expanded || formOpen) && (
+              {expanded && (
                 <>
                   {nodeTunnels.length === 0 ? (
                     <div className="px-5 py-6 text-center text-xs text-[var(--text-secondary)]">
@@ -854,21 +850,6 @@ function SshTunnel(): React.JSX.Element {
                         )
                       })}
                     </div>
-                  )}
-                  {formOpen && (
-                    <TunnelForm
-                      nodeId={node.id}
-                      fixedType={filterType}
-                      onAdded={() => {
-                        loadTunnels()
-                        message.success(
-                          connected ? t('sshTunnelAdded') : t('sshTunnelSavedOffline')
-                        )
-                      }}
-                      onError={(m) => {
-                        message.error(m)
-                      }}
-                    />
                   )}
                 </>
               )}
@@ -965,6 +946,31 @@ function SshTunnel(): React.JSX.Element {
         {activeTab === 'socks5' && socksTab}
         {activeTab === 'logs' && logsTab}
       </div>
+
+      <Modal
+        open={!!addModal}
+        title={t('sshAddTunnel')}
+        onCancel={() => setAddModal(null)}
+        footer={<Button onClick={() => setAddModal(null)}>{t('sshCancel')}</Button>}
+        destroyOnHidden
+        width={520}
+      >
+        {addModal && (
+          <TunnelForm
+            nodeId={addModal.nodeId}
+            fixedType={addModal.type}
+            onAdded={() => {
+              loadTunnels()
+              const nodeConnected = sessionByNode.get(addModal.nodeId)?.state === 'connected'
+              message.success(nodeConnected ? t('sshTunnelAdded') : t('sshTunnelSavedOffline'))
+              setAddModal(null)
+            }}
+            onError={(m) => {
+              message.error(m)
+            }}
+          />
+        )}
+      </Modal>
 
       <NodeEditor
         open={editorOpen}

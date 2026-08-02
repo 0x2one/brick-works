@@ -261,8 +261,6 @@
   "sshStart": "Start",
   "sshStop": "Stop",
   "sshAdd": "Add",
-  "sshExpand": "Expand",
-  "sshCollapse": "Collapse",
   "sshTunnelToggleFail": "Action failed. Try again later.",
   "sshTunnelCount": "{{count}} tunnels",
   "sshTunnelsEmpty": "No tunnels yet. Expand the form below to add one.",

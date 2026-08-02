@@ -63,6 +63,7 @@ interface SessionRuntime {
   everConnected: boolean
   stopRequested: boolean
   retryTimer?: NodeJS.Timeout
+  pending: SshTunnelSpec[]
   tunnels: Map<string, TunnelRuntime>
 }
 
@@ -179,7 +180,7 @@ function handleSocks5(socket: Socket, client: Client): void {
 
 export interface SshManager {
   getStatus: () => SshSessionStatus[]
-  connect: (node: SshNode) => Promise<SshSessionStatus>
+  connect: (node: SshNode, tunnels?: SshTunnelSpec[]) => Promise<SshSessionStatus>
   disconnect: (nodeId: string) => Promise<SshSessionStatus>
   disconnectAll: () => Promise<SshSessionStatus[]>
   addTunnel: (nodeId: string, spec: SshTunnelSpec) => Promise<SshSessionStatus>
@@ -370,7 +371,14 @@ export function createSshManager(): SshManager {
         'info',
         `已建立 SSH 连接: ${session.node.username}@${session.node.host}:${session.node.port}`
       )
-      const specs = [...session.tunnels.values()].map((t) => t.spec)
+      const pendingSpecs = session.pending
+      const liveSpecs = [...session.tunnels.values()].map((t) => t.spec)
+      session.pending = []
+      const byId = new Map<string, SshTunnelSpec>()
+      for (const spec of [...liveSpecs, ...pendingSpecs]) {
+        if (spec.id) byId.set(spec.id, spec)
+      }
+      const specs = [...byId.values()]
       teardownTunnels(session)
       session.tunnels = new Map()
       emitStatus()
@@ -440,9 +448,10 @@ export function createSshManager(): SshManager {
     getStatus(): SshSessionStatus[] {
       return [...sessions.values()].map(sessionToStatus)
     },
-    async connect(node: SshNode): Promise<SshSessionStatus> {
+    async connect(node: SshNode, tunnels: SshTunnelSpec[] = []): Promise<SshSessionStatus> {
       let session = sessions.get(node.id)
       if (session && (session.state === 'connected' || session.state === 'connecting')) {
+        session.pending = [...session.pending, ...tunnels]
         return sessionToStatus(session)
       }
       if (session) {
@@ -451,6 +460,7 @@ export function createSshManager(): SshManager {
         session.state = 'connecting'
         session.error = undefined
         session.everConnected = false
+        session.pending = tunnels
       } else {
         session = {
           node,
@@ -459,6 +469,7 @@ export function createSshManager(): SshManager {
           error: undefined,
           everConnected: false,
           stopRequested: false,
+          pending: tunnels,
           tunnels: new Map()
         }
         sessions.set(node.id, session)
