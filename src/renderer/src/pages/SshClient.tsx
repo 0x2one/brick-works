@@ -137,11 +137,15 @@ function readCssVar(name: string, fallback: string): string {
   return value || fallback
 }
 
-function applyTermTheme(term: Terminal): void {
+function applyTermTheme(term: Terminal, resolved?: 'light' | 'dark'): void {
+  const dark = resolved === 'dark'
   term.options.theme = {
-    background: readCssVar('--bg-warm', '#f3f0eb'),
-    foreground: readCssVar('--text-primary', '#2a2520')
+    background: readCssVar('--bg-warm', dark ? '#1a1a1a' : '#f3f0eb'),
+    foreground: readCssVar('--text-primary', dark ? '#e0e0e0' : '#2a2520'),
+    cursor: readCssVar('--text-primary', dark ? '#e0e0e0' : '#2a2520'),
+    selectionBackground: dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)'
   }
+  term.refresh(0, Math.max(0, term.rows - 1))
 }
 
 function toBase64(str: string): string {
@@ -595,7 +599,7 @@ function SshClient(): React.JSX.Element {
         fontSize: 13,
         fontFamily: 'Consolas, "Courier New", monospace'
       })
-      applyTermTheme(term)
+      applyTermTheme(term, themeResolved)
       const fit = new FitAddon()
       term.loadAddon(fit)
       term.open(host)
@@ -622,7 +626,7 @@ function SshClient(): React.JSX.Element {
 
       await connectShellRef.current(tab.id, false)
     },
-    []
+    [themeResolved]
   )
 
   useEffect(() => {
@@ -634,7 +638,11 @@ function SshClient(): React.JSX.Element {
   }, [activeTab, bootTerminal])
 
   useEffect(() => {
-    for (const rt of termsRef.current.values()) applyTermTheme(rt.term)
+    // Defer so ThemeProvider's data-theme (CSS vars) is applied first
+    const id = window.setTimeout(() => {
+      for (const rt of termsRef.current.values()) applyTermTheme(rt.term, themeResolved)
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [themeResolved])
 
   useEffect(() => {
