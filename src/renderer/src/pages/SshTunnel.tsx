@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  forwardRef,
+  useImperativeHandle
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, Modal, Form, Input, InputNumber, Radio, Segmented, Empty, Button } from 'antd'
 import {
@@ -88,26 +96,30 @@ interface EditorValues {
   passphrase?: string
 }
 
-function TunnelForm({
-  nodeId,
-  onAdded,
-  onError,
-  fixedType
-}: {
+interface TunnelFormHandle {
+  submit: () => Promise<boolean>
+}
+
+interface TunnelFormProps {
   nodeId: string
   onAdded: () => void
   onError: (msg: string) => void
   fixedType?: SshTunnelType
-}): React.JSX.Element {
+  onSubmittingChange?: (submitting: boolean) => void
+}
+
+const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function TunnelForm(
+  { nodeId, onAdded, onError, fixedType, onSubmittingChange },
+  ref
+) {
   const { t } = useTranslation()
   const [draft, setDraft] = useState<TunnelDraft>({ ...DEFAULT_DRAFT, type: fixedType ?? 'local' })
-  const [submitting, setSubmitting] = useState(false)
 
   const set = <K extends keyof TunnelDraft>(key: K, value: TunnelDraft[K]): void =>
     setDraft((prev) => ({ ...prev, [key]: value }))
 
-  const handleAdd = useCallback(async () => {
-    setSubmitting(true)
+  const handleAdd = useCallback(async (): Promise<boolean> => {
+    onSubmittingChange?.(true)
     try {
       const spec: SshTunnelSpec =
         draft.type === 'local'
@@ -134,12 +146,16 @@ function TunnelForm({
       await window.api.ssh.addTunnel(nodeId, spec)
       setDraft({ ...DEFAULT_DRAFT, type: fixedType ?? draft.type })
       onAdded()
+      return true
     } catch {
       onError(t('sshTunnelAddFail'))
+      return false
     } finally {
-      setSubmitting(false)
+      onSubmittingChange?.(false)
     }
-  }, [draft, nodeId, onAdded, onError, t, fixedType])
+  }, [draft, nodeId, onAdded, onError, t, fixedType, onSubmittingChange])
+
+  useImperativeHandle(ref, () => ({ submit: () => handleAdd() }), [handleAdd])
 
   return (
     <div className="flex flex-col gap-3">
@@ -237,10 +253,6 @@ function TunnelForm({
             />
           </div>
         )}
-        <button onClick={handleAdd} disabled={submitting} className={ACCENT_BTN_CLS}>
-          {submitting ? <LoadingOutlined /> : <PlusOutlined />}
-          {t('sshAddTunnel')}
-        </button>
       </div>
 
       {draft.type === 'remote' && (
@@ -251,7 +263,7 @@ function TunnelForm({
       )}
     </div>
   )
-}
+})
 
 function NodeEditor({
   open,
@@ -415,6 +427,8 @@ function SshTunnel(): React.JSX.Element {
   const [testingId, setTestingId] = useState<string | null>(null)
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({})
   const [addModal, setAddModal] = useState<{ nodeId: string; type: SshTunnelType } | null>(null)
+  const [addSubmitting, setAddSubmitting] = useState(false)
+  const tunnelFormRef = useRef<TunnelFormHandle>(null)
   const logBoxRef = useRef<HTMLDivElement | null>(null)
 
   const sessionByNode = useMemo(() => {
@@ -790,7 +804,7 @@ function SshTunnel(): React.JSX.Element {
                       {nodeTunnels.map((spec) => {
                         const live = liveMap.get(spec.id!)
                         const running = connected && live?.status === 'running'
-                        const starting = connected && live?.status === 'starting'
+                        const starting = live?.status === 'starting' || connecting
                         let dotCls = 'bg-[var(--border-subtle)]'
                         if (connected && live) {
                           if (live.status === 'running') dotCls = 'bg-green-500'
@@ -801,7 +815,7 @@ function SshTunnel(): React.JSX.Element {
                           <div key={spec.id} className="px-5 py-3 flex items-center gap-3">
                             <button
                               onClick={() => handleToggleTunnel(node.id, spec.id!, running)}
-                              disabled={!connected || starting}
+                              disabled={starting}
                               title={running ? t('sshStop') : t('sshStart')}
                               className={
                                 running
@@ -903,6 +917,12 @@ function SshTunnel(): React.JSX.Element {
     </section>
   )
 
+  const tunnelAddLabel = (type: SshTunnelType): string => {
+    if (type === 'local') return t('sshAddLocal')
+    if (type === 'remote') return t('sshAddRemote')
+    return t('sshAddSocks')
+  }
+
   const tabDefs: Array<{ key: string; icon: React.ReactNode; label: string }> = [
     { key: 'nodes', icon: <CloudServerOutlined />, label: t('sshTabNodes') },
     { key: 'local', icon: <ArrowRightOutlined />, label: t('sshTypeLocal') },
@@ -949,16 +969,31 @@ function SshTunnel(): React.JSX.Element {
 
       <Modal
         open={!!addModal}
-        title={t('sshAddTunnel')}
+        title={addModal ? tunnelAddLabel(addModal.type) : t('sshAddTunnel')}
         onCancel={() => setAddModal(null)}
-        footer={<Button onClick={() => setAddModal(null)}>{t('sshCancel')}</Button>}
+        footer={
+          <>
+            <Button onClick={() => setAddModal(null)}>{t('sshCancel')}</Button>
+            <Button
+              type="primary"
+              loading={addSubmitting}
+              onClick={() => {
+                tunnelFormRef.current?.submit()
+              }}
+            >
+              {addModal ? tunnelAddLabel(addModal.type) : t('sshAddTunnel')}
+            </Button>
+          </>
+        }
         destroyOnHidden
         width={520}
       >
         {addModal && (
           <TunnelForm
+            ref={tunnelFormRef}
             nodeId={addModal.nodeId}
             fixedType={addModal.type}
+            onSubmittingChange={setAddSubmitting}
             onAdded={() => {
               loadTunnels()
               const nodeConnected = sessionByNode.get(addModal.nodeId)?.state === 'connected'

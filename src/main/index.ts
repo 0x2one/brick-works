@@ -262,10 +262,16 @@ ipcMain.handle('ssh:removeTunnel', (_event, nodeId: string, tunnelId: string) =>
   return sshManager.removeTunnel(nodeId, tunnelId)
 })
 
-ipcMain.handle('ssh:startTunnel', (_event, nodeId: string, tunnelId: string) => {
+ipcMain.handle('ssh:startTunnel', async (_event, nodeId: string, tunnelId: string) => {
   const spec = sshStore.listTunnels(nodeId).find((t) => t.id === tunnelId)
   if (!spec) throw new Error('TUNNEL_NOT_FOUND')
-  return sshManager.startTunnel(nodeId, spec)
+  const node = sshStore.get(nodeId)
+  if (!node) throw new Error('NODE_NOT_FOUND')
+  const session = sshManager.getStatus().find((s) => s.nodeId === nodeId)
+  if (session?.state === 'connected' || session?.state === 'connecting') {
+    return sshManager.startTunnel(nodeId, spec)
+  }
+  return sshManager.connect(node, [spec])
 })
 
 ipcMain.handle('ssh:stopTunnel', (_event, nodeId: string, tunnelId: string) =>
