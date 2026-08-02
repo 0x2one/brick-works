@@ -12,6 +12,14 @@ import { createK8sManager } from './k8s-manager'
 
 let mainWindow: BrowserWindow | null = null
 
+function sendToRenderer(channel: string, ...args: unknown[]): void {
+  const win = mainWindow
+  if (!win || win.isDestroyed()) return
+  const wc = win.webContents
+  if (!wc || wc.isDestroyed()) return
+  wc.send(channel, ...args)
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -30,12 +38,16 @@ function createWindow(): void {
     mainWindow?.show()
   })
 
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
+
   mainWindow.on('maximize', () => {
-    mainWindow?.webContents.send('window:maximize-change', true)
+    sendToRenderer('window:maximize-change', true)
   })
 
   mainWindow.on('unmaximize', () => {
-    mainWindow?.webContents.send('window:maximize-change', false)
+    sendToRenderer('window:maximize-change', false)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -98,7 +110,7 @@ function lanStatus(): LanStatus {
 }
 
 function broadcastLanStatus(): void {
-  mainWindow?.webContents.send('lan:status-change', lanStatus())
+  sendToRenderer('lan:status-change', lanStatus())
 }
 
 ipcMain.handle('lan:status', () => lanStatus())
@@ -168,18 +180,18 @@ const sshClientManager = createSshClientManager({
 })
 
 function broadcastSshStatus(): void {
-  mainWindow?.webContents.send('ssh:status-change', sshManager.getStatus())
+  sendToRenderer('ssh:status-change', sshManager.getStatus())
 }
 
 sshManager.onStatusChange(() => broadcastSshStatus())
 sshManager.onLog((entry) => {
-  mainWindow?.webContents.send('ssh:log', entry)
+  sendToRenderer('ssh:log', entry)
 })
 sshClientManager.onShellData((data) => {
-  mainWindow?.webContents.send('ssh:shell-data', data)
+  sendToRenderer('ssh:shell-data', data)
 })
 sshClientManager.onShellExit((data) => {
-  mainWindow?.webContents.send('ssh:shell-exit', data)
+  sendToRenderer('ssh:shell-exit', data)
 })
 
 function validateNodeInput(input: SshNodeInput): string | null {
@@ -446,21 +458,21 @@ const k8sStore = createK8sStore()
 const k8sManager = createK8sManager(k8sStore)
 
 function broadcastK8sStatus(): void {
-  mainWindow?.webContents.send('k8s:status-change', k8sManager.getStatus())
+  sendToRenderer('k8s:status-change', k8sManager.getStatus())
 }
 
 k8sManager.onStatusChange(() => broadcastK8sStatus())
 k8sManager.onLogChunk((chunk) => {
-  mainWindow?.webContents.send('k8s:log-chunk', chunk)
+  sendToRenderer('k8s:log-chunk', chunk)
 })
 k8sManager.onExecData((data) => {
-  mainWindow?.webContents.send('k8s:exec-data', data)
+  sendToRenderer('k8s:exec-data', data)
 })
 k8sManager.onExecExit((data) => {
-  mainWindow?.webContents.send('k8s:exec-exit', data)
+  sendToRenderer('k8s:exec-exit', data)
 })
 k8sManager.onPortForwardStatus((list) => {
-  mainWindow?.webContents.send('k8s:portforward-status', list)
+  sendToRenderer('k8s:portforward-status', list)
 })
 
 ipcMain.handle('k8s:listClusters', () => k8sStore.list())

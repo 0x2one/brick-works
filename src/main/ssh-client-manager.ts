@@ -164,7 +164,7 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     for (const cb of shellExitListeners) cb(data)
   }
 
-  function cleanupShell(sessionId: string, reason?: string): void {
+  function cleanupShell(sessionId: string, reason?: string, silent = false): void {
     const session = shells.get(sessionId)
     if (!session) return
     shells.delete(sessionId)
@@ -178,7 +178,7 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     } catch {
       // ignore
     }
-    emitShellExit({ sessionId, reason })
+    if (!silent) emitShellExit({ sessionId, reason })
   }
 
   async function openClient(nodeId: string): Promise<{ node: SshNode; client: Client }> {
@@ -524,7 +524,7 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     },
 
     stop() {
-      for (const id of [...shells.keys()]) cleanupShell(id, 'stopped')
+      for (const id of [...shells.keys()]) cleanupShell(id, 'stopped', true)
       for (const nodeId of [...sftps.keys()]) closeSftp(nodeId)
     },
 
