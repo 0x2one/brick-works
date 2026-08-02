@@ -214,7 +214,7 @@ ipcMain.handle('ssh:status', () => sshManager.getStatus())
 ipcMain.handle('ssh:connect', async (_event, nodeId: string) => {
   const node = sshStore.get(nodeId)
   if (!node) throw new Error('NODE_NOT_FOUND')
-  return sshManager.connect(node, sshStore.listTunnels(nodeId))
+  return sshManager.connect(node)
 })
 
 ipcMain.handle('ssh:disconnect', (_event, nodeId: string) => sshManager.disconnect(nodeId))
@@ -261,6 +261,16 @@ ipcMain.handle('ssh:removeTunnel', (_event, nodeId: string, tunnelId: string) =>
   sshStore.removeTunnel(tunnelId)
   return sshManager.removeTunnel(nodeId, tunnelId)
 })
+
+ipcMain.handle('ssh:startTunnel', (_event, nodeId: string, tunnelId: string) => {
+  const spec = sshStore.listTunnels(nodeId).find((t) => t.id === tunnelId)
+  if (!spec) throw new Error('TUNNEL_NOT_FOUND')
+  return sshManager.startTunnel(nodeId, spec)
+})
+
+ipcMain.handle('ssh:stopTunnel', (_event, nodeId: string, tunnelId: string) =>
+  sshManager.stopTunnel(nodeId, tunnelId)
+)
 
 app.on('will-quit', () => {
   lanServer?.stop()

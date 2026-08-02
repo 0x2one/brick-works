@@ -63,7 +63,6 @@ interface SessionRuntime {
   everConnected: boolean
   stopRequested: boolean
   retryTimer?: NodeJS.Timeout
-  pending: SshTunnelSpec[]
   tunnels: Map<string, TunnelRuntime>
 }
 
@@ -180,11 +179,13 @@ function handleSocks5(socket: Socket, client: Client): void {
 
 export interface SshManager {
   getStatus: () => SshSessionStatus[]
-  connect: (node: SshNode, tunnels?: SshTunnelSpec[]) => Promise<SshSessionStatus>
+  connect: (node: SshNode) => Promise<SshSessionStatus>
   disconnect: (nodeId: string) => Promise<SshSessionStatus>
   disconnectAll: () => Promise<SshSessionStatus[]>
   addTunnel: (nodeId: string, spec: SshTunnelSpec) => Promise<SshSessionStatus>
   removeTunnel: (nodeId: string, tunnelId: string) => Promise<SshSessionStatus>
+  startTunnel: (nodeId: string, spec: SshTunnelSpec) => Promise<SshSessionStatus>
+  stopTunnel: (nodeId: string, tunnelId: string) => Promise<SshSessionStatus>
   test: (node: SshNode) => Promise<{ ok: boolean; error?: string; latencyMs: number }>
   onStatusChange: (cb: (statuses: SshSessionStatus[]) => void) => () => void
   onLog: (cb: (entry: SshLogEntry) => void) => () => void
@@ -255,7 +256,7 @@ export function createSshManager(): SshManager {
     }
   }
 
-  function startTunnel(session: SessionRuntime, spec: SshTunnelSpec): void {
+  function bindTunnel(session: SessionRuntime, spec: SshTunnelSpec): void {
     const client = session.client
     if (!client) return
     const state = tunnelStateFromSpec(spec)
@@ -369,19 +370,12 @@ export function createSshManager(): SshManager {
         'info',
         `已建立 SSH 连接: ${session.node.username}@${session.node.host}:${session.node.port}`
       )
-      const pendingSpecs = session.pending
-      const liveSpecs = [...session.tunnels.values()].map((t) => t.spec)
-      session.pending = []
-      const byId = new Map<string, SshTunnelSpec>()
-      for (const spec of [...liveSpecs, ...pendingSpecs]) {
-        if (spec.id) byId.set(spec.id, spec)
-      }
-      const specs = [...byId.values()]
+      const specs = [...session.tunnels.values()].map((t) => t.spec)
       teardownTunnels(session)
       session.tunnels = new Map()
       emitStatus()
       for (const spec of specs) {
-        startTunnel(session, spec)
+        bindTunnel(session, spec)
       }
     })
 
@@ -446,10 +440,9 @@ export function createSshManager(): SshManager {
     getStatus(): SshSessionStatus[] {
       return [...sessions.values()].map(sessionToStatus)
     },
-    async connect(node: SshNode, tunnels: SshTunnelSpec[] = []): Promise<SshSessionStatus> {
+    async connect(node: SshNode): Promise<SshSessionStatus> {
       let session = sessions.get(node.id)
       if (session && (session.state === 'connected' || session.state === 'connecting')) {
-        session.pending = [...session.pending, ...tunnels]
         return sessionToStatus(session)
       }
       if (session) {
@@ -458,7 +451,6 @@ export function createSshManager(): SshManager {
         session.state = 'connecting'
         session.error = undefined
         session.everConnected = false
-        session.pending = tunnels
       } else {
         session = {
           node,
@@ -467,7 +459,6 @@ export function createSshManager(): SshManager {
           error: undefined,
           everConnected: false,
           stopRequested: false,
-          pending: tunnels,
           tunnels: new Map()
         }
         sessions.set(node.id, session)
@@ -510,7 +501,43 @@ export function createSshManager(): SshManager {
         return emptyStatus(nodeId)
       }
       const next: SshTunnelSpec = { ...spec, id: spec.id ?? randomUUID() }
-      startTunnel(session, next)
+      if (!session.tunnels.has(next.id!)) {
+        bindTunnel(session, next)
+      }
+      return sessionToStatus(session)
+    },
+    async startTunnel(nodeId: string, spec: SshTunnelSpec): Promise<SshSessionStatus> {
+      const session = sessions.get(nodeId)
+      if (!session || session.state !== 'connected' || !session.client) {
+        return emptyStatus(nodeId)
+      }
+      if (!spec.id) return sessionToStatus(session)
+      if (session.tunnels.has(spec.id)) {
+        const rt = session.tunnels.get(spec.id)
+        if (rt && rt.state.status === 'error') {
+          session.tunnels.delete(spec.id)
+          bindTunnel(session, spec)
+        }
+        return sessionToStatus(session)
+      }
+      bindTunnel(session, spec)
+      return sessionToStatus(session)
+    },
+    async stopTunnel(nodeId: string, tunnelId: string): Promise<SshSessionStatus> {
+      const session = sessions.get(nodeId)
+      if (!session) return emptyStatus(nodeId)
+      const rt = session.tunnels.get(tunnelId)
+      if (rt) {
+        if (rt.server) {
+          rt.server.close()
+          rt.server = undefined
+        }
+        if (session.client && rt.state.type === 'remote' && rt.effectivePort != null) {
+          session.client.unforwardIn(rt.state.bindAddr || '127.0.0.1', rt.effectivePort, () => {})
+        }
+        session.tunnels.delete(tunnelId)
+        emitStatus()
+      }
       return sessionToStatus(session)
     },
     async removeTunnel(nodeId: string, tunnelId: string): Promise<SshSessionStatus> {

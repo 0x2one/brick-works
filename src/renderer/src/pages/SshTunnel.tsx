@@ -16,6 +16,8 @@ import {
   ArrowRightOutlined,
   ArrowLeftOutlined,
   GlobalOutlined,
+  RightOutlined,
+  DownOutlined,
   WarningOutlined
 } from '@ant-design/icons'
 
@@ -411,6 +413,8 @@ function SshTunnel(): React.JSX.Element {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<SshNodeView | null>(null)
   const [testingId, setTestingId] = useState<string | null>(null)
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({})
+  const [formOpenNodes, setFormOpenNodes] = useState<Record<string, boolean>>({})
   const logBoxRef = useRef<HTMLDivElement | null>(null)
 
   const sessionByNode = useMemo(() => {
@@ -469,6 +473,36 @@ function SshTunnel(): React.JSX.Element {
       }
     },
     [sessionByNode, message, t]
+  )
+
+  const toggleExpanded = useCallback((nodeId: string) => {
+    setExpandedNodes((prev) => ({ ...prev, [nodeId]: !prev[nodeId] }))
+  }, [])
+
+  const toggleForm = useCallback(
+    (nodeId: string) => {
+      const opening = !formOpenNodes[nodeId]
+      setFormOpenNodes((prev) => ({ ...prev, [nodeId]: opening }))
+      if (opening) {
+        setExpandedNodes((prev) => ({ ...prev, [nodeId]: true }))
+      }
+    },
+    [formOpenNodes]
+  )
+
+  const handleToggleTunnel = useCallback(
+    async (nodeId: string, tunnelId: string, running: boolean) => {
+      try {
+        if (running) {
+          await window.api.ssh.stopTunnel(nodeId, tunnelId)
+        } else {
+          await window.api.ssh.startTunnel(nodeId, tunnelId)
+        }
+      } catch {
+        message.error(t('sshTunnelToggleFail'))
+      }
+    },
+    [message, t]
   )
 
   const handleTest = useCallback(
@@ -694,29 +728,41 @@ function SshTunnel(): React.JSX.Element {
           const state = session?.state ?? 'disconnected'
           const connected = state === 'connected'
           const connecting = state === 'connecting'
+          const expanded = !!expandedNodes[node.id]
+          const formOpen = !!formOpenNodes[node.id]
           const nodeTunnels = tunnels.filter(
             (t) => t.nodeId === node.id && (!filterType || t.type === filterType)
           )
           const liveMap = new Map(session?.tunnels.map((t) => [t.id, t]) ?? [])
           return (
             <section key={node.id} className={CARD_CLS}>
-              <div className="px-5 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${STATE_DOT_CLS[state]}`} />
-                  <span className="text-sm font-medium text-[var(--text-primary)]">
+              <div className="px-5 py-3 flex items-center gap-3">
+                <button
+                  onClick={() => toggleExpanded(node.id)}
+                  title={expanded ? t('sshCollapse') : t('sshExpand')}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer border-none bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)] transition-colors"
+                >
+                  {expanded || formOpen ? <DownOutlined /> : <RightOutlined />}
+                </button>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${STATE_DOT_CLS[state]}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-[var(--text-primary)] truncate">
                     {node.name}
-                  </span>
-                  <span className="text-[11px] text-[var(--text-secondary)]">
+                  </div>
+                  <div className="text-[11px] text-[var(--text-secondary)]">
                     {state === 'connected'
                       ? t('sshConnected')
                       : state === 'connecting'
                         ? t('sshConnecting')
                         : t('sshDisconnected')}
-                  </span>
-                  <span className="text-[11px] text-[var(--text-secondary)]">
+                    {' · '}
                     {t('sshTunnelCount', { count: nodeTunnels.length })}
-                  </span>
-                </span>
+                  </div>
+                </div>
+                <button onClick={() => toggleForm(node.id)} className={BTN_CLS}>
+                  <PlusOutlined />
+                  {t('sshAdd')}
+                </button>
                 <button
                   onClick={() => handleConnect(node)}
                   disabled={connecting}
@@ -737,66 +783,95 @@ function SshTunnel(): React.JSX.Element {
                 </button>
               </div>
 
-              {nodeTunnels.length === 0 ? (
-                <div className="px-5 py-6 text-center text-xs text-[var(--text-secondary)]">
-                  {t('sshTunnelsEmpty')}
-                </div>
-              ) : (
-                <div className="divide-y divide-[var(--border-subtle)]">
-                  {nodeTunnels.map((spec) => {
-                    const live = liveMap.get(spec.id!)
-                    let dotCls = 'bg-[var(--border-subtle)]'
-                    if (connected && live) {
-                      if (live.status === 'running') dotCls = 'bg-green-500'
-                      else if (live.status === 'error') dotCls = 'bg-red-500'
-                      else dotCls = 'bg-amber-400 animate-pulse'
-                    }
-                    return (
-                      <div key={spec.id} className="px-5 py-3 flex items-center gap-3">
-                        <div className="flex-1 min-w-0">
-                          {spec.name ? (
-                            <>
-                              <div className="text-xs font-medium text-[var(--text-primary)] truncate leading-tight">
-                                {spec.name}
-                              </div>
-                              <div className="text-[11px] font-mono text-[var(--text-secondary)] truncate mt-1">
-                                {tunnelSummary(spec, live)}
-                              </div>
-                            </>
-                          ) : (
-                            <code className="text-xs font-mono text-[var(--text-primary)] truncate">
-                              {tunnelSummary(spec, live)}
-                            </code>
-                          )}
-                        </div>
-                        {connected && live?.status === 'error' && live.error && (
-                          <span className="text-[11px] text-red-500 truncate">{live.error}</span>
-                        )}
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${dotCls}`} />
-                        <button
-                          onClick={() => handleDeleteTunnel(node.id, spec)}
-                          title={t('sshDelete')}
-                          className={BTN_CLS}
-                        >
-                          <CloseOutlined />
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
+              {(expanded || formOpen) && (
+                <>
+                  {nodeTunnels.length === 0 ? (
+                    <div className="px-5 py-6 text-center text-xs text-[var(--text-secondary)]">
+                      {t('sshTunnelsEmpty')}
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
+                      {nodeTunnels.map((spec) => {
+                        const live = liveMap.get(spec.id!)
+                        const running = connected && live?.status === 'running'
+                        const starting = connected && live?.status === 'starting'
+                        let dotCls = 'bg-[var(--border-subtle)]'
+                        if (connected && live) {
+                          if (live.status === 'running') dotCls = 'bg-green-500'
+                          else if (live.status === 'error') dotCls = 'bg-red-500'
+                          else dotCls = 'bg-amber-400 animate-pulse'
+                        }
+                        return (
+                          <div key={spec.id} className="px-5 py-3 flex items-center gap-3">
+                            <button
+                              onClick={() => handleToggleTunnel(node.id, spec.id!, running)}
+                              disabled={!connected || starting}
+                              title={running ? t('sshStop') : t('sshStart')}
+                              className={
+                                running
+                                  ? 'w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer border-none transition-all duration-150 bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)] disabled:opacity-40 disabled:cursor-not-allowed'
+                                  : 'w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer border-none transition-all duration-150 bg-[var(--accent)] text-white hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed'
+                              }
+                            >
+                              {starting ? (
+                                <LoadingOutlined />
+                              ) : running ? (
+                                <StopOutlined />
+                              ) : (
+                                <PlayCircleOutlined />
+                              )}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              {spec.name ? (
+                                <>
+                                  <div className="text-xs font-medium text-[var(--text-primary)] truncate leading-tight">
+                                    {spec.name}
+                                  </div>
+                                  <div className="text-[11px] font-mono text-[var(--text-secondary)] truncate mt-1">
+                                    {tunnelSummary(spec, live)}
+                                  </div>
+                                </>
+                              ) : (
+                                <code className="text-xs font-mono text-[var(--text-primary)] truncate">
+                                  {tunnelSummary(spec, live)}
+                                </code>
+                              )}
+                            </div>
+                            {connected && live?.status === 'error' && live.error && (
+                              <span className="text-[11px] text-red-500 truncate">
+                                {live.error}
+                              </span>
+                            )}
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${dotCls}`} />
+                            <button
+                              onClick={() => handleDeleteTunnel(node.id, spec)}
+                              title={t('sshDelete')}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer border-none transition-all duration-150 bg-[var(--bg-warm)] text-[var(--text-secondary)] border border-[var(--border-subtle)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]"
+                            >
+                              <CloseOutlined />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {formOpen && (
+                    <TunnelForm
+                      nodeId={node.id}
+                      fixedType={filterType}
+                      onAdded={() => {
+                        loadTunnels()
+                        message.success(
+                          connected ? t('sshTunnelAdded') : t('sshTunnelSavedOffline')
+                        )
+                      }}
+                      onError={(m) => {
+                        message.error(m)
+                      }}
+                    />
+                  )}
+                </>
               )}
-
-              <TunnelForm
-                nodeId={node.id}
-                fixedType={filterType}
-                onAdded={() => {
-                  loadTunnels()
-                  message.success(connected ? t('sshTunnelAdded') : t('sshTunnelSavedOffline'))
-                }}
-                onError={(m) => {
-                  message.error(m)
-                }}
-              />
             </section>
           )
         })}

@@ -32,6 +32,8 @@ interface SshApi {
   listTunnels: () => Promise<SshTunnelSpec[]>
   addTunnel: (nodeId: string, spec: SshTunnelSpec) => Promise<SshTunnelSpec>
   removeTunnel: (nodeId: string, tunnelId: string) => Promise<SshSessionStatus>
+  startTunnel: (nodeId: string, tunnelId: string) => Promise<SshSessionStatus>
+  stopTunnel: (nodeId: string, tunnelId: string) => Promise<SshSessionStatus>
   onStatusChange: (callback: (statuses: SshSessionStatus[]) => void) => () => void
   onLog: (callback: (entry: SshLogEntry) => void) => () => void
 }

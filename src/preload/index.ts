@@ -49,6 +49,10 @@ const api = {
       ipcRenderer.invoke('ssh:addTunnel', nodeId, spec),
     removeTunnel: (nodeId: string, tunnelId: string) =>
       ipcRenderer.invoke('ssh:removeTunnel', nodeId, tunnelId),
+    startTunnel: (nodeId: string, tunnelId: string) =>
+      ipcRenderer.invoke('ssh:startTunnel', nodeId, tunnelId),
+    stopTunnel: (nodeId: string, tunnelId: string) =>
+      ipcRenderer.invoke('ssh:stopTunnel', nodeId, tunnelId),
     onStatusChange: (callback: (statuses: SshSessionStatus[]) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, statuses: SshSessionStatus[]): void =>
         callback(statuses)
