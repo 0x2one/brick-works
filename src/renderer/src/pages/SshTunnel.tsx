@@ -9,13 +9,13 @@ import {
   PlayCircleOutlined,
   StopOutlined,
   CloudServerOutlined,
-  SwapOutlined,
   FileTextOutlined,
   FolderOpenOutlined,
   LoadingOutlined,
   CloseOutlined,
   ArrowRightOutlined,
   ArrowLeftOutlined,
+  GlobalOutlined,
   WarningOutlined
 } from '@ant-design/icons'
 
@@ -95,14 +95,16 @@ interface EditorValues {
 function TunnelForm({
   nodeId,
   onAdded,
-  onError
+  onError,
+  fixedType
 }: {
   nodeId: string
   onAdded: () => void
   onError: (msg: string) => void
+  fixedType?: SshTunnelType
 }): React.JSX.Element {
   const { t } = useTranslation()
-  const [draft, setDraft] = useState<TunnelDraft>(DEFAULT_DRAFT)
+  const [draft, setDraft] = useState<TunnelDraft>({ ...DEFAULT_DRAFT, type: fixedType ?? 'local' })
   const [submitting, setSubmitting] = useState(false)
 
   const set = <K extends keyof TunnelDraft>(key: K, value: TunnelDraft[K]): void =>
@@ -134,30 +136,32 @@ function TunnelForm({
                 localPort: draft.socksPort
               }
       await window.api.ssh.addTunnel(nodeId, spec)
-      setDraft({ ...DEFAULT_DRAFT, type: draft.type })
+      setDraft({ ...DEFAULT_DRAFT, type: fixedType ?? draft.type })
       onAdded()
     } catch {
       onError(t('sshTunnelAddFail'))
     } finally {
       setSubmitting(false)
     }
-  }, [draft, nodeId, onAdded, onError, t])
+  }, [draft, nodeId, onAdded, onError, t, fixedType])
 
   return (
     <div className="flex flex-col gap-3 border-t border-[var(--border-subtle)] px-5 py-4">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className={LABEL_CLS + ' mb-0'}>{t('sshTunnelType')}</span>
-        <Segmented
-          size="small"
-          value={draft.type}
-          onChange={(v) => set('type', v as SshTunnelType)}
-          options={[
-            { label: t('sshTypeLocal'), value: 'local' },
-            { label: t('sshTypeRemote'), value: 'remote' },
-            { label: t('sshTypeSocks5'), value: 'socks5' }
-          ]}
-        />
-      </div>
+      {!fixedType && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={LABEL_CLS + ' mb-0'}>{t('sshTunnelType')}</span>
+          <Segmented
+            size="small"
+            value={draft.type}
+            onChange={(v) => set('type', v as SshTunnelType)}
+            options={[
+              { label: t('sshTypeLocal'), value: 'local' },
+              { label: t('sshTypeRemote'), value: 'remote' },
+              { label: t('sshTypeSocks5'), value: 'socks5' }
+            ]}
+          />
+        </div>
+      )}
 
       <div className="flex items-center gap-2 flex-wrap">
         <input
@@ -664,30 +668,40 @@ function SshTunnel(): React.JSX.Element {
     </section>
   )
 
-  const tunnelsTab =
-    nodes.length === 0 ? (
-      <section className={CARD_CLS}>
-        <div className="px-5 py-3 border-b border-[var(--border-subtle)]">
-          <span className={LABEL_CLS}>{t('sshTunnels')}</span>
-        </div>
-        <Empty description={t('sshNoNodes')} image={Empty.PRESENTED_IMAGE_SIMPLE} className="py-10">
-          <Button
-            type="primary"
-            icon={<CloudServerOutlined />}
-            onClick={() => setActiveTab('nodes')}
+  const renderNodeTunnelCards = (filterType?: SshTunnelType): React.JSX.Element => {
+    if (nodes.length === 0) {
+      return (
+        <section className={CARD_CLS}>
+          <div className="px-5 py-3 border-b border-[var(--border-subtle)]">
+            <span className={LABEL_CLS}>{t('sshTunnels')}</span>
+          </div>
+          <Empty
+            description={t('sshNoNodes')}
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            className="py-10"
           >
-            {t('sshGoNodes')}
-          </Button>
-        </Empty>
-      </section>
-    ) : (
+            <Button
+              type="primary"
+              icon={<CloudServerOutlined />}
+              onClick={() => setActiveTab('nodes')}
+            >
+              {t('sshGoNodes')}
+            </Button>
+          </Empty>
+        </section>
+      )
+    }
+
+    return (
       <div className="flex flex-col gap-4">
         {nodes.map((node) => {
           const session = sessionByNode.get(node.id)
           const state = session?.state ?? 'disconnected'
           const connected = state === 'connected'
           const connecting = state === 'connecting'
-          const nodeTunnels = tunnels.filter((t) => t.nodeId === node.id)
+          const nodeTunnels = tunnels.filter(
+            (t) => t.nodeId === node.id && (!filterType || t.type === filterType)
+          )
           const liveMap = new Map(session?.tunnels.map((t) => [t.id, t]) ?? [])
           return (
             <section key={node.id} className={CARD_CLS}>
@@ -744,13 +758,15 @@ function SshTunnel(): React.JSX.Element {
                     }
                     return (
                       <div key={spec.id} className="px-5 py-3 flex items-center gap-3">
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${TYPE_BADGE_CLS[spec.type]}`}
-                        >
-                          {t(
-                            `sshType${spec.type === 'socks5' ? 'Socks5' : spec.type === 'local' ? 'Local' : 'Remote'}`
-                          )}
-                        </span>
+                        {!filterType && (
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${TYPE_BADGE_CLS[spec.type]}`}
+                          >
+                            {t(
+                              `sshType${spec.type === 'socks5' ? 'Socks5' : spec.type === 'local' ? 'Local' : 'Remote'}`
+                            )}
+                          </span>
+                        )}
                         <code className="flex-1 min-w-0 text-xs font-mono text-[var(--text-primary)] truncate">
                           {tunnelSummary(spec, live)}
                         </code>
@@ -773,6 +789,7 @@ function SshTunnel(): React.JSX.Element {
 
               <TunnelForm
                 nodeId={node.id}
+                fixedType={filterType}
                 onAdded={() => {
                   loadTunnels()
                   message.success(connected ? t('sshTunnelAdded') : t('sshTunnelSavedOffline'))
@@ -786,6 +803,11 @@ function SshTunnel(): React.JSX.Element {
         })}
       </div>
     )
+  }
+
+  const localTab = renderNodeTunnelCards('local')
+  const remoteTab = renderNodeTunnelCards('remote')
+  const socksTab = renderNodeTunnelCards('socks5')
 
   const logsTab = (
     <section className={CARD_CLS}>
@@ -828,10 +850,7 @@ function SshTunnel(): React.JSX.Element {
 
   return (
     <div className="flex flex-col p-6 gap-4" style={{ height: 'calc(100vh - 56px)' }}>
-      <div>
-        <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('sshTunnel')}</h2>
-        <p className="text-xs text-[var(--text-secondary)] mt-1">{t('sshDesc')}</p>
-      </div>
+      <p className="text-xs text-[var(--text-secondary)]">{t('sshDesc')}</p>
 
       <Tabs
         activeKey={activeTab}
@@ -849,14 +868,34 @@ function SshTunnel(): React.JSX.Element {
             children: <div className="max-w-[760px] h-full overflow-auto pr-1">{nodesTab}</div>
           },
           {
-            key: 'tunnels',
+            key: 'local',
             label: (
               <span className="flex items-center gap-1.5">
-                <SwapOutlined />
-                {t('sshTabTunnels')}
+                <ArrowRightOutlined />
+                {t('sshTypeLocal')}
               </span>
             ),
-            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{tunnelsTab}</div>
+            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{localTab}</div>
+          },
+          {
+            key: 'remote',
+            label: (
+              <span className="flex items-center gap-1.5">
+                <ArrowLeftOutlined />
+                {t('sshTypeRemote')}
+              </span>
+            ),
+            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{remoteTab}</div>
+          },
+          {
+            key: 'socks5',
+            label: (
+              <span className="flex items-center gap-1.5">
+                <GlobalOutlined />
+                {t('sshTypeSocks5')}
+              </span>
+            ),
+            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{socksTab}</div>
           },
           {
             key: 'logs',

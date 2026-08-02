@@ -224,7 +224,6 @@
   "sshTunnel": "SSH 隧道",
   "sshDesc": "通过公网服务器建立 SSH 隧道，实现本地转发、远程映射（NAT）与 SOCKS5 代理。",
   "sshTabNodes": "节点",
-  "sshTabTunnels": "隧道",
   "sshTabLogs": "日志",
   "sshNodes": "节点（跳板机）",
   "sshAddNode": "新增节点",

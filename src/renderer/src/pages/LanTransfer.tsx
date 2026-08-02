@@ -94,10 +94,7 @@ function LanTransfer(): React.JSX.Element {
 
   return (
     <div className="flex flex-col p-6 gap-4" style={{ height: 'calc(100vh - 56px)' }}>
-      <div>
-        <h2 className="text-lg font-bold text-[var(--text-primary)]">{t('lanTransfer')}</h2>
-        <p className="text-xs text-[var(--text-secondary)] mt-1">{t('lanDesc')}</p>
-      </div>
+      <p className="text-xs text-[var(--text-secondary)]">{t('lanDesc')}</p>
 
       <div className="flex flex-col gap-4 max-w-[720px] overflow-auto pb-4">
         {/* Service status */}

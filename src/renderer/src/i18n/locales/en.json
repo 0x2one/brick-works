@@ -224,7 +224,6 @@
   "sshTunnel": "SSH Tunnel",
   "sshDesc": "Create SSH tunnels through a public server for local forwarding, remote mapping (NAT), and SOCKS5 proxy.",
   "sshTabNodes": "Nodes",
-  "sshTabTunnels": "Tunnels",
   "sshTabLogs": "Logs",
   "sshNodes": "Nodes (Jump Hosts)",
   "sshAddNode": "Add Node",
