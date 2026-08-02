@@ -34,10 +34,18 @@ function AppLayout(): React.JSX.Element {
   const navigate = useNavigate()
   const [displayLocation, setDisplayLocation] = useState(location)
   const [fadeStage, setFadeStage] = useState<FadeStage>('idle')
+  const [sshClientMounted, setSshClientMounted] = useState(
+    () => location.pathname === '/ssh-client'
+  )
+  const showSshClient = displayLocation.pathname === '/ssh-client'
 
   useEffect(() => {
     window.api.lan.setLang(i18n.language === 'en' ? 'en' : 'zh')
   }, [i18n.language])
+
+  useEffect(() => {
+    if (location.pathname === '/ssh-client') setSshClientMounted(true)
+  }, [location.pathname])
 
   useEffect(() => {
     if (location.pathname === displayLocation.pathname || fadeStage === 'exit') return
@@ -136,18 +144,20 @@ function AppLayout(): React.JSX.Element {
               }
             }}
           >
-            <Routes location={displayLocation}>
-              <Route path="/dev-tools" element={<DevTools />} />
-              <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
-              <Route path="/memo-sticky" element={<MemoSticky />} />
-              <Route path="/lan-transfer" element={<LanTransfer />} />
-              <Route path="/ssh-tunnel" element={<SshTunnel />} />
-              <Route path="/ssh-client" element={<SshClient />} />
-              <Route path="/k8s" element={<K8sManage />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/" element={<Navigate to="/dev-tools" replace />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            {sshClientMounted && <SshClient active={showSshClient} />}
+            {!showSshClient && (
+              <Routes location={displayLocation}>
+                <Route path="/dev-tools" element={<DevTools />} />
+                <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
+                <Route path="/memo-sticky" element={<MemoSticky />} />
+                <Route path="/lan-transfer" element={<LanTransfer />} />
+                <Route path="/ssh-tunnel" element={<SshTunnel />} />
+                <Route path="/k8s" element={<K8sManage />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/" element={<Navigate to="/dev-tools" replace />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            )}
           </div>
         </Content>
       </Layout>

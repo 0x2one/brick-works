@@ -363,7 +363,7 @@ function NodeEditor({
   )
 }
 
-function SshClient(): React.JSX.Element {
+function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const { t } = useTranslation()
   const { message, modal } = App.useApp()
   const { resolved: themeResolved } = useTheme()
@@ -679,7 +679,7 @@ function SshClient(): React.JSX.Element {
 
   useEffect(() => {
     const onResize = (): void => {
-      if (!activeTabId) return
+      if (!active || !activeTabId) return
       const rt = termsRef.current.get(activeTabId)
       if (!rt) return
       rt.fit.fit()
@@ -689,7 +689,20 @@ function SshClient(): React.JSX.Element {
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
-  }, [activeTabId])
+  }, [active, activeTabId])
+
+  useEffect(() => {
+    if (!active || !activeTabId) return
+    const id = window.requestAnimationFrame(() => {
+      const rt = termsRef.current.get(activeTabId)
+      if (!rt) return
+      rt.fit.fit()
+      if (rt.shellSessionId) {
+        void window.api.ssh.resizeShell(rt.shellSessionId, rt.term.cols, rt.term.rows)
+      }
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [active, activeTabId])
 
   const loadDir = useCallback(
     async (tabId: string, nodeId: string, path: string) => {
@@ -908,7 +921,10 @@ function SshClient(): React.JSX.Element {
   const crumbs = pathSegments(activeTab?.remotePath || '/')
 
   return (
-    <div className="ssh-client-page relative flex flex-1 min-h-0 overflow-hidden">
+    <div
+      className={`ssh-client-page relative flex flex-1 min-h-0 overflow-hidden${active ? '' : ' hidden'}`}
+      aria-hidden={!active}
+    >
       {copyTipVisible && (
         <div className="ssh-client-copy-hint pointer-events-none absolute right-3 bottom-3 z-50">
           {t('sshClientCopied')}

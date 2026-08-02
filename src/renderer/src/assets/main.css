@@ -563,7 +563,7 @@
 
 /* ── SSH Client workspace ── */
 
-.content-area:has(.ssh-client-page) {
+.content-area:has(.ssh-client-page:not(.hidden)) {
   overflow: hidden;
 }
 
