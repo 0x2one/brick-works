@@ -107,6 +107,13 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
   const dragRef = useRef<{ start: { x: number; y: number }; cur: { x: number; y: number } } | null>(
     null
   )
+  const panRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    scrollLeft: number
+    scrollTop: number
+  } | null>(null)
 
   const [fileKey, setFileKey] = useState<string | null>(null)
   const [fileName, setFileName] = useState('')
@@ -135,6 +142,8 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
   const [draftW, setDraftW] = useState(0)
   const [draftH, setDraftH] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [panning, setPanning] = useState(false)
+  const [altHeld, setAltHeld] = useState(false)
 
   const display = useMemo(() => {
     if (!natural) return { width: 0, height: 0 }
@@ -321,6 +330,63 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
     [t, message]
   )
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Alt') setAltHeld(true)
+    }
+    const onKeyUp = (e: KeyboardEvent): void => {
+      if (e.key === 'Alt') setAltHeld(false)
+    }
+    const onBlur = (): void => setAltHeld(false)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [])
+
+  /* ── pan (Alt + left drag) ── */
+  const handlePanPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || !e.altKey) return
+    const el = scrollRef.current
+    if (!el) return
+    e.preventDefault()
+    e.stopPropagation()
+    panRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      scrollLeft: el.scrollLeft,
+      scrollTop: el.scrollTop
+    }
+    el.setPointerCapture(e.pointerId)
+    setPanning(true)
+  }, [])
+
+  const handlePanPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current
+    const el = scrollRef.current
+    if (!pan || !el || e.pointerId !== pan.pointerId) return
+    e.preventDefault()
+    el.scrollLeft = pan.scrollLeft - (e.clientX - pan.startX)
+    el.scrollTop = pan.scrollTop - (e.clientY - pan.startY)
+  }, [])
+
+  const handlePanPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current
+    if (!pan || e.pointerId !== pan.pointerId) return
+    panRef.current = null
+    setPanning(false)
+    try {
+      scrollRef.current?.releasePointerCapture(e.pointerId)
+    } catch {
+      // ignore
+    }
+  }, [])
+
   /* ── drawing ── */
   const toNorm = useCallback((clientX: number, clientY: number): { x: number; y: number } => {
     const el = stageRef.current
@@ -343,7 +409,7 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!annotateMode || !natural) return
+      if (!annotateMode || !natural || e.altKey) return
       e.preventDefault()
       const p = toNorm(e.clientX, e.clientY)
       dragRef.current = { start: p, cur: p }
@@ -775,6 +841,14 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
           <div
             ref={scrollRef}
             className="flex-1 min-h-0 overflow-auto bg-[var(--bg-warm)] border border-[var(--border-subtle)] rounded-lg"
+            style={{
+              cursor: panning ? 'grabbing' : altHeld ? 'grab' : undefined,
+              userSelect: panning ? 'none' : undefined
+            }}
+            onPointerDownCapture={handlePanPointerDown}
+            onPointerMove={handlePanPointerMove}
+            onPointerUp={handlePanPointerUp}
+            onPointerCancel={handlePanPointerUp}
           >
             <div className="min-h-full w-max min-w-full flex py-6 px-6">
               <div
@@ -783,7 +857,13 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
                 style={{
                   width: display.width || undefined,
                   height: display.height || undefined,
-                  cursor: annotateMode ? 'crosshair' : 'default',
+                  cursor: panning
+                    ? 'grabbing'
+                    : altHeld
+                      ? 'grab'
+                      : annotateMode
+                        ? 'crosshair'
+                        : 'default',
                   touchAction: 'none'
                 }}
                 onPointerDown={annotateMode ? handlePointerDown : undefined}
