@@ -849,13 +849,13 @@ function SshTunnel(): React.JSX.Element {
   )
 
   return (
-    <div className="flex flex-col p-6 gap-4" style={{ height: 'calc(100vh - 56px)' }}>
-      <p className="text-xs text-[var(--text-secondary)]">{t('sshDesc')}</p>
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 56px)' }}>
+      <p className="text-xs text-[var(--text-secondary)] pt-6 px-6 pb-2">{t('sshDesc')}</p>
 
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
-        className="flex-1 min-h-0"
+        className="ssh-tabs flex-1 min-h-0"
         items={[
           {
             key: 'nodes',
@@ -865,7 +865,11 @@ function SshTunnel(): React.JSX.Element {
                 {t('sshTabNodes')}
               </span>
             ),
-            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{nodesTab}</div>
+            children: (
+              <div className="ssh-tab-pane overflow-auto">
+                <div className="max-w-[760px] ml-6">{nodesTab}</div>
+              </div>
+            )
           },
           {
             key: 'local',
@@ -875,7 +879,11 @@ function SshTunnel(): React.JSX.Element {
                 {t('sshTypeLocal')}
               </span>
             ),
-            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{localTab}</div>
+            children: (
+              <div className="ssh-tab-pane overflow-auto">
+                <div className="max-w-[760px] ml-6">{localTab}</div>
+              </div>
+            )
           },
           {
             key: 'remote',
@@ -885,7 +893,11 @@ function SshTunnel(): React.JSX.Element {
                 {t('sshTypeRemote')}
               </span>
             ),
-            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{remoteTab}</div>
+            children: (
+              <div className="ssh-tab-pane overflow-auto">
+                <div className="max-w-[760px] ml-6">{remoteTab}</div>
+              </div>
+            )
           },
           {
             key: 'socks5',
@@ -895,7 +907,11 @@ function SshTunnel(): React.JSX.Element {
                 {t('sshTypeSocks5')}
               </span>
             ),
-            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{socksTab}</div>
+            children: (
+              <div className="ssh-tab-pane overflow-auto">
+                <div className="max-w-[760px] ml-6">{socksTab}</div>
+              </div>
+            )
           },
           {
             key: 'logs',
@@ -905,7 +921,11 @@ function SshTunnel(): React.JSX.Element {
                 {t('sshTabLogs')}
               </span>
             ),
-            children: <div className="max-w-[760px] h-full overflow-auto pr-1">{logsTab}</div>
+            children: (
+              <div className="ssh-tab-pane overflow-auto">
+                <div className="max-w-[760px] ml-6">{logsTab}</div>
+              </div>
+            )
           }
         ]}
       />
