@@ -345,7 +345,7 @@ ipcMain.handle('ssh:stopTunnel', (_event, nodeId: string, tunnelId: string) =>
 /* ── K8s management ── */
 
 const k8sStore = createK8sStore()
-const k8sManager = createK8sManager()
+const k8sManager = createK8sManager(k8sStore)
 
 function broadcastK8sStatus(): void {
   mainWindow?.webContents.send('k8s:status-change', k8sManager.getStatus())
@@ -495,7 +495,19 @@ ipcMain.handle('k8s:stopExec', (_event, sessionId: string) => k8sManager.stopExe
 
 ipcMain.handle(
   'k8s:startPortForward',
-  (_event, opts: { namespace: string; pod: string; localPort: number; remotePort: number }) => {
+  (
+    _event,
+    opts: {
+      id?: string
+      namespace?: string
+      pod?: string
+      localPort?: number
+      remotePort?: number
+    }
+  ) => {
+    if (opts.id) {
+      return k8sManager.startPortForward({ id: opts.id })
+    }
     const localPort = Number(opts.localPort)
     const remotePort = Number(opts.remotePort)
     if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) {
@@ -504,11 +516,18 @@ ipcMain.handle(
     if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
       throw new Error('REMOTE_PORT_INVALID')
     }
-    return k8sManager.startPortForward({ ...opts, localPort, remotePort })
+    return k8sManager.startPortForward({
+      namespace: opts.namespace,
+      pod: opts.pod,
+      localPort,
+      remotePort
+    })
   }
 )
 
 ipcMain.handle('k8s:stopPortForward', (_event, id: string) => k8sManager.stopPortForward(id))
+
+ipcMain.handle('k8s:deletePortForward', (_event, id: string) => k8sManager.deletePortForward(id))
 
 ipcMain.handle('k8s:listPortForwards', () => k8sManager.listPortForwards())
 

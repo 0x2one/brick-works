@@ -431,7 +431,9 @@
   "k8sExecClosed": "会话已结束",
   "k8sPfStarted": "端口转发已启动",
   "k8sPfStopped": "端口转发已停止",
+  "k8sPfDeleted": "端口转发记录已删除",
+  "k8sPfDelete": "删除记录",
   "k8sPfFail": "端口转发失败",
-  "k8sNoPortForwards": "暂无活跃的端口转发",
+  "k8sNoPortForwards": "暂无端口转发记录",
   "k8sStart": "启动"
 }

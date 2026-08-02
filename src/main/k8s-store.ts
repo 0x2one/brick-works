@@ -30,6 +30,31 @@ interface StoreFile {
   clusters: K8sCluster[]
 }
 
+export interface K8sPortForwardRecord {
+  id: string
+  clusterId: string
+  namespace: string
+  pod: string
+  localPort: number
+  remotePort: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface K8sPortForwardInput {
+  id?: string
+  clusterId: string
+  namespace: string
+  pod: string
+  localPort: number
+  remotePort: number
+}
+
+interface PortForwardStoreFile {
+  version: 1
+  portForwards: K8sPortForwardRecord[]
+}
+
 export function defaultKubeconfigPath(): string {
   return join(homedir(), '.kube', 'config')
 }
@@ -40,12 +65,18 @@ export interface K8sStore {
   get: (id: string) => K8sCluster | null
   save: (input: K8sClusterInput) => K8sCluster
   remove: (id: string) => boolean
+  listPortForwards: (clusterId?: string) => K8sPortForwardRecord[]
+  getPortForward: (id: string) => K8sPortForwardRecord | null
+  savePortForward: (input: K8sPortForwardInput) => K8sPortForwardRecord
+  removePortForward: (id: string) => boolean
 }
 
 export function createK8sStore(): K8sStore {
   const file = join(app.getPath('userData'), 'k8s-clusters.json')
+  const pfFile = join(app.getPath('userData'), 'k8s-port-forwards.json')
   const configDir = join(app.getPath('userData'), 'k8s-kubeconfigs')
   let clusters = new Map<string, K8sCluster>()
+  let portForwards = new Map<string, K8sPortForwardRecord>()
 
   function managedConfigPath(id: string): string {
     return join(configDir, `${id}.yaml`)
@@ -81,6 +112,30 @@ export function createK8sStore(): K8sStore {
     }
   }
 
+  async function loadPortForwards(): Promise<void> {
+    try {
+      const raw = await fsp.readFile(pfFile, 'utf-8')
+      const data = JSON.parse(raw) as PortForwardStoreFile
+      const arr = Array.isArray(data?.portForwards) ? data.portForwards : []
+      portForwards = new Map(
+        arr
+          .filter(
+            (r) =>
+              r &&
+              typeof r.id === 'string' &&
+              typeof r.clusterId === 'string' &&
+              typeof r.namespace === 'string' &&
+              typeof r.pod === 'string' &&
+              typeof r.localPort === 'number' &&
+              typeof r.remotePort === 'number'
+          )
+          .map((r) => [r.id, r])
+      )
+    } catch {
+      portForwards = new Map()
+    }
+  }
+
   function persist(): void {
     const payload: StoreFile = {
       version: 1,
@@ -94,9 +149,22 @@ export function createK8sStore(): K8sStore {
     }
   }
 
+  function persistPortForwards(): void {
+    const payload: PortForwardStoreFile = {
+      version: 1,
+      portForwards: [...portForwards.values()]
+    }
+    try {
+      mkdirSync(app.getPath('userData'), { recursive: true })
+      writeFileSync(pfFile, JSON.stringify(payload, null, 2), 'utf-8')
+    } catch {
+      // best-effort
+    }
+  }
+
   return {
     async init(): Promise<void> {
-      await load()
+      await Promise.all([load(), loadPortForwards()])
     },
     list(): K8sCluster[] {
       return [...clusters.values()].sort(
@@ -146,6 +214,58 @@ export function createK8sStore(): K8sStore {
       removeManagedFile(existing)
       clusters.delete(id)
       persist()
+      for (const [pfId, pf] of [...portForwards]) {
+        if (pf.clusterId === id) portForwards.delete(pfId)
+      }
+      persistPortForwards()
+      return true
+    },
+    listPortForwards(clusterId?: string): K8sPortForwardRecord[] {
+      return [...portForwards.values()]
+        .filter((r) => !clusterId || r.clusterId === clusterId)
+        .sort(
+          (a, b) =>
+            a.pod.localeCompare(b.pod, undefined, { sensitivity: 'base', numeric: true }) ||
+            a.namespace.localeCompare(b.namespace, undefined, {
+              sensitivity: 'base',
+              numeric: true
+            }) ||
+            a.localPort - b.localPort
+        )
+    },
+    getPortForward(id: string): K8sPortForwardRecord | null {
+      return portForwards.get(id) ?? null
+    },
+    savePortForward(input: K8sPortForwardInput): K8sPortForwardRecord {
+      const now = Date.now()
+      const existingById = input.id ? portForwards.get(input.id) : undefined
+      const existingByKey = [...portForwards.values()].find(
+        (r) =>
+          r.clusterId === input.clusterId &&
+          r.namespace === input.namespace &&
+          r.pod === input.pod &&
+          r.localPort === input.localPort &&
+          r.remotePort === input.remotePort
+      )
+      const existing = existingById ?? existingByKey
+      const record: K8sPortForwardRecord = {
+        id: existing?.id ?? randomUUID(),
+        clusterId: input.clusterId,
+        namespace: input.namespace.trim(),
+        pod: input.pod.trim(),
+        localPort: input.localPort,
+        remotePort: input.remotePort,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now
+      }
+      portForwards.set(record.id, record)
+      persistPortForwards()
+      return record
+    },
+    removePortForward(id: string): boolean {
+      if (!portForwards.has(id)) return false
+      portForwards.delete(id)
+      persistPortForwards()
       return true
     }
   }

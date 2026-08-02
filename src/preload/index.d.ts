@@ -72,6 +72,7 @@ interface K8sApi {
   stopExec: (sessionId: string) => Promise<boolean>
   startPortForward: (opts: K8sStartPortForwardOpts) => Promise<K8sPortForwardStatus>
   stopPortForward: (id: string) => Promise<boolean>
+  deletePortForward: (id: string) => Promise<boolean>
   listPortForwards: () => Promise<K8sPortForwardStatus[]>
   onStatusChange: (callback: (status: K8sStatus) => void) => () => void
   onLogChunk: (callback: (chunk: K8sLogChunk) => void) => () => void

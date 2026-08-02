@@ -2,7 +2,7 @@ import { createServer, type Server as NetServer, type Socket } from 'net'
 import { Writable, PassThrough } from 'stream'
 import { randomUUID } from 'crypto'
 import { promises as fsp } from 'fs'
-import type { K8sCluster } from './k8s-store'
+import type { K8sCluster, K8sStore } from './k8s-store'
 
 export type K8sConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 
@@ -177,17 +177,19 @@ export interface K8sManager {
   resizeExec: (sessionId: string, cols: number, rows: number) => Promise<boolean>
   stopExec: (sessionId: string) => Promise<boolean>
   startPortForward: (opts: {
-    namespace: string
-    pod: string
-    localPort: number
-    remotePort: number
+    id?: string
+    namespace?: string
+    pod?: string
+    localPort?: number
+    remotePort?: number
   }) => Promise<K8sPortForwardStatus>
   stopPortForward: (id: string) => Promise<boolean>
+  deletePortForward: (id: string) => Promise<boolean>
   listPortForwards: () => K8sPortForwardStatus[]
   stop: () => void
 }
 
-export function createK8sManager(): K8sManager {
+export function createK8sManager(store: K8sStore): K8sManager {
   let k8sMod: K8sModule | null = null
   let kc: InstanceType<K8sModule['KubeConfig']> | null = null
   let status: K8sStatus = {
@@ -218,8 +220,25 @@ export function createK8sManager(): K8sManager {
     for (const cb of statusListeners) cb(status)
   }
 
+  function buildPfList(): K8sPortForwardStatus[] {
+    const clusterId = status.clusterId
+    if (!clusterId) return []
+    return store.listPortForwards(clusterId).map((record) => {
+      const runtime = portForwards.get(record.id)
+      if (runtime) return runtime.status
+      return {
+        id: record.id,
+        namespace: record.namespace,
+        pod: record.pod,
+        localPort: record.localPort,
+        remotePort: record.remotePort,
+        state: 'stopped' as const
+      }
+    })
+  }
+
   function broadcastPf(): void {
-    const list = [...portForwards.values()].map((r) => r.status)
+    const list = buildPfList()
     for (const cb of pfListeners) cb(list)
   }
 
@@ -338,6 +357,7 @@ export function createK8sManager(): K8sManager {
           error: undefined,
           connectedAt: Date.now()
         })
+        broadcastPf()
       } catch (err) {
         kc = null
         setStatus({
@@ -374,6 +394,7 @@ export function createK8sManager(): K8sManager {
         error: undefined,
         connectedAt: undefined
       })
+      broadcastPf()
       return status
     },
 
@@ -681,16 +702,42 @@ export function createK8sManager(): K8sManager {
     },
 
     async startPortForward(opts) {
-      requireConnected()
-      const k8s = await loadK8s()
       const config = requireConnected()
-      const id = randomUUID()
+      const clusterId = status.clusterId
+      if (!clusterId) throw new Error('NOT_CONNECTED')
+
+      let record = opts.id ? store.getPortForward(opts.id) : null
+      if (record && record.clusterId !== clusterId) {
+        throw new Error('PORT_FORWARD_CLUSTER_MISMATCH')
+      }
+      if (!record) {
+        if (!opts.namespace || !opts.pod || opts.localPort == null || opts.remotePort == null) {
+          throw new Error('PORT_FORWARD_OPTS_REQUIRED')
+        }
+        record = store.savePortForward({
+          clusterId,
+          namespace: opts.namespace,
+          pod: opts.pod,
+          localPort: opts.localPort,
+          remotePort: opts.remotePort
+        })
+      }
+
+      if (portForwards.has(record.id)) {
+        const current = portForwards.get(record.id)!
+        if (current.status.state === 'active' || current.status.state === 'starting') {
+          return current.status
+        }
+        await this.stopPortForward(record.id)
+      }
+
+      const k8s = await loadK8s()
       const statusRow: K8sPortForwardStatus = {
-        id,
-        namespace: opts.namespace,
-        pod: opts.pod,
-        localPort: opts.localPort,
-        remotePort: opts.remotePort,
+        id: record.id,
+        namespace: record.namespace,
+        pod: record.pod,
+        localPort: record.localPort,
+        remotePort: record.remotePort,
         state: 'starting'
       }
 
@@ -704,7 +751,7 @@ export function createK8sManager(): K8sManager {
           sockets.delete(socket)
         })
         void pf
-          .portForward(opts.namespace, opts.pod, [opts.remotePort], socket, null, socket)
+          .portForward(record.namespace, record.pod, [record.remotePort], socket, null, socket)
           .catch((err) => {
             statusRow.state = 'error'
             statusRow.error = errMessage(err)
@@ -717,20 +764,30 @@ export function createK8sManager(): K8sManager {
           })
       })
 
-      await new Promise<void>((resolve, reject) => {
-        server.once('error', reject)
-        server.listen(opts.localPort, '127.0.0.1', () => resolve())
-      })
+      try {
+        await new Promise<void>((resolve, reject) => {
+          server.once('error', reject)
+          server.listen(record.localPort, '127.0.0.1', () => resolve())
+        })
+      } catch (err) {
+        statusRow.state = 'error'
+        statusRow.error = errMessage(err)
+        broadcastPf()
+        throw err
+      }
 
       statusRow.state = 'active'
-      portForwards.set(id, { status: statusRow, server, sockets })
+      portForwards.set(record.id, { status: statusRow, server, sockets })
       broadcastPf()
       return statusRow
     },
 
     async stopPortForward(id) {
       const runtime = portForwards.get(id)
-      if (!runtime) return false
+      if (!runtime) {
+        broadcastPf()
+        return false
+      }
       for (const s of runtime.sockets) {
         try {
           s.destroy()
@@ -742,16 +799,20 @@ export function createK8sManager(): K8sManager {
         runtime.server.close(() => resolve())
         setTimeout(() => resolve(), 1000)
       })
-      runtime.status.state = 'stopped'
       portForwards.delete(id)
       broadcastPf()
       return true
     },
 
+    async deletePortForward(id) {
+      await this.stopPortForward(id)
+      const removed = store.removePortForward(id)
+      broadcastPf()
+      return removed
+    },
+
     listPortForwards() {
-      return [...portForwards.values()]
-        .map((r) => r.status)
-        .sort((a, b) => byName(a.pod, b.pod) || byName(a.namespace, b.namespace))
+      return buildPfList()
     },
 
     stop() {

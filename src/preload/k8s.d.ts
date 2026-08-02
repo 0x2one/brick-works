@@ -116,8 +116,9 @@ interface K8sStartExecOpts {
 }
 
 interface K8sStartPortForwardOpts {
-  namespace: string
-  pod: string
-  localPort: number
-  remotePort: number
+  id?: string
+  namespace?: string
+  pod?: string
+  localPort?: number
+  remotePort?: number
 }

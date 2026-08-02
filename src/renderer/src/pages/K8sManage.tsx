@@ -31,7 +31,8 @@ import {
   ApiOutlined,
   StopOutlined,
   ArrowDownOutlined,
-  SearchOutlined
+  SearchOutlined,
+  PlayCircleOutlined
 } from '@ant-design/icons'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -640,8 +641,30 @@ function K8sManage(): React.JSX.Element {
   }
 
   const stopPortForward = async (id: string): Promise<void> => {
-    await window.api.k8s.stopPortForward(id)
-    message.success(t('k8sPfStopped'))
+    try {
+      await window.api.k8s.stopPortForward(id)
+      message.success(t('k8sPfStopped'))
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : t('k8sPfFail'))
+    }
+  }
+
+  const restartPortForward = async (id: string): Promise<void> => {
+    try {
+      await window.api.k8s.startPortForward({ id })
+      message.success(t('k8sPfStarted'))
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : t('k8sPfFail'))
+    }
+  }
+
+  const deletePortForward = async (id: string): Promise<void> => {
+    try {
+      await window.api.k8s.deletePortForward(id)
+      message.success(t('k8sPfDeleted'))
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : t('k8sPfFail'))
+    }
   }
 
   const podColumns: ColumnsType<K8sPodRow> = [
@@ -786,22 +809,52 @@ function K8sManage(): React.JSX.Element {
       dataIndex: 'state',
       width: 100,
       render: (s: K8sPortForwardState) => (
-        <Tag color={s === 'active' ? 'success' : s === 'error' ? 'error' : 'default'}>{s}</Tag>
+        <Tag
+          color={
+            s === 'active' ? 'success' : s === 'error' ? 'error' : s === 'starting' ? 'processing' : 'default'
+          }
+        >
+          {s}
+        </Tag>
       )
     },
     {
       title: t('k8sColActions'),
       key: 'actions',
-      width: 80,
-      render: (_, row) => (
-        <Button
-          type="text"
-          size="small"
-          danger
-          icon={<StopOutlined />}
-          onClick={() => void stopPortForward(row.id)}
-        />
-      )
+      width: 110,
+      render: (_, row) => {
+        const running = row.state === 'active' || row.state === 'starting'
+        return (
+          <Space size={0}>
+            {running ? (
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<StopOutlined />}
+                title={t('k8sDisconnect')}
+                onClick={() => void stopPortForward(row.id)}
+              />
+            ) : (
+              <Button
+                type="text"
+                size="small"
+                icon={<PlayCircleOutlined />}
+                title={t('k8sStart')}
+                onClick={() => void restartPortForward(row.id)}
+              />
+            )}
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              title={t('k8sPfDelete')}
+              onClick={() => void deletePortForward(row.id)}
+            />
+          </Space>
+        )
+      }
     }
   ]
 

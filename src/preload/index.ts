@@ -110,6 +110,7 @@ const api = {
     startPortForward: (opts: K8sStartPortForwardOpts) =>
       ipcRenderer.invoke('k8s:startPortForward', opts),
     stopPortForward: (id: string) => ipcRenderer.invoke('k8s:stopPortForward', id),
+    deletePortForward: (id: string) => ipcRenderer.invoke('k8s:deletePortForward', id),
     listPortForwards: () => ipcRenderer.invoke('k8s:listPortForwards'),
     onStatusChange: (callback: (status: K8sStatus) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, status: K8sStatus): void =>
