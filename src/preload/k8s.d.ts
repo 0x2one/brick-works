@@ -111,6 +111,7 @@ interface K8sStartExecOpts {
   namespace: string
   pod: string
   container?: string
+  shell?: 'bash' | 'sh'
   cols?: number
   rows?: number
 }

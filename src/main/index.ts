@@ -479,7 +479,14 @@ ipcMain.handle(
   'k8s:startExec',
   (
     _event,
-    opts: { namespace: string; pod: string; container?: string; cols?: number; rows?: number }
+    opts: {
+      namespace: string
+      pod: string
+      container?: string
+      shell?: 'bash' | 'sh'
+      cols?: number
+      rows?: number
+    }
   ) => k8sManager.startExec(opts)
 )
 

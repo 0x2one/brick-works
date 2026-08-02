@@ -170,6 +170,7 @@ export interface K8sManager {
     namespace: string
     pod: string
     container?: string
+    shell?: 'bash' | 'sh'
     cols?: number
     rows?: number
   }) => Promise<{ sessionId: string }>
@@ -754,11 +755,8 @@ export function createK8sManager(store: K8sStore): K8sManager {
       })
 
       const exec = new k8s.Exec(config)
-      const command = [
-        '/bin/sh',
-        '-c',
-        'if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi'
-      ]
+      const shell = opts.shell === 'sh' ? 'sh' : 'bash'
+      const command = shell === 'bash' ? ['/bin/bash'] : ['/bin/sh']
       const ws = await exec.exec(
         opts.namespace,
         opts.pod,

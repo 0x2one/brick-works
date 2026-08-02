@@ -137,9 +137,11 @@ function K8sManage(): React.JSX.Element {
     })
   }
 
+  const [execPickerOpen, setExecPickerOpen] = useState(false)
   const [execOpen, setExecOpen] = useState(false)
   const [execPod, setExecPod] = useState<K8sPodRow | null>(null)
   const [execContainer, setExecContainer] = useState<string>()
+  const [execShell, setExecShell] = useState<'bash' | 'sh'>('bash')
   const [execSessionId, setExecSessionId] = useState<string | null>(null)
   const termRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
@@ -545,9 +547,15 @@ function K8sManage(): React.JSX.Element {
     setExecPod(null)
   }
 
-  const openExec = async (pod: K8sPodRow): Promise<void> => {
+  const openExecPicker = (pod: K8sPodRow): void => {
     setExecPod(pod)
     setExecContainer(pod.containers[0])
+    setExecShell('bash')
+    setExecPickerOpen(true)
+  }
+
+  const confirmExec = (): void => {
+    setExecPickerOpen(false)
     setExecOpen(true)
   }
 
@@ -566,18 +574,23 @@ function K8sManage(): React.JSX.Element {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(termRef.current)
-    fit.fit()
     terminalRef.current = term
     fitRef.current = fit
+    requestAnimationFrame(() => {
+      fit.fit()
+      requestAnimationFrame(() => fit.fit())
+    })
 
     let disposed = false
     let activeSession: string | null = null
     const boot = async (): Promise<void> => {
       try {
+        fit.fit()
         const { sessionId } = await window.api.k8s.startExec({
           namespace: execPod.namespace,
           pod: execPod.name,
           container: execContainer,
+          shell: execShell,
           cols: term.cols,
           rows: term.rows
         })
@@ -607,7 +620,7 @@ function K8sManage(): React.JSX.Element {
       if (activeSession) void window.api.k8s.stopExec(activeSession)
       destroyTerminal()
     }
-  }, [execOpen, execPod, execContainer, t])
+  }, [execOpen, execPod, execContainer, execShell, t])
 
   const openPortForward = (pod: K8sPodRow): void => {
     setPfPod(pod)
@@ -722,7 +735,7 @@ function K8sManage(): React.JSX.Element {
             size="small"
             icon={<CodeOutlined />}
             title={t('k8sConsole')}
-            onClick={() => void openExec(pod)}
+            onClick={() => openExecPicker(pod)}
           />
           <Button
             type="text"
@@ -1251,13 +1264,68 @@ function K8sManage(): React.JSX.Element {
       </Drawer>
 
       <Drawer
+        title={t('k8sConsole')}
+        placement="bottom"
+        height={220}
+        open={execPickerOpen}
+        onClose={() => {
+          setExecPickerOpen(false)
+          if (!execOpen) setExecPod(null)
+        }}
+        mask={false}
+        maskClosable={false}
+        destroyOnHidden
+      >
+        {execPod && (
+          <p className="text-xs text-[var(--text-secondary)] m-0 mb-3 truncate">
+            {execPod.namespace}/{execPod.name}
+          </p>
+        )}
+        <div className="flex flex-col gap-3">
+          {execPod && execPod.containers.length > 1 && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-[var(--text-secondary)] shrink-0">Container</span>
+              <Select
+                className="min-w-[160px]"
+                value={execContainer}
+                options={execPod.containers.map((c) => ({ value: c, label: c }))}
+                onChange={setExecContainer}
+              />
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-[var(--text-secondary)] shrink-0">{t('k8sExecShell')}</span>
+            <Segmented
+              value={execShell}
+              onChange={(v) => setExecShell(v as 'bash' | 'sh')}
+              options={[
+                { value: 'bash', label: 'bash' },
+                { value: 'sh', label: 'sh' }
+              ]}
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button type="primary" onClick={confirmExec}>
+              {t('k8sExecOpen')}
+            </Button>
+          </div>
+        </div>
+      </Drawer>
+
+      <Drawer
         title={
-          execPod ? `${t('k8sConsole')} · ${execPod.namespace}/${execPod.name}` : t('k8sConsole')
+          execPod
+            ? `${t('k8sConsole')} · ${execPod.namespace}/${execPod.name} · ${execShell}`
+            : t('k8sConsole')
         }
+        placement="bottom"
+        height="70vh"
         open={execOpen}
         onClose={() => void closeExec()}
-        size={800}
+        mask={false}
+        maskClosable={false}
         destroyOnHidden
+        styles={{ body: { paddingTop: 12, display: 'flex', flexDirection: 'column' } }}
         extra={
           execPod && execPod.containers.length > 1 ? (
             <Select
@@ -1276,8 +1344,8 @@ function K8sManage(): React.JSX.Element {
       >
         <div
           ref={termRef}
-          className="rounded-lg overflow-hidden"
-          style={{ height: 'calc(100vh - 160px)', padding: 8, background: 'var(--bg-warm)' }}
+          className="rounded-lg overflow-hidden flex-1 min-h-0"
+          style={{ padding: 8, background: 'var(--bg-warm)' }}
         />
       </Drawer>
 

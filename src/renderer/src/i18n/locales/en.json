@@ -420,6 +420,8 @@
   "k8sLogs": "Logs",
   "k8sDownloadLogs": "Download Logs",
   "k8sConsole": "Console",
+  "k8sExecShell": "Shell",
+  "k8sExecOpen": "Open console",
   "k8sPortForward": "Port Forward",
   "k8sFollow": "Follow",
   "k8sLogWrap": "Wrap",

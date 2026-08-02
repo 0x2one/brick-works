@@ -420,6 +420,8 @@
   "k8sLogs": "日志",
   "k8sDownloadLogs": "下载日志",
   "k8sConsole": "控制台",
+  "k8sExecShell": "Shell",
+  "k8sExecOpen": "打开控制台",
   "k8sPortForward": "端口转发",
   "k8sFollow": "Follow",
   "k8sLogWrap": "换行",
