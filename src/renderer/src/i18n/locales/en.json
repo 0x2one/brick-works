@@ -398,6 +398,8 @@
   "k8sTabPods": "Pods",
   "k8sTabWorkloads": "Workloads",
   "k8sTabNetwork": "Network",
+  "k8sTabServices": "Services",
+  "k8sTabIngress": "Ingress",
   "k8sTabPortForwards": "Port Forwards",
   "k8sColName": "Name",
   "k8sColNamespace": "Namespace",

@@ -149,6 +149,7 @@ function K8sManage(): React.JSX.Element {
   const [pfPod, setPfPod] = useState<K8sPodRow | null>(null)
   const [pfForm] = Form.useForm<{ localPort: number; remotePort: number }>()
   const [activeTab, setActiveTab] = useState('pods')
+  const [networkSubTab, setNetworkSubTab] = useState<'services' | 'ingress'>('services')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
   const [nameQuery, setNameQuery] = useState('')
@@ -156,7 +157,7 @@ function K8sManage(): React.JSX.Element {
   const bodyRef = useRef<HTMLDivElement>(null)
 
   const connected = status?.state === 'connected'
-  const bodyScrollable = !connected || activeTab === 'network'
+  const bodyScrollable = !connected
 
   const filteredPods = pods.filter((p) => matchName(p.name, nameQuery))
   const filteredWorkloads = workloads.filter((w) => matchName(w.name, nameQuery))
@@ -213,11 +214,12 @@ function K8sManage(): React.JSX.Element {
         : activeTab === 'portforwards'
           ? filteredPortForwards.length
           : activeTab === 'network'
-            ? filteredServices.length
+            ? networkSubTab === 'services'
+              ? filteredServices.length
+              : filteredIngresses.length
             : 0
 
-  const showFooterPager =
-    connected && activeTab !== 'network' && footerTotal > pageSize
+  const showFooterPager = connected && footerTotal > pageSize
 
   const refreshClusters = useCallback(async () => {
     const list = await window.api.k8s.listClusters()
@@ -806,7 +808,10 @@ function K8sManage(): React.JSX.Element {
   const tabDefs: Array<{ key: string; label: string }> = [
     { key: 'pods', label: `${t('k8sTabPods')} (${filteredPods.length})` },
     { key: 'workloads', label: `${t('k8sTabWorkloads')} (${filteredWorkloads.length})` },
-    { key: 'network', label: t('k8sTabNetwork') },
+    {
+      key: 'network',
+      label: `${t('k8sTabNetwork')} (${filteredServices.length + filteredIngresses.length})`
+    },
     {
       key: 'portforwards',
       label: `${t('k8sTabPortForwards')} (${filteredPortForwards.length})`
@@ -917,6 +922,29 @@ function K8sManage(): React.JSX.Element {
             })}
           </div>
         )}
+
+        {connected && activeTab === 'network' && (
+          <div className="flex items-center px-6 py-2 border-b border-[var(--border-subtle)]">
+            <Segmented
+              size="small"
+              value={networkSubTab}
+              onChange={(v) => {
+                setNetworkSubTab(v as 'services' | 'ingress')
+                setPage(1)
+              }}
+              options={[
+                {
+                  value: 'services',
+                  label: `${t('k8sTabServices')} (${filteredServices.length})`
+                },
+                {
+                  value: 'ingress',
+                  label: `${t('k8sTabIngress')} (${filteredIngresses.length})`
+                }
+              ]}
+            />
+          </div>
+        )}
       </div>
 
       <div
@@ -953,35 +981,27 @@ function K8sManage(): React.JSX.Element {
                 scroll={{ y: tableScrollY }}
               />
             )}
-            {activeTab === 'network' && (
-              <div className="flex flex-col gap-6">
-                <div>
-                  <div className="text-xs font-semibold mb-2 text-[var(--text-secondary)]">
-                    Services ({filteredServices.length})
-                  </div>
-                  <Table
-                    size="small"
-                    rowKey={(r) => `${r.namespace}/${r.name}`}
-                    columns={serviceColumns}
-                    dataSource={filteredServices}
-                    loading={loading}
-                    pagination={false}
-                  />
-                </div>
-                <div>
-                  <div className="text-xs font-semibold mb-2 text-[var(--text-secondary)]">
-                    Ingress ({filteredIngresses.length})
-                  </div>
-                  <Table
-                    size="small"
-                    rowKey={(r) => `${r.namespace}/${r.name}`}
-                    columns={ingressColumns}
-                    dataSource={filteredIngresses}
-                    loading={loading}
-                    pagination={false}
-                  />
-                </div>
-              </div>
+            {activeTab === 'network' && networkSubTab === 'services' && (
+              <Table
+                size="small"
+                rowKey={(r) => `${r.namespace}/${r.name}`}
+                columns={serviceColumns}
+                dataSource={paged(filteredServices)}
+                loading={loading}
+                pagination={false}
+                scroll={{ y: tableScrollY }}
+              />
+            )}
+            {activeTab === 'network' && networkSubTab === 'ingress' && (
+              <Table
+                size="small"
+                rowKey={(r) => `${r.namespace}/${r.name}`}
+                columns={ingressColumns}
+                dataSource={paged(filteredIngresses)}
+                loading={loading}
+                pagination={false}
+                scroll={{ y: tableScrollY }}
+              />
             )}
             {activeTab === 'portforwards' && (
               <Table

@@ -398,6 +398,8 @@
   "k8sTabPods": "Pods",
   "k8sTabWorkloads": "工作负载",
   "k8sTabNetwork": "网络",
+  "k8sTabServices": "Services",
+  "k8sTabIngress": "Ingress",
   "k8sTabPortForwards": "端口转发",
   "k8sColName": "名称",
   "k8sColNamespace": "命名空间",
