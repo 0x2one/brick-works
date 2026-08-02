@@ -1018,16 +1018,16 @@ function SshClient(): React.JSX.Element {
                       </div>
                       <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-[grid-template-rows] duration-150 ease-out">
                         <div className="overflow-hidden min-h-0">
-                          <div
-                            className="flex items-center justify-end gap-0.5 pt-1.5"
-                            onClick={(e) => e.stopPropagation()}
-                          >
+                          <div className="flex items-center justify-end gap-0.5 pt-1.5">
                             <button
                               type="button"
                               className={BTN_ICON}
                               title={t('sshTest')}
                               disabled={testing}
-                              onClick={() => void handleTest(node)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void handleTest(node)
+                              }}
                             >
                               {testing ? <LoadingOutlined /> : <ApiOutlined />}
                             </button>
@@ -1035,7 +1035,10 @@ function SshClient(): React.JSX.Element {
                               type="button"
                               className={BTN_ICON}
                               title={t('sshClientNewSession')}
-                              onClick={() => openOrFocusTab(node, true)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openOrFocusTab(node, true)
+                              }}
                             >
                               <CodeOutlined />
                             </button>
@@ -1043,7 +1046,8 @@ function SshClient(): React.JSX.Element {
                               type="button"
                               className={BTN_ICON}
                               title={t('sshEdit')}
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation()
                                 setEditing(node)
                                 setEditorOpen(true)
                               }}
@@ -1054,7 +1058,10 @@ function SshClient(): React.JSX.Element {
                               type="button"
                               className={BTN_ICON}
                               title={t('sshDelete')}
-                              onClick={() => handleDeleteNode(node)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDeleteNode(node)
+                              }}
                             >
                               <DeleteOutlined />
                             </button>
