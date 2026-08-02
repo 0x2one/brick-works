@@ -857,7 +857,7 @@ function SshTunnel(): React.JSX.Element {
   ]
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col gap-4">
       <div className="sticky top-0 z-10 bg-[var(--content-bg)]">
         <p className="text-xs text-[var(--text-secondary)] pt-6 px-6 pb-2">{t('sshDesc')}</p>
         <div className="flex items-center border-b border-[var(--border-subtle)] px-6">
