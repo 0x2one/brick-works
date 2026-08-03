@@ -384,14 +384,19 @@ function seedAllowedPaths(): void {
 function confirmNewHostKey(host: string, port: number, fingerprint: string): boolean {
   const short =
     fingerprint.length > 48 ? `${fingerprint.slice(0, 24)}…${fingerprint.slice(-16)}` : fingerprint
+  const zh = lanLang !== 'en'
   const options: Electron.MessageBoxSyncOptions = {
-    type: 'warning',
-    buttons: ['Trust', 'Cancel'],
-    defaultId: 1,
+    type: 'question',
+    buttons: zh ? ['信任并继续', '取消'] : ['Trust', 'Cancel'],
+    defaultId: 0,
     cancelId: 1,
-    title: 'SSH Host Key',
-    message: `Unknown host key for ${host}:${port}`,
-    detail: `Fingerprint (base64):\n${short}\n\nOnly trust this host if you expected this connection.`
+    title: zh ? 'SSH 主机密钥确认' : 'SSH Host Key',
+    message: zh
+      ? `首次连接 ${host}:${port}，是否信任该主机？`
+      : `Trust host ${host}:${port} for the first connection?`,
+    detail: zh
+      ? `指纹 (base64):\n${short}\n\n仅在确认目标主机无误时选择信任。跳板连接时，跳板机与目标机各自需要确认一次。`
+      : `Fingerprint (base64):\n${short}\n\nOnly trust this host if you expected this connection. When using a jump host, each hop may ask once.`
   }
   const result = mainWindow
     ? dialog.showMessageBoxSync(mainWindow, options)
