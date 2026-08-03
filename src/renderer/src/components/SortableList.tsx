@@ -117,9 +117,12 @@ export function SortableList<T extends IdItem>({
   const handleDragEnd = (event: DragEndEvent): void => {
     const { active, over } = event
     setActiveId(null)
-    if (!over || active.id === over.id) return
-    const oldIndex = items.findIndex((item) => item.id === active.id)
-    const newIndex = items.findIndex((item) => item.id === over.id)
+    if (!over) return
+    const activeIdStr = String(active.id)
+    const overIdStr = String(over.id)
+    if (activeIdStr === overIdStr) return
+    const oldIndex = items.findIndex((item) => item.id === activeIdStr)
+    const newIndex = items.findIndex((item) => item.id === overIdStr)
     if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return
     onReorder(arrayMove(items, oldIndex, newIndex))
   }
@@ -144,14 +147,14 @@ export function SortableList<T extends IdItem>({
       <DragOverlay dropAnimation={dropAnimation}>
         {activeItem
           ? (renderOverlay?.(activeItem) ?? (
-              <div className="pointer-events-none shadow-[0_12px_28px_rgba(0,0,0,0.18)] scale-[1.02]">
+              <div className="pointer-events-none rounded-lg shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
                 {children(activeItem, {
                   setNodeRef: () => {},
                   setActivatorNodeRef: () => {},
                   style: { opacity: 1 },
                   attributes: {} as DraggableAttributes,
                   listeners: undefined,
-                  isDragging: true
+                  isDragging: false
                 })}
               </div>
             ))

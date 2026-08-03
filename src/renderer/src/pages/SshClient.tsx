@@ -431,12 +431,23 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       .catch(() => {})
   }, [])
 
-  const persistNodeOrder = useCallback((next: SshNodeView[]) => {
-    setNodes(next)
-    void window.api.ssh.reorderNodes(next.map((n) => n.id)).catch(() => {
-      loadNodes()
-    })
-  }, [loadNodes])
+  const persistNodeOrder = useCallback(
+    (next: SshNodeView[]) => {
+      setNodes(next)
+      void (async () => {
+        try {
+          if (typeof window.api.ssh.reorderNodes !== 'function') {
+            throw new Error('REORDER_UNSUPPORTED')
+          }
+          const saved = await window.api.ssh.reorderNodes(next.map((n) => n.id))
+          setNodes(saved)
+        } catch {
+          loadNodes()
+        }
+      })()
+    },
+    [loadNodes]
+  )
 
   useEffect(() => {
     loadNodes()
@@ -1005,13 +1016,21 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                 </Empty>
               )
             ) : (
-              <SortableList items={nodes} onReorder={persistNodeOrder} className="py-2">
+              <SortableList
+                items={nodes}
+                onReorder={persistNodeOrder}
+                className="py-2 px-1.5 flex flex-col gap-1.5"
+              >
                 {(node, api) => {
                   const selected = activeTab?.nodeId === node.id
                   const testing = testingId === node.id
                   if (sidebarCollapsed) {
                     return (
-                      <div ref={api.setNodeRef} style={api.style} className="flex justify-center">
+                      <div
+                        ref={api.setNodeRef}
+                        style={api.style}
+                        className="mx-auto w-8 h-8"
+                      >
                         <Tooltip title={node.name} placement="right">
                           <button
                             type="button"
@@ -1019,7 +1038,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                             {...api.attributes}
                             {...api.listeners}
                             onClick={() => openOrFocusTab(node)}
-                            className={`my-1 w-8 h-8 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing border border-dashed ${
+                            className={`w-8 h-8 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing border border-dashed ${
                               selected
                                 ? 'border-[var(--accent)]/40 bg-[var(--accent)]/15 text-[var(--accent)]'
                                 : 'border-[var(--border-subtle)] bg-[var(--bg-warm)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]/40'
@@ -1035,11 +1054,11 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                     <div
                       ref={api.setNodeRef}
                       style={api.style}
-                      className={`group mx-1.5 mb-1.5 rounded-lg px-2.5 py-2 cursor-pointer border border-dashed transition-colors ${
+                      className={`group rounded-lg px-2.5 py-2 cursor-pointer border border-dashed transition-colors ${
                         selected
                           ? 'border-[var(--accent)]/45 bg-[var(--accent)]/10'
                           : 'border-[var(--border-subtle)] bg-[var(--bg-warm)] hover:border-[var(--text-secondary)]/35 hover:bg-[var(--bg-warm)]'
-                      }${api.isDragging ? ' shadow-sm' : ''}`}
+                      }${api.isDragging ? ' shadow-sm !bg-transparent' : ''}`}
                       onClick={() => openOrFocusTab(node)}
                       onDoubleClick={() => openOrFocusTab(node, true)}
                     >

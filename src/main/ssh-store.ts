@@ -40,6 +40,8 @@ export interface SshNode {
   port: number
   username: string
   auth: SshAuthConfig
+  /** Display order; lower first */
+  sortOrder: number
   createdAt: number
   updatedAt: number
 }
@@ -85,6 +87,7 @@ interface StoredNode {
   password: StoredSecret | null
   privateKeyPath: string | null
   passphrase: StoredSecret | null
+  sortOrder?: number
   createdAt: number
   updatedAt: number
 }
@@ -107,8 +110,8 @@ interface StoredTunnel {
 }
 
 interface StoreFile {
-  /** v1: nodes listed by createdAt; v2+: file array order is display order */
-  version: 1 | 2
+  /** v1: createdAt order; v2+: array/Map order; v3+: explicit sortOrder */
+  version: 1 | 2 | 3
   nodes: StoredNode[]
   tunnels?: StoredTunnel[]
   knownHosts?: Record<string, string>
@@ -166,12 +169,13 @@ function toStored(node: SshNode): StoredNode {
     password: encryptSecret(node.auth.password),
     privateKeyPath: node.auth.privateKeyPath ?? null,
     passphrase: encryptSecret(node.auth.passphrase),
+    sortOrder: node.sortOrder,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt
   }
 }
 
-function fromStored(stored: StoredNode): SshNode {
+function fromStored(stored: StoredNode, fallbackOrder: number): SshNode {
   return {
     id: stored.id,
     name: stored.name,
@@ -184,6 +188,7 @@ function fromStored(stored: StoredNode): SshNode {
       privateKeyPath: stored.privateKeyPath ?? undefined,
       passphrase: decryptSecret(stored.passphrase)
     },
+    sortOrder: typeof stored.sortOrder === 'number' ? stored.sortOrder : fallbackOrder,
     createdAt: stored.createdAt,
     updatedAt: stored.updatedAt
   }
@@ -298,14 +303,30 @@ export function createSshStore(): SshStore {
       const data = JSON.parse(raw) as StoreFile
       let nodeArr = Array.isArray(data?.nodes) ? data.nodes : []
       nodeArr = nodeArr.filter((n) => n && typeof n.id === 'string')
-      // v1 listed by createdAt; keep that order when upgrading so UI doesn't jump
-      let versionMigrated = false
-      if ((data?.version ?? 1) < 2) {
+      const fileVersion = data?.version ?? 1
+      let needsPersist = false
+      // v1 listed by createdAt in UI
+      if (fileVersion < 2) {
         nodeArr = nodeArr
           .slice()
           .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0) || a.id.localeCompare(b.id))
-        versionMigrated = true
+        needsPersist = true
       }
+      // Ensure every node has a stable sortOrder
+      nodeArr.forEach((n, i) => {
+        if (typeof n.sortOrder !== 'number') {
+          n.sortOrder = i
+          needsPersist = true
+        }
+      })
+      nodeArr = nodeArr
+        .slice()
+        .sort(
+          (a, b) =>
+            (a.sortOrder ?? 0) - (b.sortOrder ?? 0) ||
+            (a.createdAt ?? 0) - (b.createdAt ?? 0) ||
+            a.id.localeCompare(b.id)
+        )
       const storedNodes = nodeArr
       const tunArr = Array.isArray(data?.tunnels) ? data.tunnels : []
       const storedTunnels = tunArr
@@ -315,14 +336,14 @@ export function createSshStore(): SshStore {
           socksUser: t.socksUser ?? null,
           socksPass: t.socksPass ?? null
         }))
-      const secretsMigrated = migratePlaintextSecrets(storedNodes, storedTunnels)
-      nodes = new Map(storedNodes.map((n) => [n.id, fromStored(n)]))
+      if (migratePlaintextSecrets(storedNodes, storedTunnels)) needsPersist = true
+      nodes = new Map(storedNodes.map((n, i) => [n.id, fromStored(n, i)]))
       tunnels = new Map(storedTunnels.map((t) => [t.id, t]))
       const hosts = data?.knownHosts && typeof data.knownHosts === 'object' ? data.knownHosts : {}
       knownHosts = new Map(
         Object.entries(hosts).filter(([k, v]) => typeof k === 'string' && typeof v === 'string')
       )
-      if (secretsMigrated || versionMigrated) persist()
+      if (needsPersist || fileVersion < 3) persist()
     } catch {
       nodes = new Map()
       tunnels = new Map()
@@ -331,18 +352,17 @@ export function createSshStore(): SshStore {
   }
 
   function persist(): void {
+    const ordered = [...nodes.values()].sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+    )
     const payload: StoreFile = {
-      version: 2,
-      nodes: [...nodes.values()].map(toStored),
+      version: 3,
+      nodes: ordered.map(toStored),
       tunnels: [...tunnels.values()],
       knownHosts: Object.fromEntries(knownHosts)
     }
-    try {
-      mkdirSync(app.getPath('userData'), { recursive: true })
-      writeFileSync(file, JSON.stringify(payload, null, 2), 'utf-8')
-    } catch {
-      // best-effort persistence
-    }
+    mkdirSync(app.getPath('userData'), { recursive: true })
+    writeFileSync(file, JSON.stringify(payload, null, 2), 'utf-8')
   }
 
   return {
@@ -350,7 +370,9 @@ export function createSshStore(): SshStore {
       await load()
     },
     list(): SshNodeView[] {
-      return [...nodes.values()].map(toView)
+      return [...nodes.values()]
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+        .map(toView)
     },
     get(id: string): SshNode | null {
       return nodes.get(id) ?? null
@@ -383,6 +405,7 @@ export function createSshStore(): SshStore {
       ) {
         knownHosts.delete(hostKeyId(existing.host, existing.port))
       }
+      const maxOrder = [...nodes.values()].reduce((m, n) => Math.max(m, n.sortOrder), -1)
       const node: SshNode = {
         id: existing?.id ?? randomUUID(),
         name: input.name.trim(),
@@ -390,10 +413,10 @@ export function createSshStore(): SshStore {
         port,
         username: input.username.trim(),
         auth,
+        sortOrder: existing?.sortOrder ?? maxOrder + 1,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now
       }
-      // Map.set keeps existing key order; new ids append at the end
       nodes.set(node.id, node)
       persist()
       return toView(node)
@@ -405,19 +428,34 @@ export function createSshStore(): SshStore {
         if (tunnel.nodeId === id) tunnels.delete(tunnel.id)
       }
       if (node) knownHosts.delete(hostKeyId(node.host, node.port))
-      if (existed) persist()
+      if (existed) {
+        // Compact sortOrder so gaps don't grow forever
+        const ordered = [...nodes.values()].sort(
+          (a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+        )
+        ordered.forEach((n, i) => {
+          if (n.sortOrder !== i) nodes.set(n.id, { ...n, sortOrder: i })
+        })
+        persist()
+      }
       return existed
     },
     reorder(ids: string[]): SshNodeView[] {
-      const next = new Map<string, SshNode>()
-      for (const id of ids) {
+      const uniqueIds = [...new Set(ids.filter((id) => typeof id === 'string' && nodes.has(id)))]
+      uniqueIds.forEach((id, index) => {
         const node = nodes.get(id)
-        if (node) next.set(id, node)
-      }
-      for (const [id, node] of nodes) {
-        if (!next.has(id)) next.set(id, node)
-      }
-      nodes = next
+        if (!node || node.sortOrder === index) return
+        nodes.set(id, { ...node, sortOrder: index })
+      })
+      // Append any nodes missing from the payload at the end
+      const seen = new Set(uniqueIds)
+      const rest = [...nodes.values()]
+        .filter((n) => !seen.has(n.id))
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+      rest.forEach((node, i) => {
+        const sortOrder = uniqueIds.length + i
+        if (node.sortOrder !== sortOrder) nodes.set(node.id, { ...node, sortOrder })
+      })
       persist()
       return this.list()
     },

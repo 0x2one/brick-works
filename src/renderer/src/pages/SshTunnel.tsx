@@ -649,9 +649,17 @@ function SshTunnel(): React.JSX.Element {
   const persistNodeOrder = useCallback(
     (next: SshNodeView[]) => {
       setNodes(next)
-      void window.api.ssh.reorderNodes(next.map((n) => n.id)).catch(() => {
-        loadNodes()
-      })
+      void (async () => {
+        try {
+          if (typeof window.api.ssh.reorderNodes !== 'function') {
+            throw new Error('REORDER_UNSUPPORTED')
+          }
+          const saved = await window.api.ssh.reorderNodes(next.map((n) => n.id))
+          setNodes(saved)
+        } catch {
+          loadNodes()
+        }
+      })()
     },
     [loadNodes]
   )
