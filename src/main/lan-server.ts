@@ -27,6 +27,12 @@ export interface LanStatus {
   token: string | null
 }
 
+interface UploadSession {
+  nextIndex: number
+  total: number
+  bytes: number
+}
+
 export function getLanIps(): string[] {
   const ips: string[] = []
   const nets = networkInterfaces()
@@ -79,11 +85,15 @@ function langFromUrl(url: string): string {
   return query.get('lang') === 'en' ? 'en' : 'zh'
 }
 
-function extractToken(req: IncomingMessage, query: URLSearchParams): string {
+function extractToken(req: IncomingMessage): string {
   const header = req.headers['x-lan-token']
   if (typeof header === 'string' && header.trim()) return header.trim()
   if (Array.isArray(header) && header[0]?.trim()) return header[0].trim()
-  return (query.get('token') ?? '').trim()
+  return ''
+}
+
+function isInsideRoot(rootDir: string, target: string): boolean {
+  return target === rootDir || target.startsWith(rootDir + sep)
 }
 
 export interface LanServer {
@@ -99,14 +109,48 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
   let port = 0
   let lang: string = initialLang === 'en' ? 'en' : 'zh'
   const tmpRoot = join(rootDir, TMP_DIR)
-  const uploadBytes = new Map<string, number>()
+  const uploadSessions = new Map<string, UploadSession>()
 
-  function resolveSafe(rel: string): string {
-    const clean = decodeURIComponent(rel).replace(/\\/g, '/').replace(/^\/+/, '')
-    const target = resolve(rootDir, clean)
-    if (target !== rootDir && !target.startsWith(rootDir + sep)) {
+  async function assertPathInRoot(target: string): Promise<void> {
+    if (!isInsideRoot(rootDir, target)) throw new HttpError('OUT_OF_RANGE')
+    try {
+      const lst = await fsp.lstat(target)
+      if (lst.isSymbolicLink()) throw new HttpError('OUT_OF_RANGE')
+      const real = await fsp.realpath(target)
+      if (!isInsideRoot(rootDir, real)) throw new HttpError('OUT_OF_RANGE')
+    } catch (err) {
+      if (err instanceof HttpError) throw err
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        // Missing path: walk up to nearest existing ancestor and validate it.
+        let ancestor = resolve(target, '..')
+        for (;;) {
+          try {
+            const lst = await fsp.lstat(ancestor)
+            if (lst.isSymbolicLink()) throw new HttpError('OUT_OF_RANGE')
+            const real = await fsp.realpath(ancestor)
+            if (!isInsideRoot(rootDir, real)) throw new HttpError('OUT_OF_RANGE')
+            return
+          } catch (e) {
+            if (e instanceof HttpError) throw e
+            if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw new HttpError('OUT_OF_RANGE')
+            if (ancestor === rootDir || !isInsideRoot(rootDir, ancestor)) {
+              throw new HttpError('OUT_OF_RANGE')
+            }
+            ancestor = resolve(ancestor, '..')
+          }
+        }
+      }
       throw new HttpError('OUT_OF_RANGE')
     }
+  }
+
+  async function resolveSafe(rel: string): Promise<string> {
+    const clean = decodeURIComponent(rel).replace(/\\/g, '/').replace(/^\/+/, '')
+    const target = resolve(rootDir, clean)
+    if (!isInsideRoot(rootDir, target)) {
+      throw new HttpError('OUT_OF_RANGE')
+    }
+    await assertPathInRoot(target)
     return target
   }
 
@@ -123,8 +167,8 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
     return { ip, port, url: `http://${ip}:${port}/?token=${encodeURIComponent(token)}`, token }
   }
 
-  function assertAuth(req: IncomingMessage, query: URLSearchParams): void {
-    if (extractToken(req, query) !== token) {
+  function assertAuth(req: IncomingMessage): void {
+    if (extractToken(req) !== token) {
       throw new HttpError('AUTH_REQUIRED', 401)
     }
   }
@@ -151,7 +195,7 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
       if (!pathname.startsWith('/api/')) {
         throw new HttpError('NOT_FOUND', 404)
       }
-      assertAuth(req, query)
+      assertAuth(req)
 
       if (pathname === '/api/info') {
         let total = 0
@@ -168,21 +212,25 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
       }
 
       if (pathname === '/api/list') {
-        const dir = resolveSafe(query.get('path') ?? '')
+        const dir = await resolveSafe(query.get('path') ?? '')
         const entries = await fsp.readdir(dir, { withFileTypes: true })
         const items: Array<{ name: string; isDir: boolean; size: number; mtime: number }> = []
         for (const entry of entries) {
           if (entry.name === TMP_DIR) continue
-          let size = 0
-          let mtime = 0
+          const full = join(dir, entry.name)
           try {
-            const s = await fsp.stat(join(dir, entry.name))
-            size = s.size
-            mtime = s.mtimeMs
+            const lst = await fsp.lstat(full)
+            if (lst.isSymbolicLink()) continue
+            const s = lst.isDirectory() ? lst : await fsp.stat(full)
+            items.push({
+              name: entry.name,
+              isDir: lst.isDirectory(),
+              size: lst.isDirectory() ? 0 : s.size,
+              mtime: s.mtimeMs
+            })
           } catch {
-            // broken symlink etc.
+            // broken entry etc.
           }
-          items.push({ name: entry.name, isDir: entry.isDirectory(), size, mtime })
         }
         items.sort((a, b) => {
           if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
@@ -194,7 +242,7 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
 
       if (pathname === '/api/upload' && req.method === 'POST') {
         await fsp.mkdir(tmpRoot, { recursive: true })
-        const dir = resolveSafe(query.get('dir') ?? '')
+        const dir = await resolveSafe(query.get('dir') ?? '')
         const name = basename(decodeURIComponent(query.get('name') ?? ''))
         if (!name || name === '.' || name === '..') {
           throw new HttpError('INVALID_NAME')
@@ -205,47 +253,69 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
         const sessionKey = basename(rawSession)
         const index = Number(query.get('index') ?? '0')
         const total = Number(query.get('total') ?? '1')
-        if (index === 0) uploadBytes.set(sessionKey, 0)
+        if (!Number.isInteger(index) || !Number.isInteger(total) || index < 0 || total < 1) {
+          throw new HttpError('INVALID_SESSION')
+        }
+
+        let session = uploadSessions.get(sessionKey)
+        if (index === 0) {
+          await fsp.rm(tmpFile, { force: true }).catch(() => {})
+          session = { nextIndex: 0, total, bytes: 0 }
+          uploadSessions.set(sessionKey, session)
+        } else if (!session || session.total !== total || index !== session.nextIndex) {
+          throw new HttpError('INVALID_SESSION')
+        }
 
         const limiter = new Transform({
           transform(chunk, _enc, cb) {
-            const prev = uploadBytes.get(sessionKey) ?? 0
-            const next = prev + chunk.length
+            const cur = uploadSessions.get(sessionKey)
+            if (!cur) {
+              cb(new HttpError('INVALID_SESSION'))
+              return
+            }
+            const next = cur.bytes + chunk.length
             if (next > MAX_UPLOAD_BYTES) {
               cb(new HttpError('TOO_LARGE', 413))
               return
             }
-            uploadBytes.set(sessionKey, next)
+            cur.bytes = next
             cb(null, chunk)
           }
         })
 
         try {
-          await pipeline(req, limiter, createWriteStream(tmpFile, { flags: 'a' }))
+          await pipeline(
+            req,
+            limiter,
+            createWriteStream(tmpFile, { flags: index === 0 ? 'w' : 'a' })
+          )
         } catch (err) {
           await fsp.rm(tmpFile, { force: true }).catch(() => {})
-          uploadBytes.delete(sessionKey)
+          uploadSessions.delete(sessionKey)
           throw err
         }
 
-        const isLast = index + 1 >= total
-        if (isLast) {
+        session = uploadSessions.get(sessionKey)
+        if (!session) throw new HttpError('INVALID_SESSION')
+        session.nextIndex = index + 1
+        const done = session.nextIndex >= session.total
+        if (done) {
           await fsp.rename(tmpFile, join(dir, name))
-          uploadBytes.delete(sessionKey)
+          uploadSessions.delete(sessionKey)
         }
-        sendJson(res, 200, { ok: true, done: isLast })
+        sendJson(res, 200, { ok: true, done })
         return
       }
 
       if (pathname === '/api/download') {
-        const file = resolveSafe(query.get('path') ?? '')
-        const s = await fsp.stat(file)
-        if (!s.isFile()) {
-          throw new HttpError('NOT_FILE')
+        const file = await resolveSafe(query.get('path') ?? '')
+        const lst = await fsp.lstat(file)
+        if (lst.isSymbolicLink() || !lst.isFile()) {
+          throw new HttpError(lst.isSymbolicLink() ? 'OUT_OF_RANGE' : 'NOT_FILE')
         }
         res.writeHead(200, {
           'Content-Type': 'application/octet-stream',
-          'Content-Length': s.size,
+          'Content-Length': lst.size,
           'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(basename(file))}`
         })
         await pipeline(createReadStream(file), res)
@@ -253,7 +323,7 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
       }
 
       if (pathname === '/api/mkdir' && req.method === 'POST') {
-        const dir = resolveSafe(query.get('path') ?? '')
+        const dir = await resolveSafe(query.get('path') ?? '')
         await fsp.mkdir(dir, { recursive: true })
         sendJson(res, 200, { ok: true })
         return
@@ -280,7 +350,7 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
       if (server) return getInfo()
       await fsp.mkdir(rootDir, { recursive: true })
       await fsp.rm(tmpRoot, { recursive: true, force: true })
-      uploadBytes.clear()
+      uploadSessions.clear()
       await new Promise<void>((resolveStart, rejectStart) => {
         const srv = createServer((req, res) => {
           handle(req, res).catch(() => {
@@ -313,7 +383,7 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
         })
       }
       port = 0
-      uploadBytes.clear()
+      uploadSessions.clear()
       await fsp.rm(tmpRoot, { recursive: true, force: true }).catch(() => {})
     },
     setLang(next: string): void {

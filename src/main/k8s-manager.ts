@@ -135,6 +135,19 @@ function byName(a: string, b: string): number {
   return a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true })
 }
 
+/** Reject kubeconfig users that spawn external auth helpers (RCE risk). */
+function assertNoForbiddenAuth(config: {
+  getUsers: () => Array<{ exec?: unknown; authProvider?: { config?: Record<string, unknown> } }>
+}): void {
+  for (const user of config.getUsers()) {
+    if (user.exec) throw new Error('KUBECONFIG_EXEC_FORBIDDEN')
+    const cfg = user.authProvider?.config
+    if (cfg && (cfg['cmd-path'] || cfg.cmdPath || cfg['cmd-args'] || cfg.cmdArgs)) {
+      throw new Error('KUBECONFIG_EXEC_FORBIDDEN')
+    }
+  }
+}
+
 export interface K8sManager {
   getStatus: () => K8sStatus
   onStatusChange: (cb: (status: K8sStatus) => void) => () => void
@@ -144,6 +157,8 @@ export interface K8sManager {
   onPortForwardStatus: (cb: (list: K8sPortForwardStatus[]) => void) => () => void
   parseContexts: (kubeconfigPath: string) => Promise<K8sContextInfo[]>
   parseContextsFromContent: (content: string) => Promise<K8sContextInfo[]>
+  assertKubeconfigPathSafe: (kubeconfigPath: string) => Promise<void>
+  assertKubeconfigContentSafe: (content: string) => Promise<void>
   connect: (cluster: K8sCluster) => Promise<K8sStatus>
   disconnect: () => Promise<K8sStatus>
   listNamespaces: () => Promise<string[]>
@@ -421,6 +436,7 @@ export function createK8sManager(store: K8sStore): K8sManager {
       await fsp.access(kubeconfigPath)
       const config = new k8s.KubeConfig()
       config.loadFromFile(kubeconfigPath)
+      assertNoForbiddenAuth(config)
       return config.getContexts().map((c) => ({
         name: c.name,
         cluster: c.cluster,
@@ -435,6 +451,7 @@ export function createK8sManager(store: K8sStore): K8sManager {
       const k8s = await loadK8s()
       const config = new k8s.KubeConfig()
       config.loadFromString(trimmed)
+      assertNoForbiddenAuth(config)
       const contexts = config.getContexts()
       if (!contexts.length) throw new Error('NO_CONTEXT')
       return contexts.map((c) => ({
@@ -443,6 +460,23 @@ export function createK8sManager(store: K8sStore): K8sManager {
         user: c.user,
         namespace: c.namespace
       }))
+    },
+
+    async assertKubeconfigPathSafe(kubeconfigPath: string): Promise<void> {
+      const k8s = await loadK8s()
+      await fsp.access(kubeconfigPath)
+      const config = new k8s.KubeConfig()
+      config.loadFromFile(kubeconfigPath)
+      assertNoForbiddenAuth(config)
+    },
+
+    async assertKubeconfigContentSafe(content: string): Promise<void> {
+      const trimmed = content?.trim()
+      if (!trimmed) throw new Error('KUBECONFIG_EMPTY')
+      const k8s = await loadK8s()
+      const config = new k8s.KubeConfig()
+      config.loadFromString(trimmed)
+      assertNoForbiddenAuth(config)
     },
 
     async connect(cluster: K8sCluster): Promise<K8sStatus> {
@@ -471,6 +505,7 @@ export function createK8sManager(store: K8sStore): K8sManager {
         await fsp.access(cluster.kubeconfigPath)
         const config = new k8s.KubeConfig()
         config.loadFromFile(cluster.kubeconfigPath)
+        assertNoForbiddenAuth(config)
         config.setCurrentContext(cluster.context)
         const api = config.makeApiClient(k8s.CoreV1Api)
         await api.listNamespace({ limit: 1 })

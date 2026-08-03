@@ -552,6 +552,7 @@
   "k8sParseFirst": "请先解析 kubeconfig 内容",
   "k8sParseOk": "解析成功",
   "k8sParseFail": "解析 kubeconfig 失败",
+  "k8sExecForbidden": "不支持含 exec / 外部命令认证插件的 kubeconfig（安全限制）",
   "k8sClusterName": "显示名称",
   "k8sClusterNameRequired": "请输入名称",
   "k8sContext": "Context",

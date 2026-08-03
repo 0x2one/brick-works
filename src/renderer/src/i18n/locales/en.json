@@ -552,6 +552,7 @@
   "k8sParseFirst": "Parse the kubeconfig content first",
   "k8sParseOk": "Parsed successfully",
   "k8sParseFail": "Failed to parse kubeconfig",
+  "k8sExecForbidden": "kubeconfig with exec / external auth helpers is not allowed (security)",
   "k8sClusterName": "Display name",
   "k8sClusterNameRequired": "Name is required",
   "k8sContext": "Context",

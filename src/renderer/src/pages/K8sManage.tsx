@@ -76,6 +76,12 @@ function statusColor(state: K8sConnectionState): string {
   return 'default'
 }
 
+function mapK8sError(err: unknown, fallback: string, t: (key: string) => string): string {
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  if (msg === 'KUBECONFIG_EXEC_FORBIDDEN') return t('k8sExecForbidden')
+  return msg || fallback
+}
+
 function matchName(name: string, query: string): boolean {
   const q = query.trim().toLowerCase()
   if (!q) return true
@@ -222,7 +228,11 @@ function K8sManage(): React.JSX.Element {
       {status?.server && (
         <span className="text-xs text-[var(--text-secondary)] truncate">{status.server}</span>
       )}
-      {status?.error && <span className="text-xs text-red-500 truncate">{status.error}</span>}
+      {status?.error && (
+        <span className="text-xs text-red-500 truncate">
+          {status.error === 'KUBECONFIG_EXEC_FORBIDDEN' ? t('k8sExecForbidden') : status.error}
+        </span>
+      )}
     </span>
   )
 
@@ -406,7 +416,7 @@ function K8sManage(): React.JSX.Element {
       await window.api.k8s.connect(selectedClusterId)
       message.success(t('k8sConnected'))
     } catch (err) {
-      message.error(err instanceof Error ? err.message : t('k8sConnectFail'))
+      message.error(mapK8sError(err, t('k8sConnectFail'), t))
     } finally {
       setConnecting(false)
     }
@@ -460,7 +470,7 @@ function K8sManage(): React.JSX.Element {
       setContentParsed(false)
       applyContexts(list)
     } catch (err) {
-      message.error(err instanceof Error ? err.message : t('k8sParseFail'))
+      message.error(mapK8sError(err, t('k8sParseFail'), t))
     } finally {
       setParsing(false)
     }
@@ -481,38 +491,43 @@ function K8sManage(): React.JSX.Element {
     } catch (err) {
       setContentParsed(false)
       setContexts([])
-      message.error(err instanceof Error ? err.message : t('k8sParseFail'))
+      message.error(mapK8sError(err, t('k8sParseFail'), t))
     } finally {
       setParsing(false)
     }
   }
 
   const saveCluster = async (): Promise<void> => {
-    const values = await addForm.validateFields()
-    if (addMode === 'paste') {
-      if (!contentParsed || !kubeconfigContent.trim()) {
-        message.warning(t('k8sParseFirst'))
-        return
+    try {
+      const values = await addForm.validateFields()
+      if (addMode === 'paste') {
+        if (!contentParsed || !kubeconfigContent.trim()) {
+          message.warning(t('k8sParseFirst'))
+          return
+        }
+        await window.api.k8s.saveCluster({
+          name: values.name,
+          kubeconfigContent,
+          context: values.context
+        })
+      } else {
+        if (!kubeconfigPath) {
+          message.warning(t('k8sPickKubeconfig'))
+          return
+        }
+        await window.api.k8s.saveCluster({
+          name: values.name,
+          kubeconfigPath,
+          context: values.context
+        })
       }
-      await window.api.k8s.saveCluster({
-        name: values.name,
-        kubeconfigContent,
-        context: values.context
-      })
-    } else {
-      if (!kubeconfigPath) {
-        message.warning(t('k8sPickKubeconfig'))
-        return
-      }
-      await window.api.k8s.saveCluster({
-        name: values.name,
-        kubeconfigPath,
-        context: values.context
-      })
+      message.success(t('k8sClusterSaved'))
+      setAddOpen(false)
+      await refreshClusters()
+    } catch (err) {
+      if (err && typeof err === 'object' && 'errorFields' in err) return
+      message.error(mapK8sError(err, t('k8sParseFail'), t))
     }
-    message.success(t('k8sClusterSaved'))
-    setAddOpen(false)
-    await refreshClusters()
   }
 
   const deleteCluster = (id: string): void => {

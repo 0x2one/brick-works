@@ -563,26 +563,36 @@
         }
       }
 
-      function withToken(url) {
+      function withLang(url) {
         var sep = url.indexOf('?') >= 0 ? '&' : '?'
-        var next = url + sep + 'lang=' + encodeURIComponent(lang)
-        if (accessToken) next += '&token=' + encodeURIComponent(accessToken)
-        return next
+        return url + sep + 'lang=' + encodeURIComponent(lang)
+      }
+
+      function entryLink(path) {
+        var q = 'token=' + encodeURIComponent(accessToken)
+        if (path) q += '&path=' + encodeURIComponent(path)
+        return location.origin + '/?' + q
+      }
+
+      function stripTokenFromUrl() {
+        var sp = new URLSearchParams(location.search)
+        sp.delete('token')
+        var q = sp.toString()
+        history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash)
+      }
+
+      function syncPathUrl() {
+        var q = currentPath ? 'path=' + encodeURIComponent(currentPath) : ''
+        history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash)
       }
 
       function copyUrl() {
-        copyText(location.origin + '/?token=' + encodeURIComponent(accessToken))
+        copyText(entryLink(currentPath))
       }
 
       function joinPath(a, b) {
         if (!a) return b
         return a.replace(/\/$/, '') + '/' + b
-      }
-
-      function deepLink() {
-        var q = 'token=' + encodeURIComponent(accessToken)
-        if (currentPath) q += '&path=' + encodeURIComponent(currentPath)
-        return location.origin + '/?' + q
       }
 
       function showAuthGate(show) {
@@ -602,7 +612,7 @@
         try {
           await apiJson('/api/info')
           showAuthGate(false)
-          history.replaceState(null, '', deepLink())
+          stripTokenFromUrl()
           await bootApp()
         } catch (e) {
           setAccessToken('')
@@ -614,7 +624,7 @@
         opts = opts || {}
         opts.headers = opts.headers || {}
         if (accessToken) opts.headers['X-Lan-Token'] = accessToken
-        var resp = await fetch(withToken(url), opts)
+        var resp = await fetch(withLang(url), opts)
         var j = {}
         try {
           j = await resp.json()
@@ -716,13 +726,13 @@
       function gotoCrumb(i) {
         currentPath = i === -1 ? '' : crumbPaths[i]
         load()
-        history.replaceState(null, '', deepLink())
+        syncPathUrl()
       }
 
       function goDir(i) {
         currentPath = joinPath(currentPath, items[i].name)
         load()
-        history.replaceState(null, '', deepLink())
+        syncPathUrl()
       }
 
       function renderList() {
@@ -777,30 +787,40 @@
           .join('')
       }
 
-      function download(i) {
+      async function download(i) {
         var it = items[i]
-        location.href = withToken(
-          '/api/download?path=' + encodeURIComponent(joinPath(currentPath, it.name))
-        )
+        try {
+          var resp = await fetch(
+            withLang('/api/download?path=' + encodeURIComponent(joinPath(currentPath, it.name))),
+            { headers: { 'X-Lan-Token': accessToken } }
+          )
+          if (resp.status === 401) {
+            showAuthGate(true)
+            throw new Error(t('authInvalid'))
+          }
+          if (!resp.ok) throw new Error(t('requestFailed'))
+          var blob = await resp.blob()
+          var a = document.createElement('a')
+          a.href = URL.createObjectURL(blob)
+          a.download = it.name
+          document.body.appendChild(a)
+          a.click()
+          a.remove()
+          setTimeout(function () {
+            URL.revokeObjectURL(a.href)
+          }, 1000)
+        } catch (e) {
+          toast(e.message || t('requestFailed'))
+        }
       }
 
       function copyFileLink(i) {
-        copyText(
-          withToken(
-            location.origin +
-              '/api/download?path=' +
-              encodeURIComponent(joinPath(currentPath, items[i].name))
-          )
-        )
+        // API download no longer accepts token in query; share folder entry instead.
+        copyText(entryLink(currentPath))
       }
 
       function copyDirLink(i) {
-        var q =
-          'token=' +
-          encodeURIComponent(accessToken) +
-          '&path=' +
-          encodeURIComponent(joinPath(currentPath, items[i].name))
-        copyText(location.origin + '/?' + q)
+        copyText(entryLink(joinPath(currentPath, items[i].name)))
       }
 
       async function newFolder() {
@@ -970,6 +990,7 @@
       currentPath = initPath ? initPath.replace(/^\/+/, '') : ''
       var urlToken = sp.get('token')
       if (urlToken) setAccessToken(urlToken)
+      if (urlToken) stripTokenFromUrl()
       if (!accessToken) {
         showAuthGate(true)
         renderStatic()

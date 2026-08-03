@@ -259,31 +259,59 @@ export function createSshStore(): SshStore {
   let tunnels = new Map<string, StoredTunnel>()
   let knownHosts = new Map<string, string>()
 
+  function migratePlaintextSecrets(
+    storedNodes: StoredNode[],
+    storedTunnels: StoredTunnel[]
+  ): boolean {
+    if (!safeStorage.isEncryptionAvailable()) return false
+    let changed = false
+    const migrate = (secret: StoredSecret | null): StoredSecret | null => {
+      if (!secret || secret.encrypted) return secret
+      const plain = secret.value
+      if (!plain) return secret
+      try {
+        const next = encryptSecret(plain)
+        if (next) {
+          changed = true
+          return next
+        }
+      } catch {
+        // keep plaintext if encryption fails
+      }
+      return secret
+    }
+    for (const n of storedNodes) {
+      n.password = migrate(n.password)
+      n.passphrase = migrate(n.passphrase)
+    }
+    for (const t of storedTunnels) {
+      t.socksPass = migrate(t.socksPass)
+    }
+    return changed
+  }
+
   async function load(): Promise<void> {
     try {
       const raw = await fsp.readFile(file, 'utf-8')
       const data = JSON.parse(raw) as StoreFile
       const nodeArr = Array.isArray(data?.nodes) ? data.nodes : []
-      nodes = new Map(
-        nodeArr.filter((n) => n && typeof n.id === 'string').map((n) => [n.id, fromStored(n)])
-      )
+      const storedNodes = nodeArr.filter((n) => n && typeof n.id === 'string')
       const tunArr = Array.isArray(data?.tunnels) ? data.tunnels : []
-      tunnels = new Map(
-        tunArr
-          .filter((t) => t && typeof t.id === 'string')
-          .map((t) => [
-            t.id,
-            {
-              ...t,
-              socksUser: t.socksUser ?? null,
-              socksPass: t.socksPass ?? null
-            }
-          ])
-      )
+      const storedTunnels = tunArr
+        .filter((t) => t && typeof t.id === 'string')
+        .map((t) => ({
+          ...t,
+          socksUser: t.socksUser ?? null,
+          socksPass: t.socksPass ?? null
+        }))
+      const shouldPersist = migratePlaintextSecrets(storedNodes, storedTunnels)
+      nodes = new Map(storedNodes.map((n) => [n.id, fromStored(n)]))
+      tunnels = new Map(storedTunnels.map((t) => [t.id, t]))
       const hosts = data?.knownHosts && typeof data.knownHosts === 'object' ? data.knownHosts : {}
       knownHosts = new Map(
         Object.entries(hosts).filter(([k, v]) => typeof k === 'string' && typeof v === 'string')
       )
+      if (shouldPersist) persist()
     } catch {
       nodes = new Map()
       tunnels = new Map()

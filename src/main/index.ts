@@ -1,6 +1,8 @@
 import { app, shell, BrowserWindow, dialog, ipcMain, nativeImage, net } from 'electron'
+import { promises as dns } from 'dns'
 import { join, basename } from 'path'
 import { promises as fsp } from 'fs'
+import { isIP } from 'net'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import iconPng from '../../resources/icon.png?asset'
 import { createLanServer, generateLanToken, type LanStatus } from './lan-server'
@@ -103,6 +105,32 @@ function parseSafeHttpUrl(raw: unknown, opts?: { allowPrivate?: boolean }): URL 
   }
 }
 
+function isPrivateResolvedAddress(address: string, family: number | string): boolean {
+  const fam = typeof family === 'string' ? Number(family) : family
+  if (fam === 4 || isIP(address) === 4) {
+    const parts = address.split('.').map(Number)
+    return isPrivateIpv4(parts)
+  }
+  // IPv6 — reuse hostname checks (loopback / ULA / link-local / mapped)
+  return isPrivateOrLocalHostname(address)
+}
+
+async function assertSafeFetchUrl(url: string): Promise<URL | null> {
+  const parsed = parseSafeHttpUrl(url)
+  if (!parsed) return null
+  const host = parsed.hostname.replace(/^\[|\]$/g, '')
+  // Literal IPs already covered by parseSafeHttpUrl; still resolve hostnames.
+  if (isIP(host)) return parsed
+  try {
+    const records = await dns.lookup(host, { all: true, verbatim: true })
+    if (!records.length) return null
+    if (records.some((r) => isPrivateResolvedAddress(r.address, r.family))) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 async function openExternalSafe(raw: unknown, opts?: { allowPrivate?: boolean }): Promise<void> {
   const u = parseSafeHttpUrl(raw, opts)
   if (!u) return
@@ -110,10 +138,10 @@ async function openExternalSafe(raw: unknown, opts?: { allowPrivate?: boolean })
 }
 
 async function fetchLimitedBytes(url: string, maxBytes: number): Promise<Buffer | null> {
-  // Follow redirects manually so each hop is re-checked against the private-host deny list.
+  // Follow redirects manually so each hop is re-checked (hostname + resolved IPs).
   let current = url
   for (let hop = 0; hop < 5; hop++) {
-    if (!parseSafeHttpUrl(current)) return null
+    if (!(await assertSafeFetchUrl(current))) return null
     const response = await net.fetch(current, { redirect: 'manual' })
     if (response.status >= 300 && response.status < 400) {
       const loc = response.headers.get('location')
@@ -126,7 +154,7 @@ async function fetchLimitedBytes(url: string, maxBytes: number): Promise<Buffer 
       continue
     }
     if (!response.ok) return null
-    if (response.url && !parseSafeHttpUrl(response.url)) return null
+    if (response.url && !(await assertSafeFetchUrl(response.url))) return null
     const len = response.headers.get('content-length')
     if (len && Number(len) > maxBytes) return null
     const reader = response.body?.getReader()
@@ -212,7 +240,7 @@ ipcMain.handle('window:close', () => {
 })
 
 ipcMain.handle('fetch:image', async (_event, url: string): Promise<string | null> => {
-  const safe = parseSafeHttpUrl(url)
+  const safe = await assertSafeFetchUrl(url)
   if (!safe) return null
   try {
     const buffer = await fetchLimitedBytes(safe.toString(), MAX_FETCH_IMAGE_BYTES)
@@ -237,7 +265,7 @@ ipcMain.handle('fetch:image', async (_event, url: string): Promise<string | null
 })
 
 ipcMain.handle('fetch:svg', async (_event, url: string): Promise<string | null> => {
-  const safe = parseSafeHttpUrl(url)
+  const safe = await assertSafeFetchUrl(url)
   if (!safe) return null
   try {
     const buffer = await fetchLimitedBytes(safe.toString(), MAX_FETCH_SVG_BYTES)
@@ -709,13 +737,18 @@ k8sManager.onPortForwardStatus((list) => {
 
 ipcMain.handle('k8s:listClusters', () => k8sStore.list())
 
-ipcMain.handle('k8s:saveCluster', (_event, input: K8sClusterInput) => {
+ipcMain.handle('k8s:saveCluster', async (_event, input: K8sClusterInput) => {
   if (!input?.name?.trim()) throw new Error('NAME_REQUIRED')
   if (!input.kubeconfigPath?.trim() && !input.kubeconfigContent?.trim()) {
     throw new Error('KUBECONFIG_REQUIRED')
   }
   if (!input.context?.trim()) throw new Error('CONTEXT_REQUIRED')
-  if (input.kubeconfigPath?.trim()) assertAllowedLocalPath(input.kubeconfigPath.trim())
+  if (input.kubeconfigContent?.trim()) {
+    await k8sManager.assertKubeconfigContentSafe(input.kubeconfigContent)
+  } else if (input.kubeconfigPath?.trim()) {
+    assertAllowedLocalPath(input.kubeconfigPath.trim())
+    await k8sManager.assertKubeconfigPathSafe(input.kubeconfigPath.trim())
+  }
   return k8sStore.save(input)
 })
 
