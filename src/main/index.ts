@@ -24,6 +24,8 @@ import {
   seedAllowedPaths as seedAllowedPathsInto
 } from './path-allowlist'
 
+const gotTheLock = app.requestSingleInstanceLock()
+
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
@@ -1070,36 +1072,44 @@ app.on('before-quit', (event) => {
   })
 })
 
-app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.brickworks')
-
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    showMainWindow()
   })
 
-  ipcMain.on('ping', () => console.log('pong'))
+  app.whenReady().then(async () => {
+    electronApp.setAppUserModelId('com.brickworks')
 
-  await Promise.all([
-    sshStore.init().catch(() => {}),
-    k8sStore.init().catch(() => {}),
-    stickyStore.init().catch(() => {}),
-    appSettingsStore.init().catch(() => {})
-  ])
-  seedAllowedPaths()
-  broadcastSshStatus()
-  broadcastK8sStatus()
+    app.on('browser-window-created', (_, window) => {
+      optimizer.watchWindowShortcuts(window)
+    })
 
-  createWindow()
-  syncTrayWithSettings()
+    ipcMain.on('ping', () => console.log('pong'))
 
-  app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    } else {
-      showMainWindow()
-    }
+    await Promise.all([
+      sshStore.init().catch(() => {}),
+      k8sStore.init().catch(() => {}),
+      stickyStore.init().catch(() => {}),
+      appSettingsStore.init().catch(() => {})
+    ])
+    seedAllowedPaths()
+    broadcastSshStatus()
+    broadcastK8sStatus()
+
+    createWindow()
+    syncTrayWithSettings()
+
+    app.on('activate', function () {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow()
+      } else {
+        showMainWindow()
+      }
+    })
   })
-})
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin' && !appSettingsStore.get().closeToTray) {
