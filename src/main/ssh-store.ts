@@ -19,6 +19,11 @@ export interface SshTunnelSpec {
   bindPort?: number
   targetHost?: string
   targetPort?: number
+  /** SOCKS5 username (optional; required with socksPass for non-loopback listen) */
+  socksUser?: string
+  /** SOCKS5 password — plaintext in memory; encrypted at rest */
+  socksPass?: string
+  hasSocksPass?: boolean
 }
 
 export interface SshAuthConfig {
@@ -97,6 +102,8 @@ interface StoredTunnel {
   bindPort: number | null
   targetHost: string | null
   targetPort: number | null
+  socksUser: string | null
+  socksPass: StoredSecret | null
 }
 
 interface StoreFile {
@@ -112,10 +119,10 @@ function hostKeyId(host: string, port: number): string {
 
 function encryptSecret(value?: string | null): StoredSecret | null {
   if (!value) return null
-  if (safeStorage.isEncryptionAvailable()) {
-    return { value: safeStorage.encryptString(value).toString('base64'), encrypted: true }
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('ENCRYPTION_UNAVAILABLE')
   }
-  return { value, encrypted: false }
+  return { value: safeStorage.encryptString(value).toString('base64'), encrypted: true }
 }
 
 function decryptSecret(secret: StoredSecret | null): string | undefined {
@@ -124,9 +131,10 @@ function decryptSecret(secret: StoredSecret | null): string | undefined {
     try {
       return safeStorage.decryptString(Buffer.from(secret.value, 'base64'))
     } catch {
-      return secret.value
+      return undefined
     }
   }
+  // Legacy plaintext entries written before encryption was required
   return secret.value
 }
 
@@ -180,7 +188,7 @@ function fromStored(stored: StoredNode): SshNode {
   }
 }
 
-function toStoredTunnel(spec: SshTunnelSpec): StoredTunnel {
+function toStoredTunnel(spec: SshTunnelSpec, socksPass: StoredSecret | null): StoredTunnel {
   return {
     id: spec.id!,
     nodeId: spec.nodeId!,
@@ -193,11 +201,14 @@ function toStoredTunnel(spec: SshTunnelSpec): StoredTunnel {
     bindAddr: spec.bindAddr?.trim() || null,
     bindPort: spec.bindPort ?? null,
     targetHost: spec.targetHost?.trim() || null,
-    targetPort: spec.targetPort ?? null
+    targetPort: spec.targetPort ?? null,
+    socksUser: spec.socksUser?.trim() || null,
+    socksPass
   }
 }
 
 function fromStoredTunnel(s: StoredTunnel): SshTunnelSpec {
+  const socksPass = decryptSecret(s.socksPass)
   return {
     id: s.id,
     nodeId: s.nodeId,
@@ -210,7 +221,10 @@ function fromStoredTunnel(s: StoredTunnel): SshTunnelSpec {
     bindAddr: s.bindAddr ?? undefined,
     bindPort: s.bindPort ?? undefined,
     targetHost: s.targetHost ?? undefined,
-    targetPort: s.targetPort ?? undefined
+    targetPort: s.targetPort ?? undefined,
+    socksUser: s.socksUser ?? undefined,
+    socksPass,
+    hasSocksPass: Boolean(socksPass)
   }
 }
 
@@ -229,7 +243,12 @@ export interface SshStore {
   listTunnels: (nodeId?: string) => SshTunnelSpec[]
   saveTunnel: (spec: SshTunnelSpec) => SshTunnelSpec
   removeTunnel: (id: string) => boolean
-  verifyHostKey: (host: string, port: number, key: Buffer) => boolean
+  verifyHostKey: (
+    host: string,
+    port: number,
+    key: Buffer,
+    confirmNew?: (fingerprint: string) => boolean
+  ) => boolean
   clearHostKey: (host: string, port: number) => boolean
   clearHostKeyByNodeId: (nodeId: string) => boolean
 }
@@ -249,7 +268,18 @@ export function createSshStore(): SshStore {
         nodeArr.filter((n) => n && typeof n.id === 'string').map((n) => [n.id, fromStored(n)])
       )
       const tunArr = Array.isArray(data?.tunnels) ? data.tunnels : []
-      tunnels = new Map(tunArr.filter((t) => t && typeof t.id === 'string').map((t) => [t.id, t]))
+      tunnels = new Map(
+        tunArr
+          .filter((t) => t && typeof t.id === 'string')
+          .map((t) => [
+            t.id,
+            {
+              ...t,
+              socksUser: t.socksUser ?? null,
+              socksPass: t.socksPass ?? null
+            }
+          ])
+      )
       const hosts = data?.knownHosts && typeof data.knownHosts === 'object' ? data.knownHosts : {}
       knownHosts = new Map(
         Object.entries(hosts).filter(([k, v]) => typeof k === 'string' && typeof v === 'string')
@@ -346,7 +376,24 @@ export function createSshStore(): SshStore {
     },
     saveTunnel(input: SshTunnelSpec): SshTunnelSpec {
       if (!input.nodeId) throw new Error('NODE_REQUIRED')
-      const existing = input.id ? tunnels.get(input.id) : undefined
+      const existingStored = input.id ? tunnels.get(input.id) : undefined
+      const existing = existingStored ? fromStoredTunnel(existingStored) : undefined
+
+      // socksPass: undefined = keep existing; '' = clear; non-empty = replace
+      let socksPassSecret: StoredSecret | null = existingStored?.socksPass ?? null
+      let socksUser = pickStr(input.socksUser, existing?.socksUser) ?? null
+      if (input.socksPass !== undefined) {
+        if (!input.socksPass.trim()) {
+          socksPassSecret = null
+          if (input.socksUser !== undefined && !input.socksUser.trim()) socksUser = null
+        } else {
+          socksPassSecret = encryptSecret(input.socksPass.trim())
+        }
+      }
+      if (input.socksUser !== undefined) {
+        socksUser = input.socksUser.trim() || null
+      }
+
       const spec: SshTunnelSpec = {
         id: existing?.id ?? randomUUID(),
         nodeId: input.nodeId,
@@ -359,22 +406,30 @@ export function createSshStore(): SshStore {
         bindAddr: pickStr(input.bindAddr, existing?.bindAddr),
         bindPort: input.bindPort ?? existing?.bindPort ?? undefined,
         targetHost: pickStr(input.targetHost, existing?.targetHost),
-        targetPort: input.targetPort ?? existing?.targetPort ?? undefined
+        targetPort: input.targetPort ?? existing?.targetPort ?? undefined,
+        socksUser: socksUser ?? undefined
       }
-      tunnels.set(spec.id!, toStoredTunnel(spec))
+      const stored = toStoredTunnel(spec, socksPassSecret)
+      tunnels.set(spec.id!, stored)
       persist()
-      return spec
+      return fromStoredTunnel(stored)
     },
     removeTunnel(id: string): boolean {
       const existed = tunnels.delete(id)
       if (existed) persist()
       return existed
     },
-    verifyHostKey(host: string, port: number, key: Buffer): boolean {
+    verifyHostKey(
+      host: string,
+      port: number,
+      key: Buffer,
+      confirmNew?: (fingerprint: string) => boolean
+    ): boolean {
       const id = hostKeyId(host, port)
       const fingerprint = key.toString('base64')
       const known = knownHosts.get(id)
       if (!known) {
+        if (confirmNew && !confirmNew(fingerprint)) return false
         knownHosts.set(id, fingerprint)
         persist()
         return true

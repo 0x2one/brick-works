@@ -86,13 +86,20 @@ function parsePageRanges(
   return { ranges }
 }
 
+const MAX_PDF_BYTES = 50 * 1024 * 1024
+const MAX_TOTAL_PAGES = 500
+
 async function loadPdfItem(file: File): Promise<PdfItem> {
+  if (file.size > MAX_PDF_BYTES) {
+    throw new Error('FILE_TOO_LARGE')
+  }
   const bytes = await file.arrayBuffer()
   const doc = await PDFDocument.load(bytes, { ignoreEncryption: true })
+  const pageCount = doc.getPageCount()
   return {
     id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
     name: file.name,
-    pageCount: doc.getPageCount(),
+    pageCount,
     bytes
   }
 }
@@ -112,15 +119,12 @@ function PdfMergeSplit({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
 
   const resetOutputs = useCallback(() => setOutputs([]), [])
 
-  const handleModeChange = useCallback(
-    (next: Mode) => {
-      setMode(next)
-      setFiles([])
-      setRangeInput('')
-      setOutputs([])
-    },
-    []
-  )
+  const handleModeChange = useCallback((next: Mode) => {
+    setMode(next)
+    setFiles([])
+    setRangeInput('')
+    setOutputs([])
+  }, [])
 
   const handleFilesSelected = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,14 +141,31 @@ function PdfMergeSplit({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
           }
           try {
             loaded.push(await loadPdfItem(file))
-          } catch {
-            message.error(t('pdfMsLoadError', { name: file.name }))
+          } catch (err) {
+            if (err instanceof Error && err.message === 'FILE_TOO_LARGE') {
+              message.error(t('pdfMsFileTooLarge', { name: file.name }))
+            } else {
+              message.error(t('pdfMsLoadError', { name: file.name }))
+            }
           }
         }
         if (mode === 'merge') {
-          setFiles((prev) => [...prev, ...loaded])
+          setFiles((prev) => {
+            const next = [...prev, ...loaded]
+            const pages = next.reduce((sum, f) => sum + f.pageCount, 0)
+            if (pages > MAX_TOTAL_PAGES) {
+              message.error(t('pdfMsTooManyPages', { max: MAX_TOTAL_PAGES }))
+              return prev
+            }
+            return next
+          })
         } else {
-          setFiles(loaded.slice(0, 1))
+          const one = loaded.slice(0, 1)
+          if (one[0] && one[0].pageCount > MAX_TOTAL_PAGES) {
+            message.error(t('pdfMsTooManyPages', { max: MAX_TOTAL_PAGES }))
+          } else {
+            setFiles(one)
+          }
         }
         if (loaded.length) message.success(t('pdfMsLoaded', { count: loaded.length }))
       } finally {
@@ -155,16 +176,19 @@ function PdfMergeSplit({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
     [mode, message, t, resetOutputs]
   )
 
-  const moveFile = useCallback((index: number, dir: -1 | 1) => {
-    setFiles((prev) => {
-      const next = [...prev]
-      const target = index + dir
-      if (target < 0 || target >= next.length) return prev
-      ;[next[index], next[target]] = [next[target], next[index]]
-      return next
-    })
-    resetOutputs()
-  }, [resetOutputs])
+  const moveFile = useCallback(
+    (index: number, dir: -1 | 1) => {
+      setFiles((prev) => {
+        const next = [...prev]
+        const target = index + dir
+        if (target < 0 || target >= next.length) return prev
+        ;[next[index], next[target]] = [next[target], next[index]]
+        return next
+      })
+      resetOutputs()
+    },
+    [resetOutputs]
+  )
 
   const removeFile = useCallback(
     (id: string) => {
@@ -306,7 +330,11 @@ function PdfMergeSplit({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
           <label className={LABEL_CLS}>{t('pdfMsMode')}</label>
           <div className="flex flex-wrap gap-2">
             {(['merge', 'split', 'extract'] as const).map((m) => (
-              <button key={m} onClick={() => handleModeChange(m)} className={`toggle-pill ${mode === m ? 'active' : ''}`}>
+              <button
+                key={m}
+                onClick={() => handleModeChange(m)}
+                className={`toggle-pill ${mode === m ? 'active' : ''}`}
+              >
                 <span className="flex items-center gap-1.5 pill-label">
                   {MODE_ICONS[m]}
                   {t(`pdfMsMode${m.charAt(0).toUpperCase()}${m.slice(1)}`)}
@@ -335,7 +363,13 @@ function PdfMergeSplit({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
           transition-colors duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <FolderOpenOutlined className="text-2xl" />
-        <span>{loading ? t('pdfMsLoading') : acceptMultiple ? t('pdfMsSelectMultiple') : t('pdfMsSelectOne')}</span>
+        <span>
+          {loading
+            ? t('pdfMsLoading')
+            : acceptMultiple
+              ? t('pdfMsSelectMultiple')
+              : t('pdfMsSelectOne')}
+        </span>
         <span className="text-xs opacity-70">{t('pdfMsAcceptHint')}</span>
       </button>
       <input
@@ -352,7 +386,8 @@ function PdfMergeSplit({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <label className={LABEL_CLS + ' mb-0'}>
-              {t('pdfMsFileList')} · {t('pdfMsPageSummary', { files: files.length, pages: totalPages })}
+              {t('pdfMsFileList')} ·{' '}
+              {t('pdfMsPageSummary', { files: files.length, pages: totalPages })}
             </label>
             {mode === 'merge' && (
               <button type="button" onClick={() => fileRef.current?.click()} className={BTN_GHOST}>
@@ -369,9 +404,12 @@ function PdfMergeSplit({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
               >
                 <FilePdfOutlined className="text-[var(--accent)] text-lg shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-[var(--text-primary)] truncate font-medium">{file.name}</div>
+                  <div className="text-sm text-[var(--text-primary)] truncate font-medium">
+                    {file.name}
+                  </div>
                   <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-                    {t('pdfMsPages', { count: file.pageCount })} · {formatSize(file.bytes.byteLength)}
+                    {t('pdfMsPages', { count: file.pageCount })} ·{' '}
+                    {formatSize(file.bytes.byteLength)}
                   </div>
                 </div>
                 {mode === 'merge' && (
@@ -461,19 +499,34 @@ function PdfMergeSplit({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
       {files.length > 0 && (
         <div className="mb-6 flex flex-wrap gap-2">
           {mode === 'merge' && (
-            <button type="button" onClick={handleMerge} disabled={processing || files.length < 2} className={BTN_PRIMARY}>
+            <button
+              type="button"
+              onClick={handleMerge}
+              disabled={processing || files.length < 2}
+              className={BTN_PRIMARY}
+            >
               <MergeCellsOutlined />
               {processing ? t('pdfMsProcessing') : t('pdfMsDoMerge')}
             </button>
           )}
           {mode === 'split' && (
-            <button type="button" onClick={handleSplit} disabled={processing} className={BTN_PRIMARY}>
+            <button
+              type="button"
+              onClick={handleSplit}
+              disabled={processing}
+              className={BTN_PRIMARY}
+            >
               <ScissorOutlined />
               {processing ? t('pdfMsProcessing') : t('pdfMsDoSplit')}
             </button>
           )}
           {mode === 'extract' && (
-            <button type="button" onClick={handleExtract} disabled={processing || !rangeInput.trim()} className={BTN_PRIMARY}>
+            <button
+              type="button"
+              onClick={handleExtract}
+              disabled={processing || !rangeInput.trim()}
+              className={BTN_PRIMARY}
+            >
               <PartitionOutlined />
               {processing ? t('pdfMsProcessing') : t('pdfMsDoExtract')}
             </button>
@@ -503,7 +556,9 @@ function PdfMergeSplit({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
               >
                 <FilePdfOutlined className="text-[var(--accent)] text-lg shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-[var(--text-primary)] truncate font-medium">{out.name}</div>
+                  <div className="text-sm text-[var(--text-primary)] truncate font-medium">
+                    {out.name}
+                  </div>
                   <div className="text-[11px] text-[var(--text-secondary)] mt-0.5">
                     {formatSize(out.bytes.byteLength)}
                   </div>

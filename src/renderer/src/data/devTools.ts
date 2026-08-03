@@ -13,70 +13,70 @@ export const devTools: DevToolItem[] = [
     id: 'random-password',
     nameKey: 'devToolRandomPassword',
     descKey: 'devToolRandomPasswordDesc',
-    tags: ['工具', '安全'],
+    tags: ['devTagTool', 'devTagSecurity'],
     route: '/dev-tools/random-password'
   },
   {
     id: 'image-to-base64',
     nameKey: 'devToolImageToBase64',
     descKey: 'devToolImageToBase64Desc',
-    tags: ['工具', '图片'],
+    tags: ['devTagTool', 'devTagImage'],
     route: '/dev-tools/image-to-base64'
   },
   {
     id: 'json-beautify',
     nameKey: 'devToolJsonBeautify',
     descKey: 'devToolJsonBeautifyDesc',
-    tags: ['工具', 'JSON'],
+    tags: ['devTagTool', 'devTagJson'],
     route: '/dev-tools/json-beautify'
   },
   {
     id: 'codec-converter',
     nameKey: 'devToolCodec',
     descKey: 'devToolCodecDesc',
-    tags: ['工具', '编码'],
+    tags: ['devTagTool', 'devTagCodec'],
     route: '/dev-tools/codec-converter'
   },
   {
     id: 'timestamp-converter',
     nameKey: 'devToolTimestamp',
     descKey: 'devToolTimestampDesc',
-    tags: ['工具', '时间'],
+    tags: ['devTagTool', 'devTagTime'],
     route: '/dev-tools/timestamp-converter'
   },
   {
     id: 'uuid-generator',
     nameKey: 'devToolUuidGen',
     descKey: 'devToolUuidGenDesc',
-    tags: ['工具', '生成'],
+    tags: ['devTagTool', 'devTagGenerate'],
     route: '/dev-tools/uuid-generator'
   },
   {
     id: 'qr-code',
     nameKey: 'devToolQrCode',
     descKey: 'devToolQrCodeDesc',
-    tags: ['工具', '图片'],
+    tags: ['devTagTool', 'devTagImage'],
     route: '/dev-tools/qr-code'
   },
   {
     id: 'svg-to-image',
     nameKey: 'devToolSvgToImg',
     descKey: 'devToolSvgToImgDesc',
-    tags: ['工具', '图片'],
+    tags: ['devTagTool', 'devTagImage'],
     route: '/dev-tools/svg-to-image'
   },
   {
     id: 'pdf-image-annotate',
     nameKey: 'devToolPdfImageAnnotate',
     descKey: 'devToolPdfImageAnnotateDesc',
-    tags: ['工具', '文档', '图片'],
+    tags: ['devTagTool', 'devTagDoc', 'devTagImage'],
     route: '/dev-tools/pdf-image-annotate'
   },
   {
     id: 'pdf-merge-split',
     nameKey: 'devToolPdfMergeSplit',
     descKey: 'devToolPdfMergeSplitDesc',
-    tags: ['工具', '文档'],
+    tags: ['devTagTool', 'devTagDoc'],
     route: '/dev-tools/pdf-merge-split'
   }
 ]
@@ -98,11 +98,15 @@ function loadStats(): Record<string, DevToolStats> {
   }
 }
 
-function saveStats(stats: Record<string, DevToolStats>) {
+function saveStats(stats: Record<string, DevToolStats>): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(stats))
 }
 
-export function useDevToolStats() {
+export function useDevToolStats(): {
+  stats: Record<string, DevToolStats>
+  toggleFavorite: (id: string) => void
+  recordUse: (id: string) => void
+} {
   const [stats, setStats] = useState<Record<string, DevToolStats>>(loadStats)
 
   const toggleFavorite = useCallback((id: string) => {

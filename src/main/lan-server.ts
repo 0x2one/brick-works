@@ -1,16 +1,21 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
+import { randomBytes } from 'crypto'
 import { networkInterfaces } from 'os'
 import { basename, join, resolve, sep } from 'path'
 import { createReadStream, createWriteStream, promises as fsp } from 'fs'
+import { Transform } from 'stream'
 import { pipeline } from 'stream/promises'
 import lanWebHtml from './lan-web/index.html?raw'
 
 const TMP_DIR = '.brickworks-tmp'
+const MAX_UPLOAD_BYTES = 512 * 1024 * 1024
+const SESSION_RE = /^[A-Za-z0-9_-]+$/
 
 export interface LanServerInfo {
   ip: string
   port: number
   url: string
+  token: string
 }
 
 export interface LanStatus {
@@ -19,6 +24,7 @@ export interface LanStatus {
   port: number | null
   url: string | null
   dir: string | null
+  token: string | null
 }
 
 export function getLanIps(): string[] {
@@ -33,6 +39,10 @@ export function getLanIps(): string[] {
   return ips.sort((a, b) => Number(isPrivate(b)) - Number(isPrivate(a)))
 }
 
+export function generateLanToken(): string {
+  return randomBytes(24).toString('base64url')
+}
+
 function sendJson(res: ServerResponse, status: number, obj: unknown): void {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
   res.end(JSON.stringify(obj))
@@ -41,6 +51,9 @@ function sendJson(res: ServerResponse, status: number, obj: unknown): void {
 const ERR_MSGS: Record<string, { zh: string; en: string }> = {
   OUT_OF_RANGE: { zh: '路径超出管理目录范围', en: 'Path is outside the managed folder' },
   INVALID_NAME: { zh: '文件名无效', en: 'Invalid file name' },
+  INVALID_SESSION: { zh: '上传会话无效', en: 'Invalid upload session' },
+  AUTH_REQUIRED: { zh: '需要访问口令', en: 'Access token required' },
+  TOO_LARGE: { zh: '文件过大', en: 'File too large' },
   NOT_FOUND: { zh: '接口不存在', en: 'Endpoint not found' },
   NOT_FILE: { zh: '不是文件', en: 'Not a file' },
   INTERNAL: { zh: '服务器内部错误', en: 'Internal server error' }
@@ -66,6 +79,13 @@ function langFromUrl(url: string): string {
   return query.get('lang') === 'en' ? 'en' : 'zh'
 }
 
+function extractToken(req: IncomingMessage, query: URLSearchParams): string {
+  const header = req.headers['x-lan-token']
+  if (typeof header === 'string' && header.trim()) return header.trim()
+  if (Array.isArray(header) && header[0]?.trim()) return header[0].trim()
+  return (query.get('token') ?? '').trim()
+}
+
 export interface LanServer {
   isRunning: () => boolean
   getInfo: () => LanServerInfo
@@ -74,11 +94,12 @@ export interface LanServer {
   setLang: (lang: string) => void
 }
 
-export function createLanServer(rootDir: string, initialLang = 'zh'): LanServer {
+export function createLanServer(rootDir: string, initialLang = 'zh', token: string): LanServer {
   let server: Server | null = null
   let port = 0
   let lang: string = initialLang === 'en' ? 'en' : 'zh'
   const tmpRoot = join(rootDir, TMP_DIR)
+  const uploadBytes = new Map<string, number>()
 
   function resolveSafe(rel: string): string {
     const clean = decodeURIComponent(rel).replace(/\\/g, '/').replace(/^\/+/, '')
@@ -89,9 +110,23 @@ export function createLanServer(rootDir: string, initialLang = 'zh'): LanServer 
     return target
   }
 
+  function resolveTmpFile(session: string): string {
+    const safe = basename(session)
+    if (!safe || !SESSION_RE.test(safe) || safe !== session) {
+      throw new HttpError('INVALID_SESSION')
+    }
+    return join(tmpRoot, `${safe}.part`)
+  }
+
   function getInfo(): LanServerInfo {
     const ip = getLanIps()[0] ?? '127.0.0.1'
-    return { ip, port, url: `http://${ip}:${port}/` }
+    return { ip, port, url: `http://${ip}:${port}/?token=${encodeURIComponent(token)}`, token }
+  }
+
+  function assertAuth(req: IncomingMessage, query: URLSearchParams): void {
+    if (extractToken(req, query) !== token) {
+      throw new HttpError('AUTH_REQUIRED', 401)
+    }
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -112,6 +147,11 @@ export function createLanServer(rootDir: string, initialLang = 'zh'): LanServer 
         res.end()
         return
       }
+
+      if (!pathname.startsWith('/api/')) {
+        throw new HttpError('NOT_FOUND', 404)
+      }
+      assertAuth(req, query)
 
       if (pathname === '/api/info') {
         let total = 0
@@ -159,14 +199,39 @@ export function createLanServer(rootDir: string, initialLang = 'zh'): LanServer 
         if (!name || name === '.' || name === '..') {
           throw new HttpError('INVALID_NAME')
         }
-        const session = decodeURIComponent(query.get('session') ?? '') || String(Date.now())
+        const rawSession =
+          decodeURIComponent(query.get('session') ?? '') || randomBytes(16).toString('hex')
+        const tmpFile = resolveTmpFile(rawSession)
+        const sessionKey = basename(rawSession)
         const index = Number(query.get('index') ?? '0')
         const total = Number(query.get('total') ?? '1')
-        const tmpFile = join(tmpRoot, `${session}.part`)
-        await pipeline(req, createWriteStream(tmpFile, { flags: 'a' }))
+        if (index === 0) uploadBytes.set(sessionKey, 0)
+
+        const limiter = new Transform({
+          transform(chunk, _enc, cb) {
+            const prev = uploadBytes.get(sessionKey) ?? 0
+            const next = prev + chunk.length
+            if (next > MAX_UPLOAD_BYTES) {
+              cb(new HttpError('TOO_LARGE', 413))
+              return
+            }
+            uploadBytes.set(sessionKey, next)
+            cb(null, chunk)
+          }
+        })
+
+        try {
+          await pipeline(req, limiter, createWriteStream(tmpFile, { flags: 'a' }))
+        } catch (err) {
+          await fsp.rm(tmpFile, { force: true }).catch(() => {})
+          uploadBytes.delete(sessionKey)
+          throw err
+        }
+
         const isLast = index + 1 >= total
         if (isLast) {
           await fsp.rename(tmpFile, join(dir, name))
+          uploadBytes.delete(sessionKey)
         }
         sendJson(res, 200, { ok: true, done: isLast })
         return
@@ -215,6 +280,7 @@ export function createLanServer(rootDir: string, initialLang = 'zh'): LanServer 
       if (server) return getInfo()
       await fsp.mkdir(rootDir, { recursive: true })
       await fsp.rm(tmpRoot, { recursive: true, force: true })
+      uploadBytes.clear()
       await new Promise<void>((resolveStart, rejectStart) => {
         const srv = createServer((req, res) => {
           handle(req, res).catch(() => {
@@ -247,6 +313,7 @@ export function createLanServer(rootDir: string, initialLang = 'zh'): LanServer 
         })
       }
       port = 0
+      uploadBytes.clear()
       await fsp.rm(tmpRoot, { recursive: true, force: true }).catch(() => {})
     },
     setLang(next: string): void {

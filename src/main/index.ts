@@ -3,14 +3,27 @@ import { join, basename } from 'path'
 import { promises as fsp } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import iconPng from '../../resources/icon.png?asset'
-import { createLanServer, type LanStatus } from './lan-server'
+import { createLanServer, generateLanToken, type LanStatus } from './lan-server'
 import { createSshStore, type SshNodeInput } from './ssh-store'
-import { createSshManager, type SshTunnelSpec, type SshTunnelType } from './ssh-manager'
+import {
+  createSshManager,
+  isLoopbackAddr,
+  type SshTunnelSpec,
+  type SshTunnelType
+} from './ssh-manager'
 import { createSshClientManager, type SshShellStartOpts } from './ssh-client-manager'
 import { createK8sStore, defaultKubeconfigPath, type K8sClusterInput } from './k8s-store'
 import { createK8sManager } from './k8s-manager'
+import {
+  allowLocalPath,
+  assertAllowedLocalPath,
+  seedAllowedPaths as seedAllowedPathsInto
+} from './path-allowlist'
 
 let mainWindow: BrowserWindow | null = null
+
+const MAX_FETCH_IMAGE_BYTES = 10 * 1024 * 1024
+const MAX_FETCH_SVG_BYTES = 2 * 1024 * 1024
 
 function sendToRenderer(channel: string, ...args: unknown[]): void {
   const win = mainWindow
@@ -18,6 +31,126 @@ function sendToRenderer(channel: string, ...args: unknown[]): void {
   const wc = win.webContents
   if (!wc || wc.isDestroyed()) return
   wc.send(channel, ...args)
+}
+
+function isPrivateIpv4(parts: number[]): boolean {
+  if (parts.length !== 4 || parts.some((n) => n < 0 || n > 255)) return true
+  const [a, b] = parts
+  if (a === 127 || a === 10 || a === 0) return true
+  if (a === 192 && b === 168) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 100 && b >= 64 && b <= 127) return true
+  if (a === 169 && b === 254) return true
+  return false
+}
+
+function isPrivateOrLocalHostname(hostname: string): boolean {
+  const host = hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+  if (
+    host === 'localhost' ||
+    host === '0.0.0.0' ||
+    host === '::1' ||
+    host === '::' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local')
+  ) {
+    return true
+  }
+  if (host === '169.254.169.254' || host.startsWith('169.254.')) return true
+
+  // IPv4-mapped IPv6: ::ffff:127.0.0.1 or ::ffff:7f00:1
+  const mappedDotted = host.match(/^::ffff:(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (mappedDotted) {
+    return isPrivateIpv4(mappedDotted.slice(1).map(Number))
+  }
+  const mappedHex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/)
+  if (mappedHex) {
+    const hi = parseInt(mappedHex[1], 16)
+    const lo = parseInt(mappedHex[2], 16)
+    return isPrivateIpv4([(hi >> 8) & 0xff, hi & 0xff, (lo >> 8) & 0xff, lo & 0xff])
+  }
+
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (ipv4) {
+    return isPrivateIpv4(ipv4.slice(1).map(Number))
+  }
+  // IPv6 ULA / link-local / loopback
+  if (host.includes(':')) {
+    if (
+      host === '::1' ||
+      host.startsWith('fc') ||
+      host.startsWith('fd') ||
+      host.startsWith('fe80')
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+function parseSafeHttpUrl(raw: unknown, opts?: { allowPrivate?: boolean }): URL | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null
+  try {
+    const u = new URL(raw.trim())
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    if (!opts?.allowPrivate && isPrivateOrLocalHostname(u.hostname)) return null
+    return u
+  } catch {
+    return null
+  }
+}
+
+async function openExternalSafe(raw: unknown, opts?: { allowPrivate?: boolean }): Promise<void> {
+  const u = parseSafeHttpUrl(raw, opts)
+  if (!u) return
+  await shell.openExternal(u.toString())
+}
+
+async function fetchLimitedBytes(url: string, maxBytes: number): Promise<Buffer | null> {
+  // Follow redirects manually so each hop is re-checked against the private-host deny list.
+  let current = url
+  for (let hop = 0; hop < 5; hop++) {
+    if (!parseSafeHttpUrl(current)) return null
+    const response = await net.fetch(current, { redirect: 'manual' })
+    if (response.status >= 300 && response.status < 400) {
+      const loc = response.headers.get('location')
+      if (!loc) return null
+      try {
+        current = new URL(loc, current).toString()
+      } catch {
+        return null
+      }
+      continue
+    }
+    if (!response.ok) return null
+    if (response.url && !parseSafeHttpUrl(response.url)) return null
+    const len = response.headers.get('content-length')
+    if (len && Number(len) > maxBytes) return null
+    const reader = response.body?.getReader()
+    if (!reader) {
+      const buf = Buffer.from(await response.arrayBuffer())
+      return buf.length > maxBytes ? null : buf
+    }
+    const chunks: Uint8Array[] = []
+    let total = 0
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) {
+        total += value.byteLength
+        if (total > maxBytes) {
+          await reader.cancel().catch(() => {})
+          return null
+        }
+        chunks.push(value)
+      }
+    }
+    return Buffer.concat(chunks.map((c) => Buffer.from(c)))
+  }
+  return null
 }
 
 function createWindow(): void {
@@ -51,7 +184,7 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    void openExternalSafe(details.url)
     return { action: 'deny' }
   })
 
@@ -79,23 +212,37 @@ ipcMain.handle('window:close', () => {
 })
 
 ipcMain.handle('fetch:image', async (_event, url: string): Promise<string | null> => {
+  const safe = parseSafeHttpUrl(url)
+  if (!safe) return null
   try {
-    const response = await net.fetch(url)
-    if (!response.ok) return null
-    const buffer = Buffer.from(await response.arrayBuffer())
-    const contentType = response.headers.get('content-type') || 'image/png'
-    const base64 = buffer.toString('base64')
-    return `data:${contentType};base64,${base64}`
+    const buffer = await fetchLimitedBytes(safe.toString(), MAX_FETCH_IMAGE_BYTES)
+    if (!buffer) return null
+    const responseType = 'image/png'
+    // Re-fetch headers via HEAD is skipped; sniff from extension / default
+    const ext = safe.pathname.toLowerCase()
+    const contentType =
+      ext.endsWith('.jpg') || ext.endsWith('.jpeg')
+        ? 'image/jpeg'
+        : ext.endsWith('.gif')
+          ? 'image/gif'
+          : ext.endsWith('.webp')
+            ? 'image/webp'
+            : ext.endsWith('.svg')
+              ? 'image/svg+xml'
+              : responseType
+    return `data:${contentType};base64,${buffer.toString('base64')}`
   } catch {
     return null
   }
 })
 
 ipcMain.handle('fetch:svg', async (_event, url: string): Promise<string | null> => {
+  const safe = parseSafeHttpUrl(url)
+  if (!safe) return null
   try {
-    const response = await net.fetch(url)
-    if (!response.ok) return null
-    return await response.text()
+    const buffer = await fetchLimitedBytes(safe.toString(), MAX_FETCH_SVG_BYTES)
+    if (!buffer) return null
+    return buffer.toString('utf-8')
   } catch {
     return null
   }
@@ -123,10 +270,17 @@ let lanServer: ReturnType<typeof createLanServer> | null = null
 
 function lanStatus(): LanStatus {
   if (!lanServer || !lanServer.isRunning()) {
-    return { running: false, ip: null, port: null, url: null, dir: lanDir }
+    return { running: false, ip: null, port: null, url: null, dir: lanDir, token: null }
   }
   const info = lanServer.getInfo()
-  return { running: true, ip: info.ip, port: info.port, url: info.url, dir: lanDir }
+  return {
+    running: true,
+    ip: info.ip,
+    port: info.port,
+    url: info.url,
+    dir: lanDir,
+    token: info.token
+  }
 }
 
 function broadcastLanStatus(): void {
@@ -135,12 +289,12 @@ function broadcastLanStatus(): void {
 
 ipcMain.handle('lan:status', () => lanStatus())
 
-ipcMain.handle('lan:start', async (_event, dir?: string, lang?: string) => {
-  if (dir && typeof dir === 'string') lanDir = dir
+ipcMain.handle('lan:start', async (_event, _dir?: string, lang?: string) => {
+  // Ignore renderer-supplied dir; only chooseDir / default Downloads may set lanDir.
   if (lang === 'en' || lang === 'zh') lanLang = lang
   if (!lanDir) lanDir = app.getPath('downloads')
   if (lanServer?.isRunning()) return lanStatus()
-  lanServer = createLanServer(lanDir, lanLang)
+  lanServer = createLanServer(lanDir, lanLang, generateLanToken())
   try {
     await lanServer.start()
     broadcastLanStatus()
@@ -171,8 +325,9 @@ ipcMain.handle('lan:chooseDir', async () => {
   return lanDir
 })
 
-ipcMain.handle('lan:openBrowser', (_event, url: string) => {
-  shell.openExternal(url)
+ipcMain.handle('lan:openBrowser', async (_event, url: string) => {
+  // LAN share links intentionally target private IPs on the local network.
+  await openExternalSafe(url, { allowPrivate: true })
 })
 
 ipcMain.handle('lan:openDir', async () => {
@@ -188,15 +343,45 @@ ipcMain.handle('lan:setLang', (_event, lang?: string) => {
   return lanLang
 })
 
+/* ── Path allowlist (dialog-selected + already-persisted paths) ── */
+
+function seedAllowedPaths(): void {
+  seedAllowedPathsInto([
+    ...sshStore.list().map((n) => n.privateKeyPath),
+    ...k8sStore.list().map((c) => c.kubeconfigPath),
+    defaultKubeconfigPath()
+  ])
+}
+
+function confirmNewHostKey(host: string, port: number, fingerprint: string): boolean {
+  const short =
+    fingerprint.length > 48 ? `${fingerprint.slice(0, 24)}…${fingerprint.slice(-16)}` : fingerprint
+  const options: Electron.MessageBoxSyncOptions = {
+    type: 'warning',
+    buttons: ['Trust', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    title: 'SSH Host Key',
+    message: `Unknown host key for ${host}:${port}`,
+    detail: `Fingerprint (base64):\n${short}\n\nOnly trust this host if you expected this connection.`
+  }
+  const result = mainWindow
+    ? dialog.showMessageBoxSync(mainWindow, options)
+    : dialog.showMessageBoxSync(options)
+  return result === 0
+}
+
 /* ── SSH tunnel service ── */
 
 const sshStore = createSshStore()
 const sshManager = createSshManager({
-  verifyHostKey: (host, port, key) => sshStore.verifyHostKey(host, port, key)
+  verifyHostKey: (host, port, key) =>
+    sshStore.verifyHostKey(host, port, key, (fp) => confirmNewHostKey(host, port, fp))
 })
 const sshClientManager = createSshClientManager({
   getNode: (nodeId) => sshStore.get(nodeId) ?? undefined,
-  verifyHostKey: (host, port, key) => sshStore.verifyHostKey(host, port, key)
+  verifyHostKey: (host, port, key) =>
+    sshStore.verifyHostKey(host, port, key, (fp) => confirmNewHostKey(host, port, fp))
 })
 
 function broadcastSshStatus(): void {
@@ -233,6 +418,9 @@ ipcMain.handle('ssh:listNodes', () => sshStore.list())
 ipcMain.handle('ssh:saveNode', (_event, input: SshNodeInput) => {
   const err = validateNodeInput(input)
   if (err) throw new Error(err)
+  if (input.authType === 'privateKey' && input.privateKeyPath?.trim()) {
+    assertAllowedLocalPath(input.privateKeyPath.trim())
+  }
   return sshStore.save(input)
 })
 
@@ -255,7 +443,7 @@ ipcMain.handle('ssh:chooseKeyFile', async () => {
     ? await dialog.showOpenDialog(mainWindow, options)
     : await dialog.showOpenDialog(options)
   if (result.canceled || !result.filePaths[0]) return null
-  return result.filePaths[0]
+  return allowLocalPath(result.filePaths[0])
 })
 
 ipcMain.handle('ssh:status', () => sshManager.getStatus())
@@ -318,6 +506,15 @@ function validateTunnelSpec(
     return 'PORT_INVALID'
   }
 
+  if (spec.type === 'local') {
+    if (!isLoopbackAddr(spec.listenAddr || '127.0.0.1')) return 'LISTEN_LOOPBACK_REQUIRED'
+  }
+  if (spec.type === 'socks5') {
+    const listenAddr = spec.listenAddr || '127.0.0.1'
+    const hasSocksAuth = Boolean(spec.socksUser?.trim() && (spec.socksPass || spec.hasSocksPass))
+    if (!isLoopbackAddr(listenAddr) && !hasSocksAuth) return 'SOCKS_AUTH_REQUIRED'
+  }
+
   const all = sshStore.listTunnels()
   if (spec.type === 'local' || spec.type === 'socks5') {
     const listenAddr = spec.listenAddr || '127.0.0.1'
@@ -344,25 +541,40 @@ function validateTunnelSpec(
   return null
 }
 
-ipcMain.handle('ssh:listTunnels', () => sshStore.listTunnels())
+function toTunnelView(spec: SshTunnelSpec): SshTunnelSpec {
+  const { socksPass, ...rest } = spec
+  return {
+    ...rest,
+    hasSocksPass: Boolean(socksPass) || Boolean(spec.hasSocksPass)
+  }
+}
+
+ipcMain.handle('ssh:listTunnels', () => sshStore.listTunnels().map(toTunnelView))
 
 ipcMain.handle('ssh:addTunnel', (_event, nodeId: string, spec: SshTunnelSpec) => {
   const err = validateTunnelSpec(spec, nodeId)
   if (err) throw new Error(err)
   const saved = sshStore.saveTunnel({ ...spec, nodeId })
   sshManager.addTunnel(nodeId, saved)
-  return saved
+  return toTunnelView(saved)
 })
 
 ipcMain.handle('ssh:updateTunnel', (_event, nodeId: string, spec: SshTunnelSpec) => {
   if (!spec?.id) throw new Error('TUNNEL_NOT_FOUND')
   const existing = sshStore.listTunnels(nodeId).find((t) => t.id === spec.id)
   if (!existing) throw new Error('TUNNEL_NOT_FOUND')
-  const err = validateTunnelSpec(spec, nodeId, spec.id)
+  const err = validateTunnelSpec(
+    {
+      ...spec,
+      hasSocksPass: Boolean(spec.socksPass?.trim()) || Boolean(existing.hasSocksPass)
+    },
+    nodeId,
+    spec.id
+  )
   if (err) throw new Error(err)
   const saved = sshStore.saveTunnel({ ...spec, nodeId, id: spec.id })
   sshManager.updateTunnel(nodeId, saved)
-  return saved
+  return toTunnelView(saved)
 })
 
 ipcMain.handle('ssh:removeTunnel', (_event, nodeId: string, tunnelId: string) => {
@@ -503,6 +715,7 @@ ipcMain.handle('k8s:saveCluster', (_event, input: K8sClusterInput) => {
     throw new Error('KUBECONFIG_REQUIRED')
   }
   if (!input.context?.trim()) throw new Error('CONTEXT_REQUIRED')
+  if (input.kubeconfigPath?.trim()) assertAllowedLocalPath(input.kubeconfigPath.trim())
   return k8sStore.save(input)
 })
 
@@ -527,14 +740,19 @@ ipcMain.handle('k8s:chooseKubeconfig', async () => {
     ? await dialog.showOpenDialog(mainWindow, options)
     : await dialog.showOpenDialog(options)
   if (result.canceled || !result.filePaths[0]) return null
-  return result.filePaths[0]
+  return allowLocalPath(result.filePaths[0])
 })
 
-ipcMain.handle('k8s:defaultKubeconfig', () => defaultKubeconfigPath())
+ipcMain.handle('k8s:defaultKubeconfig', () => {
+  const p = defaultKubeconfigPath()
+  if (p) allowLocalPath(p)
+  return p
+})
 
-ipcMain.handle('k8s:parseContexts', (_event, kubeconfigPath: string) =>
-  k8sManager.parseContexts(kubeconfigPath)
-)
+ipcMain.handle('k8s:parseContexts', (_event, kubeconfigPath: string) => {
+  assertAllowedLocalPath(kubeconfigPath)
+  return k8sManager.parseContexts(kubeconfigPath)
+})
 
 ipcMain.handle('k8s:parseContextsFromContent', (_event, content: string) =>
   k8sManager.parseContextsFromContent(content)
@@ -681,11 +899,19 @@ ipcMain.handle('k8s:deletePortForward', (_event, id: string) => k8sManager.delet
 
 ipcMain.handle('k8s:listPortForwards', () => k8sManager.listPortForwards())
 
-app.on('will-quit', () => {
-  lanServer?.stop()
-  sshManager.stop()
-  sshClientManager.stop()
-  k8sManager.stop()
+let quittingCleaned = false
+app.on('before-quit', (event) => {
+  if (quittingCleaned) return
+  event.preventDefault()
+  quittingCleaned = true
+  void Promise.allSettled([
+    lanServer?.stop() ?? Promise.resolve(),
+    Promise.resolve(sshManager.stop()),
+    Promise.resolve(sshClientManager.stop()),
+    Promise.resolve(k8sManager.stop())
+  ]).finally(() => {
+    app.exit(0)
+  })
 })
 
 app.whenReady().then(async () => {
@@ -698,6 +924,7 @@ app.whenReady().then(async () => {
   ipcMain.on('ping', () => console.log('pong'))
 
   await Promise.all([sshStore.init().catch(() => {}), k8sStore.init().catch(() => {})])
+  seedAllowedPaths()
   broadcastSshStatus()
   broadcastK8sStatus()
 

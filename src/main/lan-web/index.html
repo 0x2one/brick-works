@@ -279,6 +279,51 @@
         transition: opacity 0.2s;
         z-index: 200;
       }
+      #authGate {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 300;
+        background: var(--bg);
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      #authGate.show {
+        display: flex;
+      }
+      .auth-card {
+        width: 100%;
+        max-width: 360px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+      }
+      .auth-card h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+      .auth-card p {
+        margin: 0 0 16px;
+        color: var(--text-2);
+        font-size: 13px;
+      }
+      .auth-card input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 14px;
+        margin-bottom: 12px;
+        outline: none;
+      }
+      .auth-card input:focus {
+        border-color: var(--accent);
+      }
+      #appRoot.hidden {
+        display: none;
+      }
       .toolbar {
         margin-bottom: 14px;
         display: flex;
@@ -329,42 +374,75 @@
     </style>
   </head>
   <body>
-    <header>
-      <h1><span class="dot"></span><span data-i18n="title">局域快传</span></h1>
-      <div class="header-meta">
-        <span class="mono" id="addr"></span>
-        <span id="rootInfo"></span>
+    <div id="authGate">
+      <div class="auth-card">
+        <h2 data-i18n="authTitle">输入访问口令</h2>
+        <p data-i18n="authHint">请在 BrickWorks 应用中查看一次性口令后填入。</p>
+        <input id="tokenInput" type="password" autocomplete="off" />
+        <button
+          class="btn primary"
+          style="width: 100%"
+          onclick="submitToken()"
+          data-i18n="authSubmit"
+        >
+          进入
+        </button>
       </div>
-      <div class="lang-switch">
-        <button id="langZh" class="lang-btn" onclick="setLang('zh')">中文</button>
-        <button id="langEn" class="lang-btn" onclick="setLang('en')">EN</button>
-      </div>
-      <button class="btn" onclick="copyUrl()" data-i18n="copyLink">复制链接</button>
-      <button class="btn" onclick="load()" data-i18n="refresh">刷新</button>
-    </header>
+    </div>
 
-    <main>
-      <div class="crumbs" id="crumbs"></div>
-
-      <div class="toolbar">
-        <button class="btn primary" onclick="document.getElementById('fileInput').click()" data-i18n="upload">上传文件</button>
-        <button class="btn" onclick="newFolder()" data-i18n="newFolder">新建文件夹</button>
-      </div>
-      <input id="fileInput" type="file" multiple style="display: none" onchange="pickFiles(this.files); this.value=''" />
-
-      <div id="uploads"></div>
-
-      <div class="panel">
-        <div class="list-head">
-          <div data-i18n="name">名称</div>
-          <div data-i18n="size">大小</div>
-          <div data-i18n="modified" class="col-time">修改时间</div>
-          <div data-i18n="actions">操作</div>
+    <div id="appRoot">
+      <header>
+        <h1><span class="dot"></span><span data-i18n="title">局域快传</span></h1>
+        <div class="header-meta">
+          <span class="mono" id="addr"></span>
+          <span id="rootInfo"></span>
         </div>
-        <div id="tbody"></div>
-        <div class="empty" id="empty" style="display: none" data-i18n="empty">此文件夹为空</div>
-      </div>
-    </main>
+        <div class="lang-switch">
+          <button id="langZh" class="lang-btn" onclick="setLang('zh')">中文</button>
+          <button id="langEn" class="lang-btn" onclick="setLang('en')">EN</button>
+        </div>
+        <button class="btn" onclick="copyUrl()" data-i18n="copyLink">复制链接</button>
+        <button class="btn" onclick="load()" data-i18n="refresh">刷新</button>
+      </header>
+
+      <main>
+        <div class="crumbs" id="crumbs"></div>
+
+        <div class="toolbar">
+          <button
+            class="btn primary"
+            onclick="document.getElementById('fileInput').click()"
+            data-i18n="upload"
+          >
+            上传文件
+          </button>
+          <button class="btn" onclick="newFolder()" data-i18n="newFolder">新建文件夹</button>
+        </div>
+        <input
+          id="fileInput"
+          type="file"
+          multiple
+          style="display: none"
+          onchange="
+            pickFiles(this.files)
+            this.value = ''
+          "
+        />
+
+        <div id="uploads"></div>
+
+        <div class="panel">
+          <div class="list-head">
+            <div data-i18n="name">名称</div>
+            <div data-i18n="size">大小</div>
+            <div data-i18n="modified" class="col-time">修改时间</div>
+            <div data-i18n="actions">操作</div>
+          </div>
+          <div id="tbody"></div>
+          <div class="empty" id="empty" style="display: none" data-i18n="empty">此文件夹为空</div>
+        </div>
+      </main>
+    </div>
 
     <div id="drop" data-i18n="drop">松开上传文件</div>
     <div id="toast"></div>
@@ -391,16 +469,25 @@
         created: { zh: '已创建', en: 'Created' },
         done: { zh: '完成', en: 'Done' },
         uploadFailed: { zh: '上传失败', en: 'Upload failed' },
-        download: { zh: '下载', en: 'Download' }
+        download: { zh: '下载', en: 'Download' },
+        authTitle: { zh: '输入访问口令', en: 'Enter Access Token' },
+        authHint: {
+          zh: '请在 BrickWorks 应用中查看一次性口令后填入。',
+          en: 'Enter the one-time token shown in the BrickWorks app.'
+        },
+        authSubmit: { zh: '进入', en: 'Enter' },
+        authInvalid: { zh: '口令无效', en: 'Invalid token' }
       }
 
       var CHUNK = 1024 * 1024
+      var TOKEN_KEY = 'lan-web-token'
       var currentPath = ''
       var items = []
       var crumbPaths = []
       var uploads = {}
       var infoCache = null
       var lang = localStorage.getItem('lan-web-lang') === 'en' ? 'en' : 'zh'
+      var accessToken = sessionStorage.getItem(TOKEN_KEY) || ''
 
       function t(key) {
         return (I18N[key] && I18N[key][lang]) || key
@@ -427,7 +514,15 @@
           return x < 10 ? '0' + x : x
         }
         return (
-          d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes())
+          d.getFullYear() +
+          '-' +
+          p(d.getMonth() + 1) +
+          '-' +
+          p(d.getDate()) +
+          ' ' +
+          p(d.getHours()) +
+          ':' +
+          p(d.getMinutes())
         )
       }
 
@@ -460,19 +555,23 @@
           toast(ok ? t('copied') : t('copyFailed'))
         }
         if (navigator.clipboard && window.isSecureContext) {
-          navigator.clipboard.writeText(text).then(
-            function () {
-              toast(t('copied'))
-            },
-            fallback
-          )
+          navigator.clipboard.writeText(text).then(function () {
+            toast(t('copied'))
+          }, fallback)
         } else {
           fallback()
         }
       }
 
+      function withToken(url) {
+        var sep = url.indexOf('?') >= 0 ? '&' : '?'
+        var next = url + sep + 'lang=' + encodeURIComponent(lang)
+        if (accessToken) next += '&token=' + encodeURIComponent(accessToken)
+        return next
+      }
+
       function copyUrl() {
-        copyText(location.origin + '/')
+        copyText(location.origin + '/?token=' + encodeURIComponent(accessToken))
       }
 
       function joinPath(a, b) {
@@ -481,17 +580,49 @@
       }
 
       function deepLink() {
-        return location.origin + '/?path=' + encodeURIComponent(currentPath)
+        var q = 'token=' + encodeURIComponent(accessToken)
+        if (currentPath) q += '&path=' + encodeURIComponent(currentPath)
+        return location.origin + '/?' + q
+      }
+
+      function showAuthGate(show) {
+        document.getElementById('authGate').classList.toggle('show', show)
+        document.getElementById('appRoot').classList.toggle('hidden', show)
+      }
+
+      function setAccessToken(token) {
+        accessToken = (token || '').trim()
+        if (accessToken) sessionStorage.setItem(TOKEN_KEY, accessToken)
+        else sessionStorage.removeItem(TOKEN_KEY)
+      }
+
+      async function submitToken() {
+        var input = document.getElementById('tokenInput')
+        setAccessToken(input.value)
+        try {
+          await apiJson('/api/info')
+          showAuthGate(false)
+          history.replaceState(null, '', deepLink())
+          await bootApp()
+        } catch (e) {
+          setAccessToken('')
+          toast(t('authInvalid'))
+        }
       }
 
       async function apiJson(url, opts) {
-        var sep = url.indexOf('?') >= 0 ? '&' : '?'
-        url = url + sep + 'lang=' + encodeURIComponent(lang)
-        var resp = await fetch(url, opts)
+        opts = opts || {}
+        opts.headers = opts.headers || {}
+        if (accessToken) opts.headers['X-Lan-Token'] = accessToken
+        var resp = await fetch(withToken(url), opts)
         var j = {}
         try {
           j = await resp.json()
         } catch (e) {}
+        if (resp.status === 401 || j.code === 'AUTH_REQUIRED') {
+          showAuthGate(true)
+          throw new Error(j.error || t('authInvalid'))
+        }
         if (!resp.ok || j.error) throw new Error(j.error || t('requestFailed'))
         return j
       }
@@ -572,7 +703,12 @@
         })
         var html = '<span class="crumb" onclick="gotoCrumb(-1)">' + esc(t('root')) + '</span>'
         parts.forEach(function (p, i) {
-          html += '<span class="sep">/</span><span class="crumb" onclick="gotoCrumb(' + i + ')">' + esc(p) + '</span>'
+          html +=
+            '<span class="sep">/</span><span class="crumb" onclick="gotoCrumb(' +
+            i +
+            ')">' +
+            esc(p) +
+            '</span>'
         })
         el.innerHTML = html
       }
@@ -601,18 +737,40 @@
         tbody.innerHTML = items
           .map(function (it, i) {
             var nameCell = it.isDir
-              ? '<div class="name" onclick="goDir(' + i + ')"><span>📁</span><span class="nm">' + esc(it.name) + '</span></div>'
-              : '<div class="name file"><span>📄</span><span class="nm">' + esc(it.name) + '</span></div>'
+              ? '<div class="name" onclick="goDir(' +
+                i +
+                ')"><span>📁</span><span class="nm">' +
+                esc(it.name) +
+                '</span></div>'
+              : '<div class="name file"><span>📄</span><span class="nm">' +
+                esc(it.name) +
+                '</span></div>'
             var acts = it.isDir
               ? '<button onclick="copyDirLink(' + i + ')">' + esc(t('copyLink')) + '</button>'
-              : '<button onclick="download(' + i + ')">' + esc(t('download')) + '</button>' +
-                '<button onclick="copyFileLink(' + i + ')">' + esc(t('copyLink')) + '</button>'
+              : '<button onclick="download(' +
+                i +
+                ')">' +
+                esc(t('download')) +
+                '</button>' +
+                '<button onclick="copyFileLink(' +
+                i +
+                ')">' +
+                esc(t('copyLink')) +
+                '</button>'
             return (
               '<div class="list-row">' +
-              '<div class="col-name">' + nameCell + '</div>' +
-              '<div class="col-size size">' + (it.isDir ? '—' : fmtSize(it.size)) + '</div>' +
-              '<div class="col-time time">' + fmtTime(it.mtime) + '</div>' +
-              '<div class="col-act act">' + acts + '</div>' +
+              '<div class="col-name">' +
+              nameCell +
+              '</div>' +
+              '<div class="col-size size">' +
+              (it.isDir ? '—' : fmtSize(it.size)) +
+              '</div>' +
+              '<div class="col-time time">' +
+              fmtTime(it.mtime) +
+              '</div>' +
+              '<div class="col-act act">' +
+              acts +
+              '</div>' +
               '</div>'
             )
           })
@@ -621,22 +779,37 @@
 
       function download(i) {
         var it = items[i]
-        location.href = '/api/download?path=' + encodeURIComponent(joinPath(currentPath, it.name))
+        location.href = withToken(
+          '/api/download?path=' + encodeURIComponent(joinPath(currentPath, it.name))
+        )
       }
 
       function copyFileLink(i) {
-        copyText(location.origin + '/api/download?path=' + encodeURIComponent(joinPath(currentPath, items[i].name)))
+        copyText(
+          withToken(
+            location.origin +
+              '/api/download?path=' +
+              encodeURIComponent(joinPath(currentPath, items[i].name))
+          )
+        )
       }
 
       function copyDirLink(i) {
-        copyText(location.origin + '/?path=' + encodeURIComponent(joinPath(currentPath, items[i].name)))
+        var q =
+          'token=' +
+          encodeURIComponent(accessToken) +
+          '&path=' +
+          encodeURIComponent(joinPath(currentPath, items[i].name))
+        copyText(location.origin + '/?' + q)
       }
 
       async function newFolder() {
         var name = prompt(t('enterFolderName'))
         if (!name) return
         try {
-          await apiJson('/api/mkdir?path=' + encodeURIComponent(joinPath(currentPath, name)), { method: 'POST' })
+          await apiJson('/api/mkdir?path=' + encodeURIComponent(joinPath(currentPath, name)), {
+            method: 'POST'
+          })
           toast(t('created'))
           load()
         } catch (e) {
@@ -693,9 +866,17 @@
             var status = u.error ? u.msg : u.done ? t('done') : pct + '%'
             return (
               '<div class="up-row"><div class="up-top">' +
-              '<span class="up-name">' + esc(u.name) + '</span>' +
-              '<span class="up-pct ' + (u.error ? 'up-status' : '') + '">' + esc(status) + '</span>' +
-              '</div><div class="bar"><div style="width:' + pct + '%"></div></div></div>'
+              '<span class="up-name">' +
+              esc(u.name) +
+              '</span>' +
+              '<span class="up-pct ' +
+              (u.error ? 'up-status' : '') +
+              '">' +
+              esc(status) +
+              '</span>' +
+              '</div><div class="bar"><div style="width:' +
+              pct +
+              '%"></div></div></div>'
             )
           })
           .join('')
@@ -703,7 +884,11 @@
 
       async function uploadOne(file) {
         var total = Math.max(1, Math.ceil(file.size / CHUNK))
-        var session = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)).replace(/-/g, '')
+        var session = (
+          crypto.randomUUID
+            ? crypto.randomUUID()
+            : String(Date.now()) + Math.random().toString(16).slice(2)
+        ).replace(/-/g, '')
         var id = addUploadRow(file.name, file.size)
         try {
           var sent = 0
@@ -775,12 +960,30 @@
         }
       })
 
+      async function bootApp() {
+        await loadInfo()
+        await load()
+      }
+
       var sp = new URLSearchParams(location.search)
       var initPath = sp.get('path')
       currentPath = initPath ? initPath.replace(/^\/+/, '') : ''
-      loadInfo()
-      load()
-      setInterval(pollFollow, 3000)
+      var urlToken = sp.get('token')
+      if (urlToken) setAccessToken(urlToken)
+      if (!accessToken) {
+        showAuthGate(true)
+        renderStatic()
+      } else {
+        showAuthGate(false)
+        bootApp().catch(function () {
+          showAuthGate(true)
+        })
+      }
+      setInterval(function () {
+        if (accessToken && !document.getElementById('authGate').classList.contains('show')) {
+          pollFollow()
+        }
+      }, 3000)
     </script>
   </body>
 </html>

@@ -55,7 +55,7 @@ function DevTools(): React.JSX.Element {
     return list
   }, [activeTab, searchText, stats, t])
 
-  const handleCardClick = (id: string, route: string) => {
+  const handleCardClick = (id: string, route: string): void => {
     recordUse(id)
     navigate(route)
   }
@@ -129,7 +129,7 @@ function DevTools(): React.JSX.Element {
                     key={tag}
                     className="px-2 py-0.5 text-xs rounded-md bg-[var(--border-subtle)] text-[var(--text-secondary)]"
                   >
-                    {tag}
+                    {t(tag)}
                   </span>
                 ))}
               </div>

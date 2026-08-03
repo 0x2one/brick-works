@@ -1,5 +1,3 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
-
 interface WindowControls {
   minimize: () => Promise<void>
   maximize: () => Promise<void>
@@ -143,7 +141,6 @@ declare global {
   }
 
   interface Window {
-    electron: ElectronAPI
     api: Api
   }
 }

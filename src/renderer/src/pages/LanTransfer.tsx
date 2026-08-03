@@ -88,9 +88,18 @@ function LanTransfer(): React.JSX.Element {
 
   const running = !!status?.running
   const baseUrl = status?.url ?? ''
-  const deepLink = subdir.trim()
-    ? `${baseUrl.replace(/\/$/, '')}/?path=${encodeURIComponent(subdir.trim())}`
-    : baseUrl
+  const token = status?.token ?? ''
+  const deepLink = (() => {
+    if (!baseUrl) return ''
+    try {
+      const u = new URL(baseUrl)
+      if (subdir.trim()) u.searchParams.set('path', subdir.trim().replace(/^\/+/, ''))
+      else u.searchParams.delete('path')
+      return u.toString()
+    } catch {
+      return baseUrl
+    }
+  })()
 
   return (
     <div className="flex flex-col p-6 gap-4" style={{ height: 'calc(100vh - 56px)' }}>
@@ -190,6 +199,24 @@ function LanTransfer(): React.JSX.Element {
                   {t('lanQrCode')}
                 </button>
               </div>
+
+              {token && (
+                <div>
+                  <label className={LABEL_CLS}>{t('lanToken')}</label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-warm)] text-xs font-mono text-[var(--text-primary)] select-all truncate">
+                      {token}
+                    </code>
+                    <button onClick={() => handleCopy(token)} className={BTN_CLS}>
+                      <CopyOutlined />
+                      {t('lanCopyToken')}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
+                    {t('lanTokenHint')}
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className={LABEL_CLS}>{t('lanSubdir')}</label>

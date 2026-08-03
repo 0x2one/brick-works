@@ -126,6 +126,8 @@ function K8sManage(): React.JSX.Element {
   const [logAutoScroll, setLogAutoScroll] = useState(true)
   const [logText, setLogText] = useState('')
   const [logSessionId, setLogSessionId] = useState<string | null>(null)
+  const logSessionIdRef = useRef<string | null>(null)
+  const LOG_TEXT_MAX = 512 * 1024
   const logPreRef = useRef<HTMLPreElement>(null)
   const logAutoScrollRef = useRef(logAutoScroll)
   const ignoreLogScrollRef = useRef(false)
@@ -197,8 +199,7 @@ function K8sManage(): React.JSX.Element {
 
     const update = (): void => {
       const styles = getComputedStyle(el)
-      const pad =
-        (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0)
+      const pad = (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0)
       setTableScrollY(Math.max(120, Math.floor(el.clientHeight - pad)))
     }
 
@@ -221,9 +222,7 @@ function K8sManage(): React.JSX.Element {
       {status?.server && (
         <span className="text-xs text-[var(--text-secondary)] truncate">{status.server}</span>
       )}
-      {status?.error && (
-        <span className="text-xs text-red-500 truncate">{status.error}</span>
-      )}
+      {status?.error && <span className="text-xs text-red-500 truncate">{status.error}</span>}
     </span>
   )
 
@@ -343,13 +342,27 @@ function K8sManage(): React.JSX.Element {
   }, [connected, namespace, message, t])
 
   useEffect(() => {
+    logSessionIdRef.current = logSessionId
+  }, [logSessionId])
+
+  useEffect(() => {
     if (!logOpen || !logSessionId) return
     const off = window.api.k8s.onLogChunk((chunk) => {
-      if (chunk.sessionId !== logSessionId) return
-      setLogText((prev) => prev + chunk.data)
+      if (chunk.sessionId !== logSessionIdRef.current) return
+      setLogText((prev) => {
+        const next = prev + chunk.data
+        return next.length > LOG_TEXT_MAX ? next.slice(-LOG_TEXT_MAX) : next
+      })
     })
     return off
   }, [logOpen, logSessionId])
+
+  useEffect(() => {
+    return () => {
+      const id = logSessionIdRef.current
+      if (id) void window.api.k8s.stopLogs(id)
+    }
+  }, [])
 
   useEffect(() => {
     if (!logAutoScroll) return
@@ -521,11 +534,13 @@ function K8sManage(): React.JSX.Element {
   }
 
   const stopLogs = useCallback(async () => {
-    if (logSessionId) {
-      await window.api.k8s.stopLogs(logSessionId)
+    const id = logSessionIdRef.current
+    if (id) {
+      logSessionIdRef.current = null
       setLogSessionId(null)
+      await window.api.k8s.stopLogs(id)
     }
-  }, [logSessionId])
+  }, [])
 
   const startLogs = async (pod: K8sPodRow, container?: string, follow = true): Promise<void> => {
     await stopLogs()
@@ -538,6 +553,7 @@ function K8sManage(): React.JSX.Element {
         follow,
         tailLines: 200
       })
+      logSessionIdRef.current = sessionId
       setLogSessionId(sessionId)
     } catch (err) {
       message.error(err instanceof Error ? err.message : t('k8sLogFail'))
@@ -744,7 +760,8 @@ function K8sManage(): React.JSX.Element {
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
-      sorter: (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }),
+      sorter: (a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }),
       defaultSortOrder: 'ascend'
     },
     { title: t('k8sColNamespace'), dataIndex: 'namespace', width: 120, ellipsis: true },
@@ -807,8 +824,7 @@ function K8sManage(): React.JSX.Element {
     }
   ]
 
-  const podScrollX =
-    200 + 120 + 72 + 96 + 72 + 140 + 64 + 128
+  const podScrollX = 200 + 120 + 72 + 96 + 72 + 140 + 64 + 128
 
   const workloadColumns: ColumnsType<K8sWorkloadRow> = [
     { title: t('k8sColKind'), dataIndex: 'kind', width: 120 },
@@ -816,7 +832,8 @@ function K8sManage(): React.JSX.Element {
       title: t('k8sColName'),
       dataIndex: 'name',
       ellipsis: true,
-      sorter: (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }),
+      sorter: (a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }),
       defaultSortOrder: 'ascend'
     },
     { title: t('k8sColNamespace'), dataIndex: 'namespace', width: 120 },
@@ -835,7 +852,8 @@ function K8sManage(): React.JSX.Element {
       title: t('k8sColName'),
       dataIndex: 'name',
       ellipsis: true,
-      sorter: (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }),
+      sorter: (a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }),
       defaultSortOrder: 'ascend'
     },
     { title: t('k8sColNamespace'), dataIndex: 'namespace', width: 120 },
@@ -855,7 +873,8 @@ function K8sManage(): React.JSX.Element {
       title: t('k8sColName'),
       dataIndex: 'name',
       ellipsis: true,
-      sorter: (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }),
+      sorter: (a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }),
       defaultSortOrder: 'ascend'
     },
     { title: t('k8sColNamespace'), dataIndex: 'namespace', width: 120 },
@@ -886,7 +905,13 @@ function K8sManage(): React.JSX.Element {
       render: (s: K8sPortForwardState) => (
         <Tag
           color={
-            s === 'active' ? 'success' : s === 'error' ? 'error' : s === 'starting' ? 'processing' : 'default'
+            s === 'active'
+              ? 'success'
+              : s === 'error'
+                ? 'error'
+                : s === 'starting'
+                  ? 'processing'
+                  : 'default'
           }
         >
           {s}
@@ -1366,7 +1391,9 @@ function K8sManage(): React.JSX.Element {
             </div>
           )}
           <div className="flex items-center gap-3">
-            <span className="text-sm text-[var(--text-secondary)] shrink-0">{t('k8sExecShell')}</span>
+            <span className="text-sm text-[var(--text-secondary)] shrink-0">
+              {t('k8sExecShell')}
+            </span>
             <Segmented
               value={execShell}
               onChange={(v) => {

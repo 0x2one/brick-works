@@ -3,6 +3,7 @@ import { promises as fsp } from 'fs'
 import { dirname, join, basename } from 'path'
 import { randomUUID } from 'crypto'
 import type { SshNode } from './ssh-store'
+import { assertAllowedLocalPath } from './path-allowlist'
 
 export interface SshShellStartOpts {
   nodeId: string
@@ -66,6 +67,7 @@ async function makeConnectConfig(
   if (node.auth.type === 'password' && node.auth.password) {
     cfg.password = node.auth.password
   } else if (node.auth.type === 'privateKey' && node.auth.privateKeyPath) {
+    assertAllowedLocalPath(node.auth.privateKeyPath)
     cfg.privateKey = await fsp.readFile(node.auth.privateKeyPath)
     if (node.auth.passphrase) cfg.passphrase = node.auth.passphrase
   }
@@ -153,6 +155,7 @@ export function createSshClientManager(options: SshClientManagerOptions): {
 } {
   const shells = new Map<string, ShellSession>()
   const sftps = new Map<string, SftpSession>()
+  const sftpInflight = new Map<string, Promise<SftpSession>>()
   const shellDataListeners = new Set<(data: SshShellData) => void>()
   const shellExitListeners = new Set<(data: SshShellExit) => void>()
 
@@ -216,36 +219,61 @@ export function createSshClientManager(options: SshClientManagerOptions): {
   async function ensureSftp(nodeId: string): Promise<SftpSession> {
     const existing = sftps.get(nodeId)
     if (existing) return existing
-    const { client } = await openClient(nodeId)
-    return new Promise((resolve, reject) => {
-      client.sftp((err, sftp) => {
-        if (err || !sftp) {
-          try {
-            client.end()
-          } catch {
-            // ignore
-          }
-          reject(new Error(err?.message || 'SFTP_FAILED'))
-          return
-        }
-        const session: SftpSession = { nodeId, client, sftp }
-        sftps.set(nodeId, session)
-        client.on('close', () => {
-          if (sftps.get(nodeId) === session) sftps.delete(nodeId)
-        })
-        client.on('error', () => {
-          if (sftps.get(nodeId) === session) {
-            sftps.delete(nodeId)
-            try {
-              client.end()
-            } catch {
-              // ignore
+    const inflight = sftpInflight.get(nodeId)
+    if (inflight) return inflight
+
+    const promise = (async (): Promise<SftpSession> => {
+      const { client } = await openClient(nodeId)
+      try {
+        return await new Promise<SftpSession>((resolve, reject) => {
+          client.sftp((err, sftp) => {
+            if (err || !sftp) {
+              try {
+                client.end()
+              } catch {
+                // ignore
+              }
+              reject(new Error(err?.message || 'SFTP_FAILED'))
+              return
             }
-          }
+            const session: SftpSession = { nodeId, client, sftp }
+            const prev = sftps.get(nodeId)
+            if (prev && prev !== session) {
+              try {
+                prev.client.end()
+              } catch {
+                // ignore
+              }
+            }
+            sftps.set(nodeId, session)
+            client.on('close', () => {
+              if (sftps.get(nodeId) === session) sftps.delete(nodeId)
+            })
+            client.on('error', () => {
+              if (sftps.get(nodeId) === session) {
+                sftps.delete(nodeId)
+                try {
+                  client.end()
+                } catch {
+                  // ignore
+                }
+              }
+            })
+            resolve(session)
+          })
         })
-        resolve(session)
-      })
-    })
+      } finally {
+        sftpInflight.delete(nodeId)
+      }
+    })()
+
+    sftpInflight.set(nodeId, promise)
+    try {
+      return await promise
+    } catch (err) {
+      sftpInflight.delete(nodeId)
+      throw err
+    }
   }
 
   function listDir(sftp: SFTPWrapper, remotePath: string): Promise<SshSftpEntry[]> {

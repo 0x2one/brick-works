@@ -396,6 +396,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const copyTipHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notifyCopiedRef = useRef<() => void>(() => {})
+  const loadDirSeqRef = useRef<Map<string, number>>(new Map())
 
   useEffect(() => {
     notifyCopiedRef.current = () => {
@@ -431,6 +432,10 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   useEffect(() => {
     loadNodes()
   }, [loadNodes])
+
+  useEffect(() => {
+    if (active) loadNodes()
+  }, [active, loadNodes])
 
   const destroyTerm = useCallback((tabId: string) => {
     const rt = termsRef.current.get(tabId)
@@ -706,9 +711,12 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
 
   const loadDir = useCallback(
     async (tabId: string, nodeId: string, path: string) => {
+      const seq = (loadDirSeqRef.current.get(tabId) ?? 0) + 1
+      loadDirSeqRef.current.set(tabId, seq)
       setFilesLoading(true)
       try {
         const list = await window.api.ssh.sftpList(nodeId, path)
+        if (loadDirSeqRef.current.get(tabId) !== seq) return
         setEntriesByTab((prev) => ({
           ...prev,
           [tabId]: list.filter((e) => e.name !== '.' && e.name !== '..')
@@ -717,9 +725,10 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
           prev.map((tab) => (tab.id === tabId ? { ...tab, remotePath: path } : tab))
         )
       } catch (err) {
+        if (loadDirSeqRef.current.get(tabId) !== seq) return
         message.error(mapSshError(err, t))
       } finally {
-        setFilesLoading(false)
+        if (loadDirSeqRef.current.get(tabId) === seq) setFilesLoading(false)
       }
     },
     [message, t]

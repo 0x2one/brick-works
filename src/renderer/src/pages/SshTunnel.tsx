@@ -69,6 +69,9 @@ interface TunnelDraft {
   targetHost: string
   targetPort: number
   socksPort: number
+  socksUser: string
+  socksPass: string
+  hasSocksPass: boolean
 }
 
 const DEFAULT_DRAFT: TunnelDraft = {
@@ -82,7 +85,10 @@ const DEFAULT_DRAFT: TunnelDraft = {
   bindPort: 8080,
   targetHost: '127.0.0.1',
   targetPort: 3000,
-  socksPort: 1080
+  socksPort: 1080,
+  socksUser: '',
+  socksPass: '',
+  hasSocksPass: false
 }
 
 function draftFromSpec(spec: SshTunnelSpec): TunnelDraft {
@@ -97,7 +103,10 @@ function draftFromSpec(spec: SshTunnelSpec): TunnelDraft {
     bindPort: spec.bindPort ?? 8080,
     targetHost: spec.targetHost || '127.0.0.1',
     targetPort: spec.targetPort ?? 3000,
-    socksPort: spec.localPort ?? 1080
+    socksPort: spec.localPort ?? 1080,
+    socksUser: spec.socksUser ?? '',
+    socksPass: '',
+    hasSocksPass: Boolean(spec.hasSocksPass)
   }
 }
 
@@ -111,7 +120,9 @@ const SSH_ERROR_CODES = [
   'AUTH_FAILED',
   'RECONNECT_EXHAUSTED',
   'NODE_NOT_FOUND',
-  'TUNNEL_NOT_FOUND'
+  'TUNNEL_NOT_FOUND',
+  'LISTEN_LOOPBACK_REQUIRED',
+  'SOCKS_AUTH_REQUIRED'
 ] as const
 
 function extractSshErrorCode(raw: unknown): string {
@@ -144,6 +155,8 @@ function mapSshError(
   if (code === 'RECONNECT_EXHAUSTED') return t('sshReconnectExhausted')
   if (code === 'NODE_NOT_FOUND') return t('sshNodeNotFound')
   if (code === 'TUNNEL_NOT_FOUND') return t('sshTunnelNotFound')
+  if (code === 'LISTEN_LOOPBACK_REQUIRED') return t('sshListenLoopbackRequired')
+  if (code === 'SOCKS_AUTH_REQUIRED') return t('sshSocksAuthRequired')
   return t('sshConnectFail', { msg: code })
 }
 
@@ -229,7 +242,10 @@ const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function Tunnel
                 type: 'socks5' as const,
                 name: draft.name.trim() || undefined,
                 localPort: draft.socksPort,
-                listenAddr: draft.listenAddr.trim() || '127.0.0.1'
+                listenAddr: draft.listenAddr.trim() || '127.0.0.1',
+                socksUser: draft.socksUser.trim() || undefined,
+                socksPass: draft.socksPass.trim() || undefined,
+                hasSocksPass: draft.hasSocksPass || Boolean(draft.socksPass.trim())
               }
       if (editing?.id) {
         await window.api.ssh.updateTunnel(nodeId, { ...base, id: editing.id })
@@ -241,8 +257,14 @@ const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function Tunnel
       return true
     } catch (err) {
       const code = extractSshErrorCode(err)
-      if (code === 'PORT_CONFLICT' || code === 'PORT_INVALID') onError(mapSshError(code, t))
-      else onError(editing ? t('sshTunnelUpdateFail') : t('sshTunnelAddFail'))
+      if (
+        code === 'PORT_CONFLICT' ||
+        code === 'PORT_INVALID' ||
+        code === 'LISTEN_LOOPBACK_REQUIRED' ||
+        code === 'SOCKS_AUTH_REQUIRED'
+      ) {
+        onError(mapSshError(code, t))
+      } else onError(editing ? t('sshTunnelUpdateFail') : t('sshTunnelAddFail'))
       return false
     } finally {
       onSubmittingChange?.(false)
@@ -298,7 +320,7 @@ const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function Tunnel
               className="w-full"
             />
           </Field>
-          <Field label={t('sshListenAddr')} hint={t('sshListenAddrHint')}>
+          <Field label={t('sshListenAddr')} hint={t('sshListenAddrLocalHint')}>
             <Input
               value={draft.listenAddr}
               onChange={(e) => set('listenAddr', e.target.value)}
@@ -359,24 +381,45 @@ const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function Tunnel
       )}
 
       {draft.type === 'socks5' && (
-        <div className="grid grid-cols-2 gap-4">
-          <Field label={t('sshSocksPort')}>
-            <InputNumber
-              min={1}
-              max={65535}
-              value={draft.socksPort}
-              onChange={(v) => set('socksPort', v ?? 1080)}
-              className="w-full"
-            />
-          </Field>
-          <Field label={t('sshListenAddr')} hint={t('sshListenAddrHint')}>
-            <Input
-              value={draft.listenAddr}
-              onChange={(e) => set('listenAddr', e.target.value)}
-              placeholder="127.0.0.1"
-            />
-          </Field>
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label={t('sshSocksPort')}>
+              <InputNumber
+                min={1}
+                max={65535}
+                value={draft.socksPort}
+                onChange={(v) => set('socksPort', v ?? 1080)}
+                className="w-full"
+              />
+            </Field>
+            <Field label={t('sshListenAddr')} hint={t('sshListenAddrSocksHint')}>
+              <Input
+                value={draft.listenAddr}
+                onChange={(e) => set('listenAddr', e.target.value)}
+                placeholder="127.0.0.1"
+              />
+            </Field>
+            <Field label={t('sshSocksUser')} hint={t('sshSocksAuthHint')}>
+              <Input
+                value={draft.socksUser}
+                onChange={(e) => set('socksUser', e.target.value)}
+                allowClear
+                autoComplete="off"
+              />
+            </Field>
+            <Field
+              label={t('sshSocksPass')}
+              hint={draft.hasSocksPass && !draft.socksPass ? t('sshSocksPassKeep') : undefined}
+            >
+              <Input.Password
+                value={draft.socksPass}
+                onChange={(e) => set('socksPass', e.target.value)}
+                allowClear
+                autoComplete="new-password"
+              />
+            </Field>
+          </div>
+        </>
       )}
     </div>
   )
@@ -485,7 +528,9 @@ function NodeEditor({
             <Button size="small" onClick={handleClearHostKey}>
               {t('sshClearHostKey')}
             </Button>
-            <p className="text-[10px] text-[var(--text-secondary)] mt-1">{t('sshClearHostKeyHint')}</p>
+            <p className="text-[10px] text-[var(--text-secondary)] mt-1">
+              {t('sshClearHostKeyHint')}
+            </p>
           </div>
         )}
         <Form.Item name="authType" label={t('sshAuthType')}>
@@ -654,7 +699,9 @@ function SshTunnel(): React.JSX.Element {
           }
           return
         }
-        const typeCount = tunnels.filter((tun) => tun.nodeId === node.id && tun.type === type).length
+        const typeCount = tunnels.filter(
+          (tun) => tun.nodeId === node.id && tun.type === type
+        ).length
         if (typeCount === 0) {
           message.warning(t('sshNoTunnelsToConnect'))
           return
@@ -960,14 +1007,13 @@ function SshTunnel(): React.JSX.Element {
               (tun) =>
                 tun.type === filterType && (tun.status === 'running' || tun.status === 'starting')
             )
-          const displayState =
-            connecting
-              ? 'connecting'
-              : typeRunning
-                ? 'connected'
-                : state === 'error'
-                  ? 'error'
-                  : 'disconnected'
+          const displayState = connecting
+            ? 'connecting'
+            : typeRunning
+              ? 'connected'
+              : state === 'error'
+                ? 'error'
+                : 'disconnected'
           const typeConnected = typeRunning
           return (
             <section key={node.id} className={CARD_CLS}>
@@ -1228,11 +1274,7 @@ function SshTunnel(): React.JSX.Element {
 
       <Modal
         open={!!addModal}
-        title={
-          addModal
-            ? tunnelModalLabel(addModal.type, !!addModal.tunnel)
-            : t('sshAddTunnel')
-        }
+        title={addModal ? tunnelModalLabel(addModal.type, !!addModal.tunnel) : t('sshAddTunnel')}
         onCancel={() => setAddModal(null)}
         footer={
           <>
@@ -1244,9 +1286,7 @@ function SshTunnel(): React.JSX.Element {
                 tunnelFormRef.current?.submit()
               }}
             >
-              {addModal
-                ? tunnelModalLabel(addModal.type, !!addModal.tunnel)
-                : t('sshAddTunnel')}
+              {addModal ? tunnelModalLabel(addModal.type, !!addModal.tunnel) : t('sshAddTunnel')}
             </Button>
           </>
         }

@@ -48,11 +48,13 @@ interface StoredFile {
   naturalWidth: number
   naturalHeight: number
   annotations: Annotation[]
+  updatedAt?: number
 }
 
 type StoredMap = Record<string, StoredFile>
 
 const STORAGE_KEY = 'brickworks:pdfImageAnnotations'
+const MAX_STORED_FILES = 20
 const MIN_ZOOM = 0.2
 const MAX_ZOOM = 4
 const MIN_DRAG = 0.01
@@ -219,9 +221,33 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
       type: docType,
       naturalWidth: natural.width,
       naturalHeight: natural.height,
-      annotations
+      annotations,
+      updatedAt: Date.now()
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(map))
+    const keys = Object.keys(map)
+    if (keys.length > MAX_STORED_FILES) {
+      keys
+        .sort((a, b) => (map[a].updatedAt ?? 0) - (map[b].updatedAt ?? 0))
+        .slice(0, keys.length - MAX_STORED_FILES)
+        .forEach((k) => delete map[k])
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(map))
+    } catch {
+      // QuotaExceeded — drop oldest until it fits
+      const remaining = Object.keys(map).sort(
+        (a, b) => (map[a].updatedAt ?? 0) - (map[b].updatedAt ?? 0)
+      )
+      while (remaining.length > 1) {
+        delete map[remaining.shift()!]
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(map))
+          break
+        } catch {
+          // continue pruning
+        }
+      }
+    }
   }, [fileKey, fileName, docType, natural, annotations])
 
   /* ── auto fit on file open ── */

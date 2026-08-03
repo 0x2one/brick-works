@@ -78,6 +78,9 @@ interface SshTunnelSpec {
   bindPort?: number
   targetHost?: string
   targetPort?: number
+  socksUser?: string
+  socksPass?: string
+  hasSocksPass?: boolean
 }
 
 interface SshShellStartOpts {

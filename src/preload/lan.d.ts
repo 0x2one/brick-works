@@ -4,4 +4,5 @@ interface LanStatus {
   port: number | null
   url: string | null
   dir: string | null
+  token: string | null
 }

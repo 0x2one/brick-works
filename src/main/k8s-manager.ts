@@ -446,6 +446,18 @@ export function createK8sManager(store: K8sStore): K8sManager {
     },
 
     async connect(cluster: K8sCluster): Promise<K8sStatus> {
+      // Tear down any previous cluster sessions before switching.
+      for (const id of [...logSessions.keys()]) {
+        await this.stopLogs(id)
+      }
+      for (const id of [...execSessions.keys()]) {
+        await this.stopExec(id)
+      }
+      for (const id of [...portForwards.keys()]) {
+        await stopPortForwardRuntime(id)
+      }
+      kc = null
+
       setStatus({
         state: 'connecting',
         clusterId: cluster.id,
@@ -607,7 +619,8 @@ export function createK8sManager(store: K8sStore): K8sManager {
         })
       }
       return rows.sort(
-        (a, b) => byName(a.kind, b.kind) || byName(a.name, b.name) || byName(a.namespace, b.namespace)
+        (a, b) =>
+          byName(a.kind, b.kind) || byName(a.name, b.name) || byName(a.namespace, b.namespace)
       )
     },
 
@@ -764,11 +777,7 @@ export function createK8sManager(store: K8sStore): K8sManager {
               '-c',
               'export TERM=xterm-256color; export PS1="\\u@\\h:\\w\\$ "; exec /bin/bash -i'
             ]
-          : [
-              '/bin/sh',
-              '-c',
-              'export TERM=xterm-256color; export PS1="$PWD\\$ "; exec /bin/sh -i'
-            ]
+          : ['/bin/sh', '-c', 'export TERM=xterm-256color; export PS1="$PWD\\$ "; exec /bin/sh -i']
       const ws = await exec.exec(
         opts.namespace,
         opts.pod,

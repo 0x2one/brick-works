@@ -212,7 +212,7 @@ function QrCodeTool({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Eleme
         const result = await decodeImageDataUrl(dataUrl)
         if (result) {
           setDecodeResult(result)
-          message.success(t('copied'))
+          message.success(t('qrDecSuccess'))
         } else {
           message.info(t('qrDecNotFound'))
         }

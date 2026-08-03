@@ -3,6 +3,7 @@ import { createServer, connect, type Server as NetServer, type Socket } from 'ne
 import { promises as fsp } from 'fs'
 import { randomUUID } from 'crypto'
 import type { SshNode, SshTunnelSpec, SshTunnelType } from './ssh-store'
+import { assertAllowedLocalPath } from './path-allowlist'
 
 export type { SshTunnelSpec, SshTunnelType } from './ssh-store'
 
@@ -53,7 +54,11 @@ const MAX_RETRY = 10
 
 function normalizeSshError(message: string): string {
   if (/host key|host denied|verification failed/i.test(message)) return 'HOST_KEY_MISMATCH'
-  if (/authentication failed|all configured authentication|permission denied|unable to authenticate/i.test(message)) {
+  if (
+    /authentication failed|all configured authentication|permission denied|unable to authenticate/i.test(
+      message
+    )
+  ) {
     return 'AUTH_FAILED'
   }
   return message
@@ -111,6 +116,7 @@ async function makeConnectConfig(
   if (node.auth.type === 'password' && node.auth.password) {
     cfg.password = node.auth.password
   } else if (node.auth.type === 'privateKey' && node.auth.privateKeyPath) {
+    assertAllowedLocalPath(node.auth.privateKeyPath)
     cfg.privateKey = await fsp.readFile(node.auth.privateKeyPath)
     if (node.auth.passphrase) cfg.passphrase = node.auth.passphrase
   }
@@ -144,8 +150,13 @@ function formatIpv6(bytes: Buffer): string {
   return groups.join(':')
 }
 
-function handleSocks5(socket: Socket, client: Client): void {
-  let stage: 'greeting' | 'request' | 'done' = 'greeting'
+export function isLoopbackAddr(addr?: string | null): boolean {
+  const a = (addr || '127.0.0.1').trim().toLowerCase()
+  return a === '127.0.0.1' || a === '::1' || a === 'localhost'
+}
+
+function handleSocks5(socket: Socket, client: Client, auth?: { user: string; pass: string }): void {
+  let stage: 'greeting' | 'auth' | 'request' | 'done' = 'greeting'
   let buffer = Buffer.alloc(0)
   const fail = (code: number): void => {
     stage = 'done'
@@ -164,8 +175,55 @@ function handleSocks5(socket: Socket, client: Client): void {
       if (buffer.length < 2) return
       const nmethods = buffer[1]
       if (buffer.length < 2 + nmethods) return
-      socket.write(Buffer.from([0x05, 0x00]))
+      const methods = buffer.subarray(2, 2 + nmethods)
       buffer = buffer.subarray(2 + nmethods)
+      if (auth) {
+        if (![...methods].includes(0x02)) {
+          stage = 'done'
+          socket.removeListener('data', onData)
+          if (!socket.destroyed) {
+            socket.write(Buffer.from([0x05, 0xff]))
+            socket.end()
+          }
+          return
+        }
+        socket.write(Buffer.from([0x05, 0x02]))
+        stage = 'auth'
+      } else {
+        socket.write(Buffer.from([0x05, 0x00]))
+        stage = 'request'
+      }
+    }
+
+    if (stage === 'auth') {
+      // RFC 1929 username/password
+      if (buffer.length < 2) return
+      if (buffer[0] !== 0x01) {
+        stage = 'done'
+        socket.removeListener('data', onData)
+        if (!socket.destroyed) {
+          socket.write(Buffer.from([0x01, 0x01]))
+          socket.end()
+        }
+        return
+      }
+      const ulen = buffer[1]
+      if (buffer.length < 2 + ulen + 1) return
+      const plen = buffer[2 + ulen]
+      if (buffer.length < 2 + ulen + 1 + plen) return
+      const user = buffer.subarray(2, 2 + ulen).toString()
+      const pass = buffer.subarray(2 + ulen + 1, 2 + ulen + 1 + plen).toString()
+      buffer = buffer.subarray(2 + ulen + 1 + plen)
+      if (!auth || user !== auth.user || pass !== auth.pass) {
+        stage = 'done'
+        socket.removeListener('data', onData)
+        if (!socket.destroyed) {
+          socket.write(Buffer.from([0x01, 0x01]))
+          socket.end()
+        }
+        return
+      }
+      socket.write(Buffer.from([0x01, 0x00]))
       stage = 'request'
     }
 
@@ -398,7 +456,9 @@ export function createSshManager(options: SshManagerOptions = {}): SshManager {
             }
           )
         })
-        const listenAddr = spec.listenAddr || '127.0.0.1'
+        const listenAddr = isLoopbackAddr(spec.listenAddr)
+          ? spec.listenAddr?.trim() || '127.0.0.1'
+          : '127.0.0.1'
         server.on('error', setError)
         server.listen(spec.localPort!, listenAddr, () => {
           state.status = 'running'
@@ -426,8 +486,16 @@ export function createSshManager(options: SshManagerOptions = {}): SshManager {
           emitStatus()
         })
       } else {
-        const server = createServer((socket) => handleSocks5(socket, client))
-        const listenAddr = spec.listenAddr || '127.0.0.1'
+        const hasAuth = Boolean(spec.socksUser?.trim() && spec.socksPass)
+        const auth =
+          hasAuth && spec.socksUser && spec.socksPass
+            ? { user: spec.socksUser.trim(), pass: spec.socksPass }
+            : undefined
+        let listenAddr = spec.listenAddr?.trim() || '127.0.0.1'
+        if (!hasAuth && !isLoopbackAddr(listenAddr)) {
+          listenAddr = '127.0.0.1'
+        }
+        const server = createServer((socket) => handleSocks5(socket, client, auth))
         server.on('error', setError)
         server.listen(spec.localPort!, listenAddr, () => {
           state.status = 'running'
