@@ -458,6 +458,13 @@ ipcMain.handle('ssh:deleteNode', (_event, id: string) => {
   return sshStore.remove(id)
 })
 
+ipcMain.handle('ssh:reorderNodes', (_event, ids: string[]) => {
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) {
+    throw new Error('INVALID_IDS')
+  }
+  return sshStore.reorder(ids)
+})
+
 ipcMain.handle('ssh:chooseKeyFile', async () => {
   const options: Electron.OpenDialogOptions = {
     title: '选择私钥文件',

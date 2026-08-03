@@ -31,6 +31,7 @@ interface SshApi {
   listNodes: () => Promise<SshNodeView[]>
   saveNode: (input: SshNodeInput) => Promise<SshNodeView>
   deleteNode: (id: string) => Promise<boolean>
+  reorderNodes: (ids: string[]) => Promise<SshNodeView[]>
   chooseKeyFile: () => Promise<string | null>
   clearHostKey: (nodeId: string) => Promise<boolean>
   status: () => Promise<SshSessionStatus[]>

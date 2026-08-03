@@ -428,6 +428,7 @@
   "sshTabLogs": "Logs",
   "sshNodes": "Nodes (Jump Hosts)",
   "sshAddNode": "Add Node",
+  "sshReorderNode": "Drag to reorder",
   "sshNoNodes": "No nodes yet. Click \"Add Node\" to create one.",
   "sshNodeNew": "Add Node",
   "sshNodeEdit": "Edit Node",

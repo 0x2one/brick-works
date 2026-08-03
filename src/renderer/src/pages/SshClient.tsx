@@ -38,12 +38,14 @@ import {
   UploadOutlined,
   FileAddOutlined,
   FolderAddOutlined,
-  CodeOutlined
+  CodeOutlined,
+  HolderOutlined
 } from '@ant-design/icons'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useTheme } from '../theme/ThemeProvider'
+import { SortableList } from '../components/SortableList'
 
 const BTN_ICON =
   'h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer ' +
@@ -428,6 +430,13 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       .then(setNodes)
       .catch(() => {})
   }, [])
+
+  const persistNodeOrder = useCallback((next: SshNodeView[]) => {
+    setNodes(next)
+    void window.api.ssh.reorderNodes(next.map((n) => n.id)).catch(() => {
+      loadNodes()
+    })
+  }, [loadNodes])
 
   useEffect(() => {
     loadNodes()
@@ -996,41 +1005,62 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                 </Empty>
               )
             ) : (
-              <div className="py-2">
-                {nodes.map((node) => {
-                  const active = activeTab?.nodeId === node.id
+              <SortableList items={nodes} onReorder={persistNodeOrder} className="py-2">
+                {(node, api) => {
+                  const selected = activeTab?.nodeId === node.id
                   const testing = testingId === node.id
                   if (sidebarCollapsed) {
                     return (
-                      <Tooltip key={node.id} title={node.name} placement="right">
-                        <button
-                          type="button"
-                          onClick={() => openOrFocusTab(node)}
-                          className={`mx-auto my-1 w-8 h-8 flex items-center justify-center rounded-md cursor-pointer border border-dashed ${
-                            active
-                              ? 'border-[var(--accent)]/40 bg-[var(--accent)]/15 text-[var(--accent)]'
-                              : 'border-[var(--border-subtle)] bg-[var(--bg-warm)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]/40'
-                          }`}
-                        >
-                          <CloudServerOutlined />
-                        </button>
-                      </Tooltip>
+                      <div ref={api.setNodeRef} style={api.style} className="flex justify-center">
+                        <Tooltip title={node.name} placement="right">
+                          <button
+                            type="button"
+                            ref={api.setActivatorNodeRef}
+                            {...api.attributes}
+                            {...api.listeners}
+                            onClick={() => openOrFocusTab(node)}
+                            className={`my-1 w-8 h-8 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing border border-dashed ${
+                              selected
+                                ? 'border-[var(--accent)]/40 bg-[var(--accent)]/15 text-[var(--accent)]'
+                                : 'border-[var(--border-subtle)] bg-[var(--bg-warm)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]/40'
+                            }`}
+                          >
+                            <CloudServerOutlined />
+                          </button>
+                        </Tooltip>
+                      </div>
                     )
                   }
                   return (
                     <div
-                      key={node.id}
+                      ref={api.setNodeRef}
+                      style={api.style}
                       className={`group mx-1.5 mb-1.5 rounded-lg px-2.5 py-2 cursor-pointer border border-dashed transition-colors ${
-                        active
+                        selected
                           ? 'border-[var(--accent)]/45 bg-[var(--accent)]/10'
                           : 'border-[var(--border-subtle)] bg-[var(--bg-warm)] hover:border-[var(--text-secondary)]/35 hover:bg-[var(--bg-warm)]'
-                      }`}
+                      }${api.isDragging ? ' shadow-sm' : ''}`}
                       onClick={() => openOrFocusTab(node)}
                       onDoubleClick={() => openOrFocusTab(node, true)}
                     >
                       <div className="flex items-center gap-2 min-w-0">
+                        <button
+                          type="button"
+                          ref={api.setActivatorNodeRef}
+                          {...api.attributes}
+                          {...api.listeners}
+                          title={t('sshReorderNode')}
+                          className={
+                            'shrink-0 inline-flex items-center justify-center border-none bg-transparent ' +
+                            'text-[var(--text-secondary)] cursor-grab active:cursor-grabbing px-0.5 -ml-1 ' +
+                            'hover:text-[var(--text-primary)]'
+                          }
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <HolderOutlined />
+                        </button>
                         <CloudServerOutlined
-                          className={`shrink-0 ${active ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}
+                          className={`shrink-0 ${selected ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}
                         />
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-[var(--text-primary)] truncate leading-tight">
@@ -1095,8 +1125,8 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                       </div>
                     </div>
                   )
-                })}
-              </div>
+                }}
+              </SortableList>
             )}
           </div>
         </aside>

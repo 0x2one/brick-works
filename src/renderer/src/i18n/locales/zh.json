@@ -428,6 +428,7 @@
   "sshTabLogs": "日志",
   "sshNodes": "节点（跳板机）",
   "sshAddNode": "新增节点",
+  "sshReorderNode": "拖动排序",
   "sshNoNodes": "暂无节点，点击上方「新增节点」创建",
   "sshNodeNew": "新增节点",
   "sshNodeEdit": "编辑节点",

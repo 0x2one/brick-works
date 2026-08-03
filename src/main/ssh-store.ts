@@ -107,7 +107,8 @@ interface StoredTunnel {
 }
 
 interface StoreFile {
-  version: 1
+  /** v1: nodes listed by createdAt; v2+: file array order is display order */
+  version: 1 | 2
   nodes: StoredNode[]
   tunnels?: StoredTunnel[]
   knownHosts?: Record<string, string>
@@ -240,6 +241,7 @@ export interface SshStore {
   get: (id: string) => SshNode | null
   save: (input: SshNodeInput) => SshNodeView
   remove: (id: string) => boolean
+  reorder: (ids: string[]) => SshNodeView[]
   listTunnels: (nodeId?: string) => SshTunnelSpec[]
   saveTunnel: (spec: SshTunnelSpec) => SshTunnelSpec
   removeTunnel: (id: string) => boolean
@@ -294,8 +296,17 @@ export function createSshStore(): SshStore {
     try {
       const raw = await fsp.readFile(file, 'utf-8')
       const data = JSON.parse(raw) as StoreFile
-      const nodeArr = Array.isArray(data?.nodes) ? data.nodes : []
-      const storedNodes = nodeArr.filter((n) => n && typeof n.id === 'string')
+      let nodeArr = Array.isArray(data?.nodes) ? data.nodes : []
+      nodeArr = nodeArr.filter((n) => n && typeof n.id === 'string')
+      // v1 listed by createdAt; keep that order when upgrading so UI doesn't jump
+      let versionMigrated = false
+      if ((data?.version ?? 1) < 2) {
+        nodeArr = nodeArr
+          .slice()
+          .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0) || a.id.localeCompare(b.id))
+        versionMigrated = true
+      }
+      const storedNodes = nodeArr
       const tunArr = Array.isArray(data?.tunnels) ? data.tunnels : []
       const storedTunnels = tunArr
         .filter((t) => t && typeof t.id === 'string')
@@ -304,14 +315,14 @@ export function createSshStore(): SshStore {
           socksUser: t.socksUser ?? null,
           socksPass: t.socksPass ?? null
         }))
-      const shouldPersist = migratePlaintextSecrets(storedNodes, storedTunnels)
+      const secretsMigrated = migratePlaintextSecrets(storedNodes, storedTunnels)
       nodes = new Map(storedNodes.map((n) => [n.id, fromStored(n)]))
       tunnels = new Map(storedTunnels.map((t) => [t.id, t]))
       const hosts = data?.knownHosts && typeof data.knownHosts === 'object' ? data.knownHosts : {}
       knownHosts = new Map(
         Object.entries(hosts).filter(([k, v]) => typeof k === 'string' && typeof v === 'string')
       )
-      if (shouldPersist) persist()
+      if (secretsMigrated || versionMigrated) persist()
     } catch {
       nodes = new Map()
       tunnels = new Map()
@@ -321,7 +332,7 @@ export function createSshStore(): SshStore {
 
   function persist(): void {
     const payload: StoreFile = {
-      version: 1,
+      version: 2,
       nodes: [...nodes.values()].map(toStored),
       tunnels: [...tunnels.values()],
       knownHosts: Object.fromEntries(knownHosts)
@@ -339,7 +350,7 @@ export function createSshStore(): SshStore {
       await load()
     },
     list(): SshNodeView[] {
-      return [...nodes.values()].sort((a, b) => a.createdAt - b.createdAt).map(toView)
+      return [...nodes.values()].map(toView)
     },
     get(id: string): SshNode | null {
       return nodes.get(id) ?? null
@@ -382,6 +393,7 @@ export function createSshStore(): SshStore {
         createdAt: existing?.createdAt ?? now,
         updatedAt: now
       }
+      // Map.set keeps existing key order; new ids append at the end
       nodes.set(node.id, node)
       persist()
       return toView(node)
@@ -395,6 +407,19 @@ export function createSshStore(): SshStore {
       if (node) knownHosts.delete(hostKeyId(node.host, node.port))
       if (existed) persist()
       return existed
+    },
+    reorder(ids: string[]): SshNodeView[] {
+      const next = new Map<string, SshNode>()
+      for (const id of ids) {
+        const node = nodes.get(id)
+        if (node) next.set(id, node)
+      }
+      for (const [id, node] of nodes) {
+        if (!next.has(id)) next.set(id, node)
+      }
+      nodes = next
+      persist()
+      return this.list()
     },
     listTunnels(nodeId?: string): SshTunnelSpec[] {
       const list = [...tunnels.values()]

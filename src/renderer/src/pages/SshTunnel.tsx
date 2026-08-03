@@ -26,8 +26,10 @@ import {
   GlobalOutlined,
   RightOutlined,
   DownOutlined,
-  WarningOutlined
+  WarningOutlined,
+  HolderOutlined
 } from '@ant-design/icons'
+import { SortableList } from '../components/SortableList'
 
 const LABEL_CLS =
   'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
@@ -637,6 +639,23 @@ function SshTunnel(): React.JSX.Element {
       .catch(() => {})
   }, [])
 
+  const loadNodes = useCallback(() => {
+    window.api.ssh
+      .listNodes()
+      .then(setNodes)
+      .catch(() => {})
+  }, [])
+
+  const persistNodeOrder = useCallback(
+    (next: SshNodeView[]) => {
+      setNodes(next)
+      void window.api.ssh.reorderNodes(next.map((n) => n.id)).catch(() => {
+        loadNodes()
+      })
+    },
+    [loadNodes]
+  )
+
   const appendLog = useCallback((entry: SshLogEntry) => {
     setLogs((prev) => {
       const next = [...prev.slice(-499), entry]
@@ -864,15 +883,37 @@ function SshTunnel(): React.JSX.Element {
           </Button>
         </Empty>
       ) : (
-        <div className="divide-y divide-[var(--border-subtle)]">
-          {nodes.map((node) => {
+        <SortableList
+          items={nodes}
+          onReorder={persistNodeOrder}
+          className="divide-y divide-[var(--border-subtle)]"
+        >
+          {(node, api) => {
             const session = sessionByNode.get(node.id)
             const state = session?.state ?? 'disconnected'
             const connecting = state === 'connecting'
             const connected = state === 'connected'
             const testing = testingId === node.id
             return (
-              <div key={node.id} className="px-5 py-4 flex items-center gap-3">
+              <div
+                ref={api.setNodeRef}
+                style={api.style}
+                className="px-5 py-4 flex items-center gap-3 bg-[var(--surface)]"
+              >
+                <button
+                  type="button"
+                  ref={api.setActivatorNodeRef}
+                  {...api.attributes}
+                  {...api.listeners}
+                  title={t('sshReorderNode')}
+                  className={
+                    'shrink-0 inline-flex items-center justify-center border-none bg-transparent ' +
+                    'text-[var(--text-secondary)] cursor-grab active:cursor-grabbing px-0.5 -ml-1 ' +
+                    'hover:text-[var(--text-primary)]'
+                  }
+                >
+                  <HolderOutlined />
+                </button>
                 <span className={`w-2 h-2 rounded-full shrink-0 ${STATE_DOT_CLS[state]}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -959,8 +1000,8 @@ function SshTunnel(): React.JSX.Element {
                 </div>
               </div>
             )
-          })}
-        </div>
+          }}
+        </SortableList>
       )}
     </section>
   )
@@ -990,8 +1031,8 @@ function SshTunnel(): React.JSX.Element {
     }
 
     return (
-      <div className="flex flex-col gap-4">
-        {nodes.map((node) => {
+      <SortableList items={nodes} onReorder={persistNodeOrder} className="flex flex-col gap-4">
+        {(node, api) => {
           const session = sessionByNode.get(node.id)
           const state = session?.state ?? 'disconnected'
           const connected = state === 'connected'
@@ -1016,11 +1057,26 @@ function SshTunnel(): React.JSX.Element {
                 : 'disconnected'
           const typeConnected = typeRunning
           return (
-            <section key={node.id} className={CARD_CLS}>
+            <section ref={api.setNodeRef} style={api.style} className={CARD_CLS}>
               <div
                 className="px-5 py-3 flex items-center gap-3 cursor-pointer select-none"
                 onClick={() => toggleExpanded(node.id)}
               >
+                <button
+                  type="button"
+                  ref={api.setActivatorNodeRef}
+                  {...api.attributes}
+                  {...api.listeners}
+                  title={t('sshReorderNode')}
+                  className={
+                    'shrink-0 inline-flex items-center justify-center border-none bg-transparent ' +
+                    'text-[var(--text-secondary)] cursor-grab active:cursor-grabbing ' +
+                    'hover:text-[var(--text-primary)]'
+                  }
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <HolderOutlined />
+                </button>
                 <span className="w-4 flex items-center justify-center text-[var(--text-secondary)] text-xs shrink-0">
                   {expanded ? <DownOutlined /> : <RightOutlined />}
                 </span>
@@ -1169,8 +1225,8 @@ function SshTunnel(): React.JSX.Element {
               )}
             </section>
           )
-        })}
-      </div>
+        }}
+      </SortableList>
     )
   }
 

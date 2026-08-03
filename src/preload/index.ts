@@ -41,6 +41,7 @@ const api = {
     listNodes: () => ipcRenderer.invoke('ssh:listNodes'),
     saveNode: (input: SshNodeInput) => ipcRenderer.invoke('ssh:saveNode', input),
     deleteNode: (id: string) => ipcRenderer.invoke('ssh:deleteNode', id),
+    reorderNodes: (ids: string[]) => ipcRenderer.invoke('ssh:reorderNodes', ids),
     chooseKeyFile: () => ipcRenderer.invoke('ssh:chooseKeyFile'),
     clearHostKey: (nodeId: string) => ipcRenderer.invoke('ssh:clearHostKey', nodeId),
     status: () => ipcRenderer.invoke('ssh:status'),
