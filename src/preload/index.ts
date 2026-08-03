@@ -5,6 +5,10 @@ const api = {
   app: {
     info: () => ipcRenderer.invoke('app:info')
   },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    setCloseToTray: (value: boolean) => ipcRenderer.invoke('settings:setCloseToTray', value)
+  },
   fetchSvg: (url: string) => ipcRenderer.invoke('fetch:svg', url),
   windowControls: {
     minimize: () => ipcRenderer.invoke('window:minimize'),

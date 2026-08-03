@@ -120,11 +120,21 @@ interface AppApi {
   info: () => Promise<AppInfo>
 }
 
+interface AppSettings {
+  closeToTray: boolean
+}
+
+interface SettingsApi {
+  get: () => Promise<AppSettings>
+  setCloseToTray: (value: boolean) => Promise<AppSettings>
+}
+
 interface Api {
   fetchImage: (url: string) => Promise<string | null>
   fetchSvg: (url: string) => Promise<string | null>
   windowControls: WindowControls
   app: AppApi
+  settings: SettingsApi
   lan: LanApi
   ssh: SshApi
   sticky: StickyApi

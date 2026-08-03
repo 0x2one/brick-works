@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, dialog, ipcMain, nativeImage, net } from 'electron'
+import { app, shell, BrowserWindow, dialog, ipcMain, nativeImage, net, Tray, Menu } from 'electron'
 import { promises as dns } from 'dns'
 import { join, basename } from 'path'
 import { promises as fsp } from 'fs'
@@ -17,6 +17,7 @@ import { createSshClientManager, type SshShellStartOpts } from './ssh-client-man
 import { createK8sStore, defaultKubeconfigPath, type K8sClusterInput } from './k8s-store'
 import { createK8sManager } from './k8s-manager'
 import { createStickyStore, type StickyData } from './sticky-store'
+import { createAppSettingsStore } from './app-settings'
 import {
   allowLocalPath,
   assertAllowedLocalPath,
@@ -24,6 +25,9 @@ import {
 } from './path-allowlist'
 
 let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let isQuitting = false
+const appSettingsStore = createAppSettingsStore()
 
 const MAX_FETCH_IMAGE_BYTES = 10 * 1024 * 1024
 const MAX_FETCH_SVG_BYTES = 2 * 1024 * 1024
@@ -182,6 +186,63 @@ async function fetchLimitedBytes(url: string, maxBytes: number): Promise<Buffer 
   return null
 }
 
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.setSkipTaskbar(false)
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function trayLabels(): { show: string; quit: string } {
+  const zh = app.getLocale().toLowerCase().startsWith('zh')
+  return zh
+    ? { show: '显示窗口', quit: '退出' }
+    : { show: 'Show', quit: 'Quit' }
+}
+
+function destroyTray(): void {
+  if (!tray) return
+  tray.destroy()
+  tray = null
+}
+
+function createTray(): void {
+  if (tray) return
+  const icon = nativeImage.createFromPath(iconPng)
+  tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon)
+  tray.setToolTip('BrickWorks')
+  const labels = trayLabels()
+  const menu = Menu.buildFromTemplate([
+    {
+      label: labels.show,
+      click: () => showMainWindow()
+    },
+    { type: 'separator' },
+    {
+      label: labels.quit,
+      click: () => {
+        isQuitting = true
+        app.quit()
+      }
+    }
+  ])
+  tray.setContextMenu(menu)
+  tray.on('click', () => showMainWindow())
+  tray.on('double-click', () => showMainWindow())
+}
+
+function syncTrayWithSettings(): void {
+  if (appSettingsStore.get().closeToTray) {
+    createTray()
+  } else {
+    destroyTray()
+  }
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -198,6 +259,14 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
+  })
+
+  mainWindow.on('close', (event) => {
+    if (!isQuitting && appSettingsStore.get().closeToTray) {
+      event.preventDefault()
+      mainWindow?.setSkipTaskbar(true)
+      mainWindow?.hide()
+    }
   })
 
   mainWindow.on('closed', () => {
@@ -238,6 +307,17 @@ ipcMain.handle('window:maximize', () => {
 
 ipcMain.handle('window:close', () => {
   mainWindow?.close()
+})
+
+ipcMain.handle('settings:get', () => appSettingsStore.get())
+
+ipcMain.handle('settings:setCloseToTray', (_event, value: boolean) => {
+  const settings = appSettingsStore.setCloseToTray(Boolean(value))
+  syncTrayWithSettings()
+  if (!settings.closeToTray && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+    showMainWindow()
+  }
+  return settings
 })
 
 ipcMain.handle('fetch:image', async (_event, url: string): Promise<string | null> => {
@@ -970,6 +1050,8 @@ ipcMain.handle('sticky:save', (_event, data: StickyData) => stickyStore.save(dat
 
 let quittingCleaned = false
 app.on('before-quit', (event) => {
+  isQuitting = true
+  destroyTray()
   if (quittingCleaned) return
   event.preventDefault()
   quittingCleaned = true
@@ -995,21 +1077,27 @@ app.whenReady().then(async () => {
   await Promise.all([
     sshStore.init().catch(() => {}),
     k8sStore.init().catch(() => {}),
-    stickyStore.init().catch(() => {})
+    stickyStore.init().catch(() => {}),
+    appSettingsStore.init().catch(() => {})
   ])
   seedAllowedPaths()
   broadcastSshStatus()
   broadcastK8sStatus()
 
   createWindow()
+  syncTrayWithSettings()
 
   app.on('activate', function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow()
+    } else {
+      showMainWindow()
+    }
   })
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (process.platform !== 'darwin' && !appSettingsStore.get().closeToTray) {
     app.quit()
   }
 })

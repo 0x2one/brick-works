@@ -18,6 +18,8 @@
   "settings": "Settings",
   "preferences": "Preferences",
   "autoSave": "Auto save",
+  "closeToTray": "Minimize to tray on close",
+  "closeToTrayDesc": "When enabled, closing hides the app to the system tray instead of quitting",
   "language": "Language",
   "theme": "Theme",
   "themeSystem": "System",

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Switch, Radio } from 'antd'
 import type { RadioChangeEvent } from 'antd'
@@ -63,6 +64,41 @@ function ThemeRadio(): React.JSX.Element {
   )
 }
 
+function CloseToTraySwitch(): React.JSX.Element {
+  const { t } = useTranslation()
+  const [checked, setChecked] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    void window.api.settings.get().then((settings) => {
+      if (!alive) return
+      setChecked(settings.closeToTray)
+      setLoading(false)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const onChange = (value: boolean): void => {
+    setChecked(value)
+    void window.api.settings.setCloseToTray(value).then((settings) => {
+      setChecked(settings.closeToTray)
+    })
+  }
+
+  return (
+    <div className="settings-row">
+      <div className="settings-label-block">
+        <span className="settings-label">{t('closeToTray')}</span>
+        <span className="settings-value">{t('closeToTrayDesc')}</span>
+      </div>
+      <Switch checked={checked} loading={loading} onChange={onChange} />
+    </div>
+  )
+}
+
 function Settings(): React.JSX.Element {
   const { t } = useTranslation()
 
@@ -81,6 +117,7 @@ function Settings(): React.JSX.Element {
               <span className="settings-label">{t('autoSave')}</span>
               <Switch defaultChecked />
             </div>
+            <CloseToTraySwitch />
           </div>
         </section>
 
