@@ -261,8 +261,7 @@
   "svgToImgDownload": "下载",
   "svgToImgCopyImage": "复制图片",
   "svgToImgCopyDataUrl": "复制 Data URL",
-  "svgToImgNoResult": "导入 SVG 后自动生成预览"
-  "timestampNow": "此刻",
+  "svgToImgNoResult": "导入 SVG 后自动生成预览",
   "devToolPdfImageAnnotate": "PDF/图片标注",
   "devToolPdfImageAnnotateDesc": "预览 PDF 和图片，在预览上拖拽添加带颜色和说明的高亮标注，支持缩放、翻页，标注随缩放同步变化。",
   "devToolPdfMergeSplit": "PDF 合并/拆分",

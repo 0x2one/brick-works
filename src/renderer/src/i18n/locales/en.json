@@ -261,8 +261,7 @@
   "svgToImgDownload": "Download",
   "svgToImgCopyImage": "Copy Image",
   "svgToImgCopyDataUrl": "Copy Data URL",
-  "svgToImgNoResult": "Import an SVG to see the preview"
-  "timestampNow": "Now",
+  "svgToImgNoResult": "Import an SVG to see the preview",
   "devToolPdfImageAnnotate": "PDF/Image Annotate",
   "devToolPdfImageAnnotateDesc": "Preview PDFs and images, drag to add highlighted annotations with color and notes. Supports zoom and page navigation; annotations scale together with the preview.",
   "devToolPdfMergeSplit": "PDF Merge/Split",

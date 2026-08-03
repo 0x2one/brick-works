@@ -26,8 +26,7 @@ const toolComponents: Record<string, React.ComponentType<ToolProps>> = {
   'timestamp-converter': TimestampConverter,
   'uuid-generator': UuidGenerator,
   'qr-code': QrCodeTool,
-  'svg-to-image': SvgToImage
-  'timestamp-converter': TimestampConverter,
+  'svg-to-image': SvgToImage,
   'pdf-image-annotate': PdfImageAnnotate,
   'pdf-merge-split': PdfMergeSplit
 }
