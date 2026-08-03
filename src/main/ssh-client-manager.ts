@@ -48,7 +48,7 @@ function normalizeSshError(message: string): string {
 
 export interface SshClientManagerOptions {
   getNode: (nodeId: string) => SshNode | undefined
-  verifyHostKey?: (host: string, port: number, key: Buffer) => boolean
+  verifyHostKey?: (host: string, port: number, key: Buffer) => boolean | Promise<boolean>
 }
 
 function posixJoin(base: string, name: string): string {

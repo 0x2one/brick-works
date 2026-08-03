@@ -290,8 +290,8 @@ export interface SshStore {
     host: string,
     port: number,
     key: Buffer,
-    confirmNew?: (fingerprint: string) => boolean
-  ) => boolean
+    confirmNew?: (fingerprint: string) => boolean | Promise<boolean>
+  ) => boolean | Promise<boolean>
   clearHostKey: (host: string, port: number) => boolean
   clearHostKeyByNodeId: (nodeId: string) => boolean
 }
@@ -574,13 +574,32 @@ export function createSshStore(): SshStore {
       host: string,
       port: number,
       key: Buffer,
-      confirmNew?: (fingerprint: string) => boolean
-    ): boolean {
+      confirmNew?: (fingerprint: string) => boolean | Promise<boolean>
+    ): boolean | Promise<boolean> {
       const id = hostKeyId(host, port)
       const fingerprint = key.toString('base64')
       const known = knownHosts.get(id)
       if (!known) {
-        if (confirmNew && !confirmNew(fingerprint)) return false
+        if (!confirmNew) {
+          knownHosts.set(id, fingerprint)
+          persist()
+          return true
+        }
+        const confirmed = confirmNew(fingerprint)
+        if (confirmed instanceof Promise) {
+          return confirmed.then((ok) => {
+            if (!ok) return false
+            // Re-check in case another connection trusted the same host meanwhile
+            const latest = knownHosts.get(id)
+            if (latest && latest !== fingerprint) return false
+            if (!latest) {
+              knownHosts.set(id, fingerprint)
+              persist()
+            }
+            return true
+          })
+        }
+        if (!confirmed) return false
         knownHosts.set(id, fingerprint)
         persist()
         return true

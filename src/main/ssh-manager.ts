@@ -98,7 +98,7 @@ interface SessionRuntime {
 
 export interface SshManagerOptions {
   getNode?: (nodeId: string) => SshNode | null | undefined
-  verifyHostKey?: (host: string, port: number, key: Buffer) => boolean
+  verifyHostKey?: (host: string, port: number, key: Buffer) => boolean | Promise<boolean>
 }
 
 function tunnelStateFromSpec(spec: SshTunnelSpec): SshTunnelState {

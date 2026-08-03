@@ -381,15 +381,20 @@ function seedAllowedPaths(): void {
   ])
 }
 
-function confirmNewHostKey(host: string, port: number, fingerprint: string): boolean {
+async function confirmNewHostKey(
+  host: string,
+  port: number,
+  fingerprint: string
+): Promise<boolean> {
   const short =
     fingerprint.length > 48 ? `${fingerprint.slice(0, 24)}…${fingerprint.slice(-16)}` : fingerprint
   const zh = lanLang !== 'en'
-  const options: Electron.MessageBoxSyncOptions = {
+  const options: Electron.MessageBoxOptions = {
     type: 'question',
     buttons: zh ? ['信任并继续', '取消'] : ['Trust', 'Cancel'],
     defaultId: 0,
     cancelId: 1,
+    noLink: true,
     title: zh ? 'SSH 主机密钥确认' : 'SSH Host Key',
     message: zh
       ? `首次连接 ${host}:${port}，是否信任该主机？`
@@ -399,9 +404,9 @@ function confirmNewHostKey(host: string, port: number, fingerprint: string): boo
       : `Fingerprint (base64):\n${short}\n\nOnly trust this host if you expected this connection. When using a jump host, each hop may ask once.`
   }
   const result = mainWindow
-    ? dialog.showMessageBoxSync(mainWindow, options)
-    : dialog.showMessageBoxSync(options)
-  return result === 0
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options)
+  return result.response === 0
 }
 
 /* ── SSH tunnel service ── */
