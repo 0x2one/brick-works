@@ -577,11 +577,19 @@
   min-height: 0;
 }
 
-.ssh-client-page .xterm,
-.ssh-client-page .xterm-viewport,
-.ssh-client-page .xterm-screen {
-  height: 100%;
-  width: 100%;
+/*
+ * Do not force height on .xterm / viewport / screen:
+ * - height:100% on screen clips the last row
+ * - height:100% on .xterm leaves black bands where the canvas doesn't fill
+ * FitAddon sizes the canvas; the host background fills leftover space.
+ */
+.ssh-client-page .xterm {
+  padding: 0;
+  background-color: transparent !important;
+}
+
+.ssh-client-page .xterm-viewport {
+  background-color: transparent !important;
 }
 
 /* Tiny “copied” tip for SSH console selection */

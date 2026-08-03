@@ -1359,13 +1359,17 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   {tabs.map((tab) => (
                     <div
                       key={tab.id}
-                      ref={(el) => {
-                        if (el) termHostsRef.current.set(tab.id, el)
-                        else termHostsRef.current.delete(tab.id)
-                      }}
                       className="absolute inset-0 p-1"
                       style={{ display: tab.id === activeTabId ? 'block' : 'none' }}
-                    />
+                    >
+                      <div
+                        ref={(el) => {
+                          if (el) termHostsRef.current.set(tab.id, el)
+                          else termHostsRef.current.delete(tab.id)
+                        }}
+                        className="h-full w-full min-h-0 overflow-hidden bg-[var(--bg-warm)]"
+                      />
+                    </div>
                   ))}
                 </div>
               )}
