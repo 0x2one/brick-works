@@ -1,0 +1,541 @@
+import { Client, type ConnectConfig, type ClientChannel, type SFTPWrapper } from 'ssh2'
+import { promises as fsp } from 'fs'
+import { dirname, join, basename } from 'path'
+import { randomUUID } from 'crypto'
+import type { SshNode } from './ssh-store'
+
+export interface SshShellStartOpts {
+  nodeId: string
+  cols?: number
+  rows?: number
+  term?: string
+}
+
+export interface SshShellData {
+  sessionId: string
+  data: string
+}
+
+export interface SshShellExit {
+  sessionId: string
+  reason?: string
+}
+
+export interface SshSftpEntry {
+  name: string
+  path: string
+  type: 'file' | 'directory' | 'symlink' | 'other'
+  size: number
+  modifyTime: number
+  accessTime: number
+  owner?: number
+  group?: number
+  mode?: number
+}
+
+function normalizeSshError(message: string): string {
+  if (/host key|host denied|verification failed/i.test(message)) return 'HOST_KEY_MISMATCH'
+  if (
+    /authentication failed|all configured authentication|permission denied|unable to authenticate/i.test(
+      message
+    )
+  ) {
+    return 'AUTH_FAILED'
+  }
+  return message
+}
+
+export interface SshClientManagerOptions {
+  getNode: (nodeId: string) => SshNode | undefined
+  verifyHostKey?: (host: string, port: number, key: Buffer) => boolean
+}
+
+async function makeConnectConfig(
+  node: SshNode,
+  verifyHostKey?: SshClientManagerOptions['verifyHostKey']
+): Promise<ConnectConfig> {
+  const cfg: ConnectConfig = {
+    host: node.host,
+    port: node.port,
+    username: node.username,
+    keepaliveInterval: 10000,
+    keepaliveCountMax: 3,
+    readyTimeout: 15000,
+    timeout: 30000
+  }
+  if (node.auth.type === 'password' && node.auth.password) {
+    cfg.password = node.auth.password
+  } else if (node.auth.type === 'privateKey' && node.auth.privateKeyPath) {
+    cfg.privateKey = await fsp.readFile(node.auth.privateKeyPath)
+    if (node.auth.passphrase) cfg.passphrase = node.auth.passphrase
+  }
+  if (verifyHostKey) {
+    cfg.hostVerifier = (key: Buffer) => verifyHostKey(node.host, node.port, key)
+  }
+  return cfg
+}
+
+function posixJoin(base: string, name: string): string {
+  if (base === '/' || base === '') return `/${name}`
+  return `${base.replace(/\/+$/, '')}/${name}`
+}
+
+const S_IFMT = 0o170000
+const S_IFDIR = 0o040000
+const S_IFLNK = 0o120000
+const S_IFREG = 0o100000
+
+function entryType(attrs: {
+  mode?: number
+  isDirectory?: () => boolean
+  isSymbolicLink?: () => boolean
+  isFile?: () => boolean
+}): SshSftpEntry['type'] {
+  if (typeof attrs.isDirectory === 'function') {
+    if (attrs.isDirectory()) return 'directory'
+    if (attrs.isSymbolicLink?.()) return 'symlink'
+    if (attrs.isFile?.()) return 'file'
+    return 'other'
+  }
+  const mode = attrs.mode ?? 0
+  const type = mode & S_IFMT
+  if (type === S_IFDIR) return 'directory'
+  if (type === S_IFLNK) return 'symlink'
+  if (type === S_IFREG) return 'file'
+  return 'other'
+}
+
+interface ShellSession {
+  sessionId: string
+  nodeId: string
+  client: Client
+  channel: ClientChannel
+}
+
+interface SftpSession {
+  nodeId: string
+  client: Client
+  sftp: SFTPWrapper
+}
+
+export function createSshClientManager(options: SshClientManagerOptions): {
+  startShell: (opts: SshShellStartOpts) => Promise<{ sessionId: string }>
+  writeShell: (sessionId: string, dataBase64: string) => Promise<boolean>
+  resizeShell: (sessionId: string, cols: number, rows: number) => Promise<boolean>
+  stopShell: (sessionId: string) => Promise<boolean>
+  sftpList: (nodeId: string, remotePath: string) => Promise<SshSftpEntry[]>
+  sftpDownloadFile: (
+    nodeId: string,
+    remotePath: string,
+    localPath: string
+  ) => Promise<{ ok: boolean; error?: string }>
+  sftpDownloadDir: (
+    nodeId: string,
+    remotePath: string,
+    localDir: string
+  ) => Promise<{ ok: boolean; count: number; error?: string }>
+  sftpUploadFiles: (
+    nodeId: string,
+    remoteDir: string,
+    localPaths: string[]
+  ) => Promise<{ ok: boolean; count: number; error?: string }>
+  sftpMkdir: (nodeId: string, remotePath: string) => Promise<{ ok: boolean; error?: string }>
+  sftpWriteFile: (
+    nodeId: string,
+    remotePath: string,
+    content?: string
+  ) => Promise<{ ok: boolean; error?: string }>
+  disconnectNode: (nodeId: string) => void
+  disconnectSftp: (nodeId: string) => void
+  stop: () => void
+  onShellData: (cb: (data: SshShellData) => void) => () => void
+  onShellExit: (cb: (data: SshShellExit) => void) => () => void
+} {
+  const shells = new Map<string, ShellSession>()
+  const sftps = new Map<string, SftpSession>()
+  const shellDataListeners = new Set<(data: SshShellData) => void>()
+  const shellExitListeners = new Set<(data: SshShellExit) => void>()
+
+  function emitShellData(data: SshShellData): void {
+    for (const cb of shellDataListeners) cb(data)
+  }
+
+  function emitShellExit(data: SshShellExit): void {
+    for (const cb of shellExitListeners) cb(data)
+  }
+
+  function cleanupShell(sessionId: string, reason?: string, silent = false): void {
+    const session = shells.get(sessionId)
+    if (!session) return
+    shells.delete(sessionId)
+    try {
+      session.channel.close()
+    } catch {
+      // ignore
+    }
+    try {
+      session.client.end()
+    } catch {
+      // ignore
+    }
+    if (!silent) emitShellExit({ sessionId, reason })
+  }
+
+  async function openClient(nodeId: string): Promise<{ node: SshNode; client: Client }> {
+    const node = options.getNode(nodeId)
+    if (!node) throw new Error('NODE_NOT_FOUND')
+    const cfg = await makeConnectConfig(node, options.verifyHostKey)
+    return new Promise((resolve, reject) => {
+      const client = new Client()
+      let settled = false
+      const succeed = (): void => {
+        if (settled) return
+        settled = true
+        resolve({ node, client })
+      }
+      const fail = (err: Error): void => {
+        if (settled) return
+        settled = true
+        try {
+          client.end()
+        } catch {
+          // ignore
+        }
+        reject(err)
+      }
+      client.on('ready', () => succeed())
+      client.on('error', (err) => fail(new Error(normalizeSshError(err.message))))
+      try {
+        client.connect(cfg)
+      } catch (err) {
+        fail(err as Error)
+      }
+    })
+  }
+
+  async function ensureSftp(nodeId: string): Promise<SftpSession> {
+    const existing = sftps.get(nodeId)
+    if (existing) return existing
+    const { client } = await openClient(nodeId)
+    return new Promise((resolve, reject) => {
+      client.sftp((err, sftp) => {
+        if (err || !sftp) {
+          try {
+            client.end()
+          } catch {
+            // ignore
+          }
+          reject(new Error(err?.message || 'SFTP_FAILED'))
+          return
+        }
+        const session: SftpSession = { nodeId, client, sftp }
+        sftps.set(nodeId, session)
+        client.on('close', () => {
+          if (sftps.get(nodeId) === session) sftps.delete(nodeId)
+        })
+        client.on('error', () => {
+          if (sftps.get(nodeId) === session) {
+            sftps.delete(nodeId)
+            try {
+              client.end()
+            } catch {
+              // ignore
+            }
+          }
+        })
+        resolve(session)
+      })
+    })
+  }
+
+  function listDir(sftp: SFTPWrapper, remotePath: string): Promise<SshSftpEntry[]> {
+    return new Promise((resolve, reject) => {
+      sftp.readdir(remotePath, (err, list) => {
+        if (err) {
+          reject(new Error(err.message || 'SFTP_LIST_FAILED'))
+          return
+        }
+        const entries: SshSftpEntry[] = (list || []).map((item) => {
+          const attrs = item.attrs
+          return {
+            name: item.filename,
+            path: posixJoin(remotePath === '.' ? '/' : remotePath, item.filename),
+            type: entryType(attrs),
+            size: attrs.size ?? 0,
+            modifyTime: (attrs.mtime ?? 0) * 1000,
+            accessTime: (attrs.atime ?? 0) * 1000,
+            owner: attrs.uid,
+            group: attrs.gid,
+            mode: attrs.mode
+          }
+        })
+        entries.sort((a, b) => {
+          if (a.type === 'directory' && b.type !== 'directory') return -1
+          if (a.type !== 'directory' && b.type === 'directory') return 1
+          return a.name.localeCompare(b.name)
+        })
+        resolve(entries)
+      })
+    })
+  }
+
+  function downloadOneFile(
+    sftp: SFTPWrapper,
+    remotePath: string,
+    localPath: string
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      sftp.fastGet(remotePath, localPath, (err) => {
+        if (err) reject(new Error(err.message || 'SFTP_DOWNLOAD_FAILED'))
+        else resolve()
+      })
+    })
+  }
+
+  function uploadOneFile(sftp: SFTPWrapper, localPath: string, remotePath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      sftp.fastPut(localPath, remotePath, (err) => {
+        if (err) reject(new Error(err.message || 'SFTP_UPLOAD_FAILED'))
+        else resolve()
+      })
+    })
+  }
+
+  function mkdirRemote(sftp: SFTPWrapper, remotePath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      sftp.mkdir(remotePath, (err) => {
+        if (err) reject(new Error(err.message || 'SFTP_MKDIR_FAILED'))
+        else resolve()
+      })
+    })
+  }
+
+  function writeRemoteFile(sftp: SFTPWrapper, remotePath: string, content: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      sftp.writeFile(remotePath, Buffer.from(content, 'utf8'), (err) => {
+        if (err) reject(new Error(err.message || 'SFTP_WRITE_FAILED'))
+        else resolve()
+      })
+    })
+  }
+
+  function closeSftp(nodeId: string): void {
+    const sftp = sftps.get(nodeId)
+    if (!sftp) return
+    sftps.delete(nodeId)
+    try {
+      sftp.client.end()
+    } catch {
+      // ignore
+    }
+  }
+
+  async function downloadTree(
+    sftp: SFTPWrapper,
+    remotePath: string,
+    localDir: string
+  ): Promise<number> {
+    await fsp.mkdir(localDir, { recursive: true })
+    const entries = await listDir(sftp, remotePath)
+    let count = 0
+    for (const entry of entries) {
+      if (entry.name === '.' || entry.name === '..') continue
+      const localPath = join(localDir, entry.name)
+      if (entry.type === 'directory') {
+        count += await downloadTree(sftp, entry.path, localPath)
+      } else if (entry.type === 'file' || entry.type === 'symlink') {
+        await fsp.mkdir(dirname(localPath), { recursive: true })
+        await downloadOneFile(sftp, entry.path, localPath)
+        count += 1
+      }
+    }
+    return count
+  }
+
+  function statPath(
+    sftp: SFTPWrapper,
+    remotePath: string
+  ): Promise<{ type: SshSftpEntry['type']; size: number }> {
+    return new Promise((resolve, reject) => {
+      sftp.lstat(remotePath, (err, stats) => {
+        if (err || !stats) {
+          reject(new Error(err?.message || 'SFTP_STAT_FAILED'))
+          return
+        }
+        resolve({ type: entryType(stats), size: stats.size ?? 0 })
+      })
+    })
+  }
+
+  return {
+    async startShell(opts) {
+      const cols = Math.max(2, opts.cols ?? 80)
+      const rows = Math.max(1, opts.rows ?? 24)
+      const term = opts.term || 'xterm-256color'
+      const { client } = await openClient(opts.nodeId)
+      return new Promise((resolve, reject) => {
+        client.shell({ term, cols, rows }, (err, channel) => {
+          if (err || !channel) {
+            try {
+              client.end()
+            } catch {
+              // ignore
+            }
+            reject(new Error(normalizeSshError(err?.message || 'SHELL_FAILED')))
+            return
+          }
+          const sessionId = randomUUID()
+          const session: ShellSession = {
+            sessionId,
+            nodeId: opts.nodeId,
+            client,
+            channel
+          }
+          shells.set(sessionId, session)
+
+          channel.on('data', (chunk: Buffer | string) => {
+            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+            emitShellData({ sessionId, data: buf.toString('base64') })
+          })
+          channel.stderr?.on('data', (chunk: Buffer | string) => {
+            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+            emitShellData({ sessionId, data: buf.toString('base64') })
+          })
+          channel.on('close', () => cleanupShell(sessionId))
+          channel.on('exit', (_code, _signal, dump, desc) => {
+            cleanupShell(sessionId, desc || (dump ? 'dump' : undefined))
+          })
+          client.on('close', () => cleanupShell(sessionId, 'closed'))
+          client.on('error', () => cleanupShell(sessionId, 'error'))
+
+          resolve({ sessionId })
+        })
+      })
+    },
+
+    async writeShell(sessionId, dataBase64) {
+      const session = shells.get(sessionId)
+      if (!session) return false
+      session.channel.write(Buffer.from(dataBase64, 'base64'))
+      return true
+    },
+
+    async resizeShell(sessionId, cols, rows) {
+      const session = shells.get(sessionId)
+      if (!session) return false
+      try {
+        session.channel.setWindow(Math.max(1, rows), Math.max(2, cols), 0, 0)
+        return true
+      } catch {
+        return false
+      }
+    },
+
+    async stopShell(sessionId) {
+      const session = shells.get(sessionId)
+      if (!session) return false
+      cleanupShell(sessionId, 'stopped')
+      return true
+    },
+
+    async sftpList(nodeId, remotePath) {
+      const session = await ensureSftp(nodeId)
+      const path = remotePath?.trim() || '/'
+      return listDir(session.sftp, path)
+    },
+
+    async sftpDownloadFile(nodeId, remotePath, localPath) {
+      try {
+        const session = await ensureSftp(nodeId)
+        await fsp.mkdir(dirname(localPath), { recursive: true })
+        await downloadOneFile(session.sftp, remotePath, localPath)
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    },
+
+    async sftpDownloadDir(nodeId, remotePath, localDir) {
+      try {
+        const session = await ensureSftp(nodeId)
+        const stats = await statPath(session.sftp, remotePath)
+        if (stats.type !== 'directory') {
+          const fileName = basename(remotePath)
+          const localPath = join(localDir, fileName)
+          await fsp.mkdir(localDir, { recursive: true })
+          await downloadOneFile(session.sftp, remotePath, localPath)
+          return { ok: true, count: 1 }
+        }
+        const folderName = basename(remotePath.replace(/\/+$/, '') || 'download')
+        const target = join(localDir, folderName)
+        const count = await downloadTree(session.sftp, remotePath, target)
+        return { ok: true, count }
+      } catch (err) {
+        return { ok: false, count: 0, error: (err as Error).message }
+      }
+    },
+
+    async sftpUploadFiles(nodeId, remoteDir, localPaths) {
+      try {
+        const session = await ensureSftp(nodeId)
+        const dir = remoteDir?.trim() || '/'
+        let count = 0
+        for (const localPath of localPaths) {
+          const name = basename(localPath)
+          if (!name) continue
+          await uploadOneFile(session.sftp, localPath, posixJoin(dir, name))
+          count += 1
+        }
+        return { ok: true, count }
+      } catch (err) {
+        return { ok: false, count: 0, error: (err as Error).message }
+      }
+    },
+
+    async sftpMkdir(nodeId, remotePath) {
+      try {
+        const session = await ensureSftp(nodeId)
+        await mkdirRemote(session.sftp, remotePath)
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    },
+
+    async sftpWriteFile(nodeId, remotePath, content = '') {
+      try {
+        const session = await ensureSftp(nodeId)
+        await writeRemoteFile(session.sftp, remotePath, content)
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    },
+
+    disconnectSftp(nodeId) {
+      closeSftp(nodeId)
+    },
+
+    disconnectNode(nodeId) {
+      for (const [id, session] of shells) {
+        if (session.nodeId === nodeId) cleanupShell(id, 'node-removed')
+      }
+      closeSftp(nodeId)
+    },
+
+    stop() {
+      for (const id of [...shells.keys()]) cleanupShell(id, 'stopped', true)
+      for (const nodeId of [...sftps.keys()]) closeSftp(nodeId)
+    },
+
+    onShellData(cb) {
+      shellDataListeners.add(cb)
+      return () => shellDataListeners.delete(cb)
+    },
+
+    onShellExit(cb) {
+      shellExitListeners.add(cb)
+      return () => shellExitListeners.delete(cb)
+    }
+  }
+}

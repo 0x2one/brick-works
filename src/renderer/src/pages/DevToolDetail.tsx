@@ -11,6 +11,8 @@ import TimestampConverter from './tools/TimestampConverter'
 import UuidGenerator from './tools/UuidGenerator'
 import QrCodeTool from './tools/QrCodeTool'
 import SvgToImage from './tools/SvgToImage'
+import PdfImageAnnotate from './tools/PdfImageAnnotate'
+import PdfMergeSplit from './tools/PdfMergeSplit'
 
 interface ToolProps {
   breadcrumb?: React.ReactNode
@@ -25,6 +27,9 @@ const toolComponents: Record<string, React.ComponentType<ToolProps>> = {
   'uuid-generator': UuidGenerator,
   'qr-code': QrCodeTool,
   'svg-to-image': SvgToImage
+  'timestamp-converter': TimestampConverter,
+  'pdf-image-annotate': PdfImageAnnotate,
+  'pdf-merge-split': PdfMergeSplit
 }
 
 function DevToolDetail(): React.JSX.Element {

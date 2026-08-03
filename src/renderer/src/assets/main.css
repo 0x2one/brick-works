@@ -162,6 +162,39 @@
   background: var(--content-bg);
 }
 
+@keyframes page-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.page-fade-exit {
+  animation: page-fade-out 0.12s ease both;
+}
+
+.page-fade-enter {
+  animation: page-fade-in 0.16s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-fade-exit,
+  .page-fade-enter {
+    animation: none !important;
+  }
+}
+
 .layout-right {
   background: var(--content-bg);
 }
@@ -470,6 +503,94 @@
 .sticky-color-swatch.selected {
   border-color: var(--text-primary);
   transform: scale(1.15);
+}
+
+/* ── K8s Manage ── */
+
+.k8s-page {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.k8s-page-body {
+  scrollbar-gutter: stable;
+}
+
+.k8s-page-body .ant-table-body {
+  overflow-y: auto !important;
+}
+
+.k8s-page-body .ant-table-header table {
+  border-collapse: separate;
+}
+
+.k8s-page-body .ant-table-header .ant-table-cell {
+  background: var(--content-bg);
+}
+
+/* Stabilize fixed action column while horizontal scrolling */
+.k8s-page-body .ant-table-cell-fix {
+  background: var(--content-bg);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.k8s-page-body .ant-table-tbody > tr > .ant-table-cell-fix,
+.k8s-page-body .ant-table-thead > tr > .ant-table-cell-fix {
+  background: var(--content-bg);
+}
+
+.k8s-page-body .ant-table-tbody > tr.ant-table-row:hover > .ant-table-cell-fix {
+  background: var(--bg-warm);
+}
+
+/* No-mask bottom drawers: keep panel interactive, pass clicks outside */
+.k8s-drawer-no-mask.ant-drawer {
+  pointer-events: none;
+}
+
+.k8s-drawer-no-mask .ant-drawer-section,
+.k8s-drawer-no-mask .ant-drawer-content {
+  pointer-events: auto;
+}
+
+.k8s-drawer-no-mask .xterm,
+.k8s-drawer-no-mask .xterm-screen,
+.k8s-drawer-no-mask .xterm-helpers {
+  pointer-events: auto;
+}
+
+/* ── SSH Client workspace ── */
+
+.content-area:has(.ssh-client-page:not(.hidden)) {
+  overflow: hidden;
+}
+
+.ssh-client-page {
+  height: 100%;
+  min-height: 0;
+}
+
+.ssh-client-page .xterm,
+.ssh-client-page .xterm-viewport,
+.ssh-client-page .xterm-screen {
+  height: 100%;
+  width: 100%;
+}
+
+/* Tiny “copied” tip for SSH console selection */
+.ssh-client-copy-hint {
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 400;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  opacity: 0.92;
 }
 
 /* ── Animations ── */

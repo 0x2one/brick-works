@@ -1,44 +1,97 @@
-import { useState } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu } from 'antd'
-import { NavLink, useLocation, Outlet } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ToolOutlined,
-  InfoCircleOutlined,
   PushpinOutlined,
   BuildOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined
+  MenuUnfoldOutlined,
+  ThunderboltOutlined,
+  DeploymentUnitOutlined,
+  CloudServerOutlined,
+  CodeOutlined
 } from '@ant-design/icons'
 import TitleBar from './components/TitleBar'
 import DevTools from './pages/DevTools'
 import DevToolDetail from './pages/DevToolDetail'
 import About from './pages/About'
 import MemoSticky from './pages/MemoSticky'
+import LanTransfer from './pages/LanTransfer'
+import SshTunnel from './pages/SshTunnel'
+import SshClient from './pages/SshClient'
+import K8sManage from './pages/K8sManage'
 
 const { Sider, Content } = Layout
 
+type FadeStage = 'idle' | 'exit' | 'enter'
+
 function AppLayout(): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
+  const [displayLocation, setDisplayLocation] = useState(location)
+  const [fadeStage, setFadeStage] = useState<FadeStage>('idle')
+  const [sshClientMounted, setSshClientMounted] = useState(
+    () => location.pathname === '/ssh-client'
+  )
+  const showSshClient = displayLocation.pathname === '/ssh-client'
+
+  useEffect(() => {
+    window.api.lan.setLang(i18n.language === 'en' ? 'en' : 'zh')
+  }, [i18n.language])
+
+  useEffect(() => {
+    if (location.pathname === '/ssh-client') setSshClientMounted(true)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (location.pathname === displayLocation.pathname || fadeStage === 'exit') return
+    // Skip animation for the initial `/` → default route redirect
+    if (displayLocation.pathname === '/') {
+      setDisplayLocation(location)
+      return
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDisplayLocation(location)
+      setFadeStage('idle')
+      return
+    }
+    setFadeStage('exit')
+  }, [location, displayLocation.pathname, fadeStage])
 
   const menuItems = [
     {
       key: '/memo-sticky',
       icon: <PushpinOutlined />,
-      label: <NavLink to="/memo-sticky">{t('memoSticky')}</NavLink>
+      label: t('memoSticky')
+    },
+    {
+      key: '/lan-transfer',
+      icon: <ThunderboltOutlined />,
+      label: t('lanTransfer')
+    },
+    {
+      key: '/ssh-tunnel',
+      icon: <DeploymentUnitOutlined />,
+      label: t('sshTunnel')
+    },
+    {
+      key: '/ssh-client',
+      icon: <CodeOutlined />,
+      label: t('sshClient')
+    },
+    {
+      key: '/k8s',
+      icon: <CloudServerOutlined />,
+      label: t('k8sManage')
     },
     {
       key: '/dev-tools',
       icon: <ToolOutlined />,
-      label: <NavLink to="/dev-tools">{t('devTools')}</NavLink>
-    },
-    {
-      key: '/about',
-      icon: <InfoCircleOutlined />,
-      label: <NavLink to="/about">{t('about')}</NavLink>
+      label: t('devTools')
     }
   ]
 
@@ -67,12 +120,45 @@ function AppLayout(): React.JSX.Element {
           ]}
           items={menuItems}
           className="!bg-transparent !border-e-0"
+          onClick={({ key }) => {
+            if (typeof key === 'string' && key.startsWith('/') && key !== location.pathname) {
+              navigate(key)
+            }
+          }}
         />
       </Sider>
-      <Layout className="layout-right">
+      <Layout className="layout-right flex flex-col min-h-0">
         <TitleBar />
-        <Content className="overflow-auto content-area">
-          <Outlet />
+        <Content className="overflow-auto content-area flex flex-col flex-1 min-h-0">
+          <div
+            className={`page-fade flex flex-col flex-1 min-h-0${
+              fadeStage === 'exit' ? ' page-fade-exit' : fadeStage === 'enter' ? ' page-fade-enter' : ''
+            }`}
+            onAnimationEnd={(e) => {
+              if (e.target !== e.currentTarget) return
+              if (fadeStage === 'exit') {
+                setDisplayLocation(location)
+                setFadeStage('enter')
+              } else if (fadeStage === 'enter') {
+                setFadeStage('idle')
+              }
+            }}
+          >
+            {sshClientMounted && <SshClient active={showSshClient} />}
+            {!showSshClient && (
+              <Routes location={displayLocation}>
+                <Route path="/dev-tools" element={<DevTools />} />
+                <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
+                <Route path="/memo-sticky" element={<MemoSticky />} />
+                <Route path="/lan-transfer" element={<LanTransfer />} />
+                <Route path="/ssh-tunnel" element={<SshTunnel />} />
+                <Route path="/k8s" element={<K8sManage />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/" element={<Navigate to="/dev-tools" replace />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            )}
+          </div>
         </Content>
       </Layout>
     </Layout>
@@ -80,18 +166,7 @@ function AppLayout(): React.JSX.Element {
 }
 
 function App(): React.JSX.Element {
-  return (
-    <Routes>
-      <Route element={<AppLayout />}>
-        <Route path="/dev-tools" element={<DevTools />} />
-        <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
-        <Route path="/memo-sticky" element={<MemoSticky />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/" element={<Navigate to="/dev-tools" replace />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  )
+  return <AppLayout />
 }
 
 export default App

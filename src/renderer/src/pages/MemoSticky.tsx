@@ -134,7 +134,6 @@ function TagSidebar({
 
 function NoteCard({
   note,
-  tag,
   selected,
   batchMode,
   batchSelected,

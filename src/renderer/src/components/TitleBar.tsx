@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Modal } from 'antd'
 import { useTranslation } from 'react-i18next'
 import {
@@ -7,19 +7,25 @@ import {
   CompressOutlined,
   BorderOutlined,
   CloseOutlined,
-  SettingOutlined
+  SettingOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons'
 import Settings from '../pages/Settings'
 
 const pathToLabelKey: Record<string, string> = {
   '/dev-tools': 'devTools',
   '/about': 'about',
-  '/memo-sticky': 'memoSticky'
+  '/memo-sticky': 'memoSticky',
+  '/lan-transfer': 'lanTransfer',
+  '/ssh-tunnel': 'sshTunnel',
+  '/ssh-client': 'sshClient',
+  '/k8s': 'k8sManage'
 }
 
 function TitleBar(): React.JSX.Element {
   const { t } = useTranslation()
   const location = useLocation()
+  const navigate = useNavigate()
   const [maximized, setMaximized] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -45,6 +51,13 @@ function TitleBar(): React.JSX.Element {
       )}
       <div className="title-bar-drag" />
       <div className="title-bar-controls">
+        <button
+          className="title-bar-btn"
+          onClick={() => navigate('/about')}
+          title={t('about')}
+        >
+          <InfoCircleOutlined />
+        </button>
         <button
           className="title-bar-btn"
           onClick={() => setSettingsOpen(true)}
@@ -80,6 +93,7 @@ function TitleBar(): React.JSX.Element {
         onCancel={() => setSettingsOpen(false)}
         footer={null}
         width={480}
+        zIndex={3000}
       >
         <Settings />
       </Modal>
