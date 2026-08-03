@@ -8,7 +8,19 @@ import {
   useImperativeHandle
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Modal, Form, Input, InputNumber, Radio, Segmented, Empty, Button, Select } from 'antd'
+import {
+  App,
+  Modal,
+  Form,
+  Input,
+  InputNumber,
+  Radio,
+  Segmented,
+  Empty,
+  Button,
+  Select,
+  Tooltip
+} from 'antd'
 import {
   PlusOutlined,
   ApiOutlined,
@@ -529,13 +541,19 @@ function NodeEditor({
       okText={t('sshSave')}
       cancelText={t('sshCancel')}
       destroyOnHidden
-      width={460}
+      centered
+      width={560}
     >
-      <Form form={form} layout="vertical" className="mt-2">
-        <Form.Item name="name" label={t('sshName')} rules={[{ required: true }]}>
-          <Input placeholder="cloud-server" />
-        </Form.Item>
-        <div className="grid grid-cols-3 gap-3">
+      <Form form={form} layout="vertical" className="mt-1 [&_.ant-form-item]:mb-3" size="middle">
+        <div className="grid grid-cols-2 gap-x-3">
+          <Form.Item name="name" label={t('sshName')} rules={[{ required: true }]}>
+            <Input placeholder="cloud-server" />
+          </Form.Item>
+          <Form.Item name="username" label={t('sshUsername')} rules={[{ required: true }]}>
+            <Input placeholder="root" />
+          </Form.Item>
+        </div>
+        <div className="grid grid-cols-3 gap-x-3">
           <Form.Item
             name="host"
             label={t('sshHost')}
@@ -548,42 +566,32 @@ function NodeEditor({
             <InputNumber min={1} max={65535} className="w-full" />
           </Form.Item>
         </div>
-        <Form.Item name="username" label={t('sshUsername')} rules={[{ required: true }]}>
-          <Input placeholder="root" />
-        </Form.Item>
-        <Form.Item
-          name="jumpHostId"
-          label={t('sshJumpHost')}
-          extra={t('sshJumpHostHint')}
-        >
-          <Select
-            allowClear
-            placeholder={t('sshJumpHostNone')}
-            options={jumpOptions}
-            optionFilterProp="label"
-            showSearch
-          />
-        </Form.Item>
-        {editing && (
-          <div className="mb-4">
-            <Button size="small" onClick={handleClearHostKey}>
-              {t('sshClearHostKey')}
-            </Button>
-            <p className="text-[10px] text-[var(--text-secondary)] mt-1">
-              {t('sshClearHostKeyHint')}
-            </p>
-          </div>
-        )}
-        <Form.Item name="authType" label={t('sshAuthType')}>
-          <Radio.Group
-            optionType="button"
-            buttonStyle="solid"
-            options={[
-              { label: t('sshAuthPassword'), value: 'password' },
-              { label: t('sshAuthKey'), value: 'privateKey' }
-            ]}
-          />
-        </Form.Item>
+        <div className="grid grid-cols-2 gap-x-3">
+          <Form.Item
+            name="jumpHostId"
+            label={t('sshJumpHost')}
+            tooltip={t('sshJumpHostHint')}
+          >
+            <Select
+              allowClear
+              placeholder={t('sshJumpHostNone')}
+              options={jumpOptions}
+              optionFilterProp="label"
+              showSearch
+            />
+          </Form.Item>
+          <Form.Item name="authType" label={t('sshAuthType')}>
+            <Radio.Group
+              optionType="button"
+              buttonStyle="solid"
+              className="flex w-full [&>label]:flex-1 [&>label]:text-center"
+              options={[
+                { label: t('sshAuthPassword'), value: 'password' },
+                { label: t('sshAuthKey'), value: 'privateKey' }
+              ]}
+            />
+          </Form.Item>
+        </div>
         <Form.Item noStyle shouldUpdate={(prev, cur) => prev.authType !== cur.authType}>
           {() => {
             const authType = form.getFieldValue('authType') as EditorValues['authType']
@@ -592,6 +600,7 @@ function NodeEditor({
                 <Form.Item
                   name="password"
                   label={t('sshPassword')}
+                  className="mb-0!"
                   rules={
                     editing?.hasPassword
                       ? []
@@ -629,6 +638,7 @@ function NodeEditor({
                   <Form.Item
                     name="passphrase"
                     label={t('sshPassphrase')}
+                    className="mb-0!"
                     extra={editing?.hasPassphrase ? t('sshKeepSecret') : undefined}
                   >
                     <Input.Password autoComplete="new-password" />
@@ -639,6 +649,15 @@ function NodeEditor({
             return null
           }}
         </Form.Item>
+        {editing && (
+          <div className="mt-1">
+            <Tooltip title={t('sshClearHostKeyHint')}>
+              <Button type="link" size="small" className="px-0 h-auto" onClick={handleClearHostKey}>
+                {t('sshClearHostKey')}
+              </Button>
+            </Tooltip>
+          </div>
+        )}
       </Form>
     </Modal>
   )
