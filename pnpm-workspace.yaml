@@ -4,3 +4,8 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   ssh2: true
+
+# electron-builder 26 uses ElectronDownloadCacheMode (added in @electron/get@3.1.0),
+# but app-builder-lib still allows ^3.0.0 which can resolve to 3.0.0 and crash packaging.
+overrides:
+  'app-builder-lib>@electron/get': 3.1.0

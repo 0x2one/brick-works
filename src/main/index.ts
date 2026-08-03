@@ -16,6 +16,7 @@ import {
 import { createSshClientManager, type SshShellStartOpts } from './ssh-client-manager'
 import { createK8sStore, defaultKubeconfigPath, type K8sClusterInput } from './k8s-store'
 import { createK8sManager } from './k8s-manager'
+import { createStickyStore, type StickyData } from './sticky-store'
 import {
   allowLocalPath,
   assertAllowedLocalPath,
@@ -959,6 +960,14 @@ ipcMain.handle('k8s:deletePortForward', (_event, id: string) => k8sManager.delet
 
 ipcMain.handle('k8s:listPortForwards', () => k8sManager.listPortForwards())
 
+/* ── Sticky notes ── */
+
+const stickyStore = createStickyStore()
+
+ipcMain.handle('sticky:load', () => stickyStore.load())
+
+ipcMain.handle('sticky:save', (_event, data: StickyData) => stickyStore.save(data ?? { tags: [], notes: [] }))
+
 let quittingCleaned = false
 app.on('before-quit', (event) => {
   if (quittingCleaned) return
@@ -983,7 +992,11 @@ app.whenReady().then(async () => {
 
   ipcMain.on('ping', () => console.log('pong'))
 
-  await Promise.all([sshStore.init().catch(() => {}), k8sStore.init().catch(() => {})])
+  await Promise.all([
+    sshStore.init().catch(() => {}),
+    k8sStore.init().catch(() => {}),
+    stickyStore.init().catch(() => {})
+  ])
   seedAllowedPaths()
   broadcastSshStatus()
   broadcastK8sStatus()

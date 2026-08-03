@@ -127,6 +127,7 @@ interface Api {
   app: AppApi
   lan: LanApi
   ssh: SshApi
+  sticky: StickyApi
   k8s: K8sApi
 }
 

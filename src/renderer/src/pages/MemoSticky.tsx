@@ -38,7 +38,7 @@ const TAG_COLORS = [
 const LS_TAGS = 'brickworks:stickyTags'
 const LS_NOTES = 'brickworks:stickyNotes'
 
-function loadFromLS<T>(key: string, fallback: T): T {
+function loadFromLs<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key)
     return raw ? (JSON.parse(raw) as T) : fallback
@@ -47,8 +47,13 @@ function loadFromLS<T>(key: string, fallback: T): T {
   }
 }
 
-function saveToLS<T>(key: string, data: T): void {
-  localStorage.setItem(key, JSON.stringify(data))
+function clearLegacyLs(): void {
+  try {
+    localStorage.removeItem(LS_TAGS)
+    localStorage.removeItem(LS_NOTES)
+  } catch {
+    // ignore
+  }
 }
 
 function genId(): string {
@@ -202,8 +207,9 @@ function NoteCard({
 function MemoSticky(): React.JSX.Element {
   const { t } = useTranslation()
 
-  const [tags, setTags] = useState<Tag[]>(() => loadFromLS<Tag[]>(LS_TAGS, []))
-  const [notes, setNotes] = useState<Note[]>(() => loadFromLS<Note[]>(LS_NOTES, []))
+  const [tags, setTags] = useState<Tag[]>([])
+  const [notes, setNotes] = useState<Note[]>([])
+  const [hydrated, setHydrated] = useState(false)
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null)
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [batchMode, setBatchMode] = useState(false)
@@ -222,11 +228,40 @@ function MemoSticky(): React.JSX.Element {
   const [noteContentInput, setNoteContentInput] = useState('')
 
   useEffect(() => {
-    saveToLS(LS_TAGS, tags)
-  }, [tags])
+    let cancelled = false
+    void (async () => {
+      try {
+        let data = await window.api.sticky.load()
+        if (cancelled) return
+        if (data.tags.length === 0 && data.notes.length === 0) {
+          const legacyTags = loadFromLs<Tag[]>(LS_TAGS, [])
+          const legacyNotes = loadFromLs<Note[]>(LS_NOTES, [])
+          if (legacyTags.length > 0 || legacyNotes.length > 0) {
+            data = await window.api.sticky.save({ tags: legacyTags, notes: legacyNotes })
+            clearLegacyLs()
+          }
+        } else {
+          clearLegacyLs()
+        }
+        if (cancelled) return
+        setTags(data.tags)
+        setNotes(data.notes)
+        setHydrated(true)
+      } catch {
+        if (cancelled) return
+        setTags(loadFromLs<Tag[]>(LS_TAGS, []))
+        setNotes(loadFromLs<Note[]>(LS_NOTES, []))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   useEffect(() => {
-    saveToLS(LS_NOTES, notes)
-  }, [notes])
+    if (!hydrated) return
+    void window.api.sticky.save({ tags, notes })
+  }, [tags, notes, hydrated])
 
   
   const filteredNotes =
