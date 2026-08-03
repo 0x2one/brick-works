@@ -155,7 +155,7 @@ function LanTransfer(): React.JSX.Element {
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={handleChooseDir} className={BTN_CLS}>
+              <button onClick={handleChooseDir} disabled={running} className={BTN_CLS}>
                 <FolderOpenOutlined />
                 {t('lanChooseDir')}
               </button>
