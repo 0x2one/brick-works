@@ -33,6 +33,7 @@ const api = {
     openBrowser: (url: string) => ipcRenderer.invoke('lan:openBrowser', url),
     openDir: () => ipcRenderer.invoke('lan:openDir'),
     setLang: (lang: string) => ipcRenderer.invoke('lan:setLang', lang),
+    setIp: (ip: string | null) => ipcRenderer.invoke('lan:setIp', ip),
     onStatusChange: (callback: (status: LanStatus) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, status: LanStatus): void =>
         callback(status)

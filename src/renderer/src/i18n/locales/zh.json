@@ -373,6 +373,8 @@
   "lanStop": "停止服务",
   "lanPort": "端口",
   "lanAddress": "访问地址",
+  "lanNetworkIp": "网卡 IP",
+  "lanNetworkIpHint": "电脑有多个网卡时，请选择对端设备所在的局域网 IP。",
   "lanCopy": "复制链接",
   "lanOpenBrowser": "在浏览器打开",
   "lanManageDir": "管理目录",

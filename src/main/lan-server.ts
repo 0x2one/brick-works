@@ -16,6 +16,7 @@ export interface LanServerInfo {
   port: number
   url: string
   token: string
+  ips: string[]
 }
 
 export interface LanStatus {
@@ -25,6 +26,7 @@ export interface LanStatus {
   url: string | null
   dir: string | null
   token: string | null
+  ips: string[]
 }
 
 interface UploadSession {
@@ -34,15 +36,28 @@ interface UploadSession {
 }
 
 export function getLanIps(): string[] {
-  const ips: string[] = []
+  const list: Array<{ ip: string; isPrivate: boolean; isVirtual: boolean }> = []
   const nets = networkInterfaces()
   for (const name of Object.keys(nets)) {
     for (const net of nets[name] ?? []) {
-      if (net.family === 'IPv4' && !net.internal) ips.push(net.address)
+      if (net.family === 'IPv4' && !net.internal) {
+        list.push({
+          ip: net.address,
+          isPrivate: /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(net.address),
+          isVirtual:
+            /virtual|vmware|vbox|hyper-v|vehternet|tailscale|zerotier|docker|wsl|npcap/i.test(name)
+        })
+      }
     }
   }
-  const isPrivate = (ip: string): boolean => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip)
-  return ips.sort((a, b) => Number(isPrivate(b)) - Number(isPrivate(a)))
+  // Prefer physical private LAN addresses, then other private, then the rest.
+  return list
+    .sort((a, b) => {
+      const score = (x: { isPrivate: boolean; isVirtual: boolean }): number =>
+        x.isPrivate ? (x.isVirtual ? 2 : 0) : x.isVirtual ? 3 : 1
+      return score(a) - score(b)
+    })
+    .map((x) => x.ip)
 }
 
 export function generateLanToken(): string {
@@ -102,12 +117,14 @@ export interface LanServer {
   start: () => Promise<LanServerInfo>
   stop: () => Promise<void>
   setLang: (lang: string) => void
+  setIp: (ip: string | null) => void
 }
 
 export function createLanServer(rootDir: string, initialLang = 'zh', token: string): LanServer {
   let server: Server | null = null
   let port = 0
   let lang: string = initialLang === 'en' ? 'en' : 'zh'
+  let selectedIp: string | null = null
   const tmpRoot = join(rootDir, TMP_DIR)
   const uploadSessions = new Map<string, UploadSession>()
 
@@ -163,8 +180,9 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
   }
 
   function getInfo(): LanServerInfo {
-    const ip = getLanIps()[0] ?? '127.0.0.1'
-    return { ip, port, url: `http://${ip}:${port}/?token=${encodeURIComponent(token)}`, token }
+    const ips = getLanIps()
+    const ip = selectedIp && ips.includes(selectedIp) ? selectedIp : (ips[0] ?? '127.0.0.1')
+    return { ip, port, url: `http://${ip}:${port}/?token=${encodeURIComponent(token)}`, token, ips }
   }
 
   function assertAuth(req: IncomingMessage): void {
@@ -388,6 +406,9 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
     },
     setLang(next: string): void {
       lang = next === 'en' ? 'en' : 'zh'
+    },
+    setIp(next: string | null): void {
+      selectedIp = next && getLanIps().includes(next) ? next : null
     }
   }
 }

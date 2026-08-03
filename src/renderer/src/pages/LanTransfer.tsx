@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Modal } from 'antd'
+import { App, Modal, Select } from 'antd'
 import {
   PlayCircleOutlined,
   StopOutlined,
@@ -102,10 +102,10 @@ function LanTransfer(): React.JSX.Element {
   })()
 
   return (
-    <div className="flex flex-col p-6 gap-4" style={{ height: 'calc(100vh - 56px)' }}>
+    <div className="flex flex-col p-6 gap-4">
       <p className="text-xs text-[var(--text-secondary)]">{t('lanDesc')}</p>
 
-      <div className="flex flex-col gap-4 max-w-[720px] overflow-auto pb-4">
+      <div className="flex flex-col gap-4 max-w-[720px]">
         {/* Service status */}
         <section className={CARD_CLS}>
           <div className="px-5 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
@@ -214,6 +214,27 @@ function LanTransfer(): React.JSX.Element {
                   </div>
                   <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
                     {t('lanTokenHint')}
+                  </p>
+                </div>
+              )}
+
+              {status?.ips && status.ips.length > 0 && (
+                <div>
+                  <label className={LABEL_CLS}>{t('lanNetworkIp')}</label>
+                  <Select
+                    className="w-full"
+                    size="small"
+                    value={status.ip ?? undefined}
+                    onChange={(ip) => {
+                      void window.api.lan
+                        .setIp(ip)
+                        .then(setStatus)
+                        .catch(() => {})
+                    }}
+                    options={status.ips.map((ip) => ({ value: ip, label: ip }))}
+                  />
+                  <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
+                    {t('lanNetworkIpHint')}
                   </p>
                 </div>
               )}

@@ -201,9 +201,7 @@ function showMainWindow(): void {
 
 function trayLabels(): { show: string; quit: string } {
   const zh = app.getLocale().toLowerCase().startsWith('zh')
-  return zh
-    ? { show: '显示窗口', quit: '退出' }
-    : { show: 'Show', quit: 'Quit' }
+  return zh ? { show: '显示窗口', quit: '退出' } : { show: 'Show', quit: 'Quit' }
 }
 
 function destroyTray(): void {
@@ -386,7 +384,7 @@ let lanServer: ReturnType<typeof createLanServer> | null = null
 
 function lanStatus(): LanStatus {
   if (!lanServer || !lanServer.isRunning()) {
-    return { running: false, ip: null, port: null, url: null, dir: lanDir, token: null }
+    return { running: false, ip: null, port: null, url: null, dir: lanDir, token: null, ips: [] }
   }
   const info = lanServer.getInfo()
   return {
@@ -395,7 +393,8 @@ function lanStatus(): LanStatus {
     port: info.port,
     url: info.url,
     dir: lanDir,
-    token: info.token
+    token: info.token,
+    ips: info.ips
   }
 }
 
@@ -457,6 +456,12 @@ ipcMain.handle('lan:setLang', (_event, lang?: string) => {
     lanServer?.setLang(lang)
   }
   return lanLang
+})
+
+ipcMain.handle('lan:setIp', (_event, ip?: string) => {
+  lanServer?.setIp(ip && typeof ip === 'string' ? ip : null)
+  broadcastLanStatus()
+  return lanStatus()
 })
 
 /* ── Path allowlist (dialog-selected + already-persisted paths) ── */
@@ -1053,7 +1058,9 @@ const stickyStore = createStickyStore()
 
 ipcMain.handle('sticky:load', () => stickyStore.load())
 
-ipcMain.handle('sticky:save', (_event, data: StickyData) => stickyStore.save(data ?? { tags: [], notes: [] }))
+ipcMain.handle('sticky:save', (_event, data: StickyData) =>
+  stickyStore.save(data ?? { tags: [], notes: [] })
+)
 
 let quittingCleaned = false
 app.on('before-quit', (event) => {

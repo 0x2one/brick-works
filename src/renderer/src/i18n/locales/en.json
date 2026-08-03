@@ -373,6 +373,8 @@
   "lanStop": "Stop Service",
   "lanPort": "Port",
   "lanAddress": "Address",
+  "lanNetworkIp": "Network IP",
+  "lanNetworkIpHint": "When the computer has multiple network adapters, pick the LAN IP reachable by the target device.",
   "lanCopy": "Copy Link",
   "lanOpenBrowser": "Open in Browser",
   "lanManageDir": "Managed Folder",

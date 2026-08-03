@@ -24,6 +24,7 @@ interface LanApi {
   openBrowser: (url: string) => Promise<void>
   openDir: () => Promise<void>
   setLang: (lang: string) => Promise<void>
+  setIp: (ip: string | null) => Promise<LanStatus>
   onStatusChange: (callback: (status: LanStatus) => void) => () => void
 }
 
