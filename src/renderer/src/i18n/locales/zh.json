@@ -17,7 +17,6 @@
   "devToolsDesc": "开发者高频小工具：随机密码、编码转换、JSON、时间戳、PDF 处理等。",
   "settings": "设置",
   "preferences": "偏好设置",
-  "autoSave": "自动保存",
   "openAtLogin": "开机自启",
   "openAtLoginDesc": "随系统启动自动运行积木工坊",
   "closeToTray": "关闭时最小化到托盘",

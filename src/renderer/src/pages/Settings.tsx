@@ -121,10 +121,6 @@ function Settings(): React.JSX.Element {
             <h3 className="settings-group-title">{t('preferences')}</h3>
           </div>
           <div className="settings-group-body">
-            <div className="settings-row">
-              <span className="settings-label">{t('autoSave')}</span>
-              <Switch defaultChecked />
-            </div>
             <SettingsToggle
               labelKey="openAtLogin"
               descKey="openAtLoginDesc"

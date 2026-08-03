@@ -17,7 +17,6 @@
   "devToolsDesc": "Handy developer tools: random passwords, codecs, JSON, timestamps, PDF processing and more.",
   "settings": "Settings",
   "preferences": "Preferences",
-  "autoSave": "Auto save",
   "openAtLogin": "Launch at startup",
   "openAtLoginDesc": "Start BrickWorks automatically when you sign in",
   "closeToTray": "Minimize to tray on close",
