@@ -92,8 +92,11 @@ function TitleBar(): React.JSX.Element {
         open={settingsOpen}
         onCancel={() => setSettingsOpen(false)}
         footer={null}
-        width={480}
+        width={760}
         zIndex={3000}
+        className="settings-modal"
+        styles={{ body: { padding: 0 } }}
+        destroyOnHidden
       >
         <Settings />
       </Modal>

@@ -4,7 +4,6 @@ import { Switch, Radio } from 'antd'
 import type { RadioChangeEvent } from 'antd'
 import {
   SettingOutlined,
-  GlobalOutlined,
   InfoCircleOutlined,
   LaptopOutlined,
   SunOutlined,
@@ -13,10 +12,22 @@ import {
 import i18n from '../i18n'
 import { useTheme, type ThemeMode } from '../theme/ThemeProvider'
 
+type SettingsSection = 'preferences' | 'appearance' | 'about'
+
+const NAV_ITEMS: {
+  key: SettingsSection
+  labelKey: string
+  icon: typeof SettingOutlined
+}[] = [
+  { key: 'preferences', labelKey: 'preferences', icon: SettingOutlined },
+  { key: 'appearance', labelKey: 'appearance', icon: SunOutlined },
+  { key: 'about', labelKey: 'about', icon: InfoCircleOutlined }
+]
+
 function LanguageRadio(): React.JSX.Element {
   const currentLang = i18n.language.startsWith('zh') ? 'zh' : 'en'
   const changeLang = (e: RadioChangeEvent): void => {
-    i18n.changeLanguage(e.target.value)
+    void i18n.changeLanguage(e.target.value)
     localStorage.setItem('lang', e.target.value)
   }
   return (
@@ -42,25 +53,23 @@ function ThemeRadio(): React.JSX.Element {
   }
 
   return (
-    <div style={{ padding: '8px 16px' }}>
-      <Radio.Group
-        value={mode}
-        onChange={changeTheme}
-        optionType="button"
-        buttonStyle="solid"
-        className="settings-radio"
-      >
-        <Radio value="system">
-          <LaptopOutlined /> {t('themeSystem')}
-        </Radio>
-        <Radio value="light">
-          <SunOutlined /> {t('themeLight')}
-        </Radio>
-        <Radio value="dark">
-          <MoonOutlined /> {t('themeDark')}
-        </Radio>
-      </Radio.Group>
-    </div>
+    <Radio.Group
+      value={mode}
+      onChange={changeTheme}
+      optionType="button"
+      buttonStyle="solid"
+      className="settings-radio"
+    >
+      <Radio value="system">
+        <LaptopOutlined /> {t('themeSystem')}
+      </Radio>
+      <Radio value="light">
+        <SunOutlined /> {t('themeLight')}
+      </Radio>
+      <Radio value="dark">
+        <MoonOutlined /> {t('themeDark')}
+      </Radio>
+    </Radio.Group>
   )
 }
 
@@ -107,71 +116,128 @@ function SettingsToggle(props: {
   )
 }
 
-function Settings(): React.JSX.Element {
+function PreferencesPanel(): React.JSX.Element {
+  return (
+    <div className="settings-panel-card">
+      <SettingsToggle labelKey="openAtLogin" descKey="openAtLoginDesc" field="openAtLogin" />
+      <SettingsToggle labelKey="closeToTray" descKey="closeToTrayDesc" field="closeToTray" />
+    </div>
+  )
+}
+
+function AppearancePanel(): React.JSX.Element {
   const { t } = useTranslation()
+  return (
+    <div className="settings-panel-stack">
+      <div className="settings-panel-card">
+        <div className="settings-row settings-row-stack">
+          <div className="settings-label-block">
+            <span className="settings-label">{t('language')}</span>
+            <span className="settings-value">{t('languageDesc')}</span>
+          </div>
+          <LanguageRadio />
+        </div>
+      </div>
+      <div className="settings-panel-card">
+        <div className="settings-row settings-row-stack">
+          <div className="settings-label-block">
+            <span className="settings-label">{t('theme')}</span>
+            <span className="settings-value">{t('themeDesc')}</span>
+          </div>
+          <ThemeRadio />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AboutPanel(): React.JSX.Element {
+  const { t } = useTranslation()
+  const [info, setInfo] = useState<AppInfo | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void window.api.app.info().then((data) => {
+      if (alive) setInfo(data)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   return (
-    <div className="settings-page">
-      <div className="settings-groups">
-        <section className="settings-group" style={{ animationDelay: '0ms' }}>
-          <div className="settings-group-head">
-            <span className="settings-group-icon">
-              <SettingOutlined />
-            </span>
-            <h3 className="settings-group-title">{t('preferences')}</h3>
-          </div>
-          <div className="settings-group-body">
-            <SettingsToggle
-              labelKey="openAtLogin"
-              descKey="openAtLoginDesc"
-              field="openAtLogin"
-            />
-            <SettingsToggle
-              labelKey="closeToTray"
-              descKey="closeToTrayDesc"
-              field="closeToTray"
-            />
-          </div>
-        </section>
+    <div className="settings-panel-card settings-about">
+      <div className="settings-about-brand">
+        <span className="settings-about-mark">
+          <InfoCircleOutlined />
+        </span>
+        <div>
+          <div className="settings-label">BrickWorks · {t('appName')}</div>
+          <div className="settings-value">{t('aboutTagline')}</div>
+        </div>
+      </div>
+      <div className="settings-about-meta">
+        <div className="settings-row">
+          <span className="settings-label">{t('version')}</span>
+          <span className="settings-value">{info?.version ?? '—'}</span>
+        </div>
+        <div className="settings-row">
+          <span className="settings-label">Electron</span>
+          <span className="settings-value">{info?.electron ?? '—'}</span>
+        </div>
+        <div className="settings-row">
+          <span className="settings-label">Chrome</span>
+          <span className="settings-value">{info?.chrome ?? '—'}</span>
+        </div>
+        <div className="settings-row">
+          <span className="settings-label">Node</span>
+          <span className="settings-value">{info?.node ?? '—'}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-        <section className="settings-group" style={{ animationDelay: '80ms' }}>
-          <div className="settings-group-head">
-            <span className="settings-group-icon">
-              <GlobalOutlined />
-            </span>
-            <h3 className="settings-group-title">{t('language')}</h3>
-          </div>
-          <div className="settings-group-body">
-            <LanguageRadio />
-          </div>
-        </section>
+const SECTION_DESC: Record<SettingsSection, string> = {
+  preferences: 'preferencesDesc',
+  appearance: 'appearanceDesc',
+  about: 'settingsAboutDesc'
+}
 
-        <section className="settings-group" style={{ animationDelay: '160ms' }}>
-          <div className="settings-group-head">
-            <span className="settings-group-icon">
-              <SunOutlined />
-            </span>
-            <h3 className="settings-group-title">{t('theme')}</h3>
-          </div>
-          <div className="settings-group-body">
-            <ThemeRadio />
-          </div>
-        </section>
+function Settings(): React.JSX.Element {
+  const { t } = useTranslation()
+  const [section, setSection] = useState<SettingsSection>('preferences')
+  const active = NAV_ITEMS.find((item) => item.key === section) ?? NAV_ITEMS[0]
 
-        <section className="settings-group" style={{ animationDelay: '240ms' }}>
-          <div className="settings-group-head">
-            <span className="settings-group-icon">
-              <InfoCircleOutlined />
-            </span>
-            <h3 className="settings-group-title">About</h3>
-          </div>
-          <div className="settings-group-body">
-            <div className="settings-row">
-              <span className="settings-label">BrickWorks</span>
-              <span className="settings-value">v1.0.0</span>
-            </div>
-          </div>
-        </section>
+  return (
+    <div className="settings-shell">
+      <nav className="settings-nav" aria-label={t('settings')}>
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon
+          const isActive = section === item.key
+          return (
+            <button
+              key={item.key}
+              type="button"
+              className={`settings-nav-item${isActive ? ' is-active' : ''}`}
+              onClick={() => setSection(item.key)}
+            >
+              <Icon className="settings-nav-icon" />
+              <span>{t(item.labelKey)}</span>
+            </button>
+          )
+        })}
+      </nav>
+      <div className="settings-main">
+        <header className="settings-main-head">
+          <h3 className="settings-main-title">{t(active.labelKey)}</h3>
+          <p className="settings-main-desc">{t(SECTION_DESC[section])}</p>
+        </header>
+        <div className="settings-main-body">
+          {section === 'preferences' && <PreferencesPanel />}
+          {section === 'appearance' && <AppearancePanel />}
+          {section === 'about' && <AboutPanel />}
+        </div>
       </div>
     </div>
   )
