@@ -37,7 +37,9 @@ function AppLayout(): React.JSX.Element {
   const [sshClientMounted, setSshClientMounted] = useState(
     () => location.pathname === '/ssh-client'
   )
+  const [k8sMounted, setK8sMounted] = useState(() => location.pathname === '/k8s')
   const showSshClient = displayLocation.pathname === '/ssh-client'
+  const showK8s = displayLocation.pathname === '/k8s'
 
   useEffect(() => {
     window.api.lan.setLang(i18n.language === 'en' ? 'en' : 'zh')
@@ -45,6 +47,7 @@ function AppLayout(): React.JSX.Element {
 
   useEffect(() => {
     if (location.pathname === '/ssh-client') setSshClientMounted(true)
+    if (location.pathname === '/k8s') setK8sMounted(true)
   }, [location.pathname])
 
   useEffect(() => {
@@ -145,14 +148,14 @@ function AppLayout(): React.JSX.Element {
             }}
           >
             {sshClientMounted && <SshClient active={showSshClient} />}
-            {!showSshClient && (
+            {k8sMounted && <K8sManage active={showK8s} />}
+            {!showSshClient && !showK8s && (
               <Routes location={displayLocation}>
                 <Route path="/dev-tools" element={<DevTools />} />
                 <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
                 <Route path="/memo-sticky" element={<MemoSticky />} />
                 <Route path="/lan-transfer" element={<LanTransfer />} />
                 <Route path="/ssh-tunnel" element={<SshTunnel />} />
-                <Route path="/k8s" element={<K8sManage />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/" element={<Navigate to="/dev-tools" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

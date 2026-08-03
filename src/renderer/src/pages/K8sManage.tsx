@@ -40,6 +40,7 @@ import '@xterm/xterm/css/xterm.css'
 import { useTheme } from '../theme/ThemeProvider'
 
 const LS_K8S_NAME_QUERY = 'brickworks:k8sNameQuery'
+const LS_K8S_NAMESPACE = 'brickworks:k8sNamespace'
 const LS_K8S_EXEC_SHELL = 'brickworks:k8sExecShell'
 
 function readCssVar(name: string, fallback: string): string {
@@ -96,16 +97,20 @@ function toBase64(str: string): string {
   return btoa(binary)
 }
 
-function K8sManage(): React.JSX.Element {
+function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { resolved: themeResolved } = useTheme()
+  const pageRef = useRef<HTMLDivElement>(null)
+  const overlayContainer = (): HTMLElement => pageRef.current || document.body
 
   const [clusters, setClusters] = useState<K8sCluster[]>([])
   const [status, setStatus] = useState<K8sStatus | null>(null)
   const [selectedClusterId, setSelectedClusterId] = useState<string>()
   const [namespaces, setNamespaces] = useState<string[]>([])
-  const [namespace, setNamespace] = useState<string>('all')
+  const [namespace, setNamespace] = useState<string>(
+    () => localStorage.getItem(LS_K8S_NAMESPACE) || 'all'
+  )
   const [loading, setLoading] = useState(false)
   const [connecting, setConnecting] = useState(false)
 
@@ -711,6 +716,20 @@ function K8sManage(): React.JSX.Element {
     return () => window.clearTimeout(id)
   }, [themeResolved, execOpen, execReady])
 
+  useEffect(() => {
+    if (!active || !execOpen) return
+    const id = window.setTimeout(() => {
+      const fit = fitRef.current
+      const term = terminalRef.current
+      const sessionId = execSessionRef.current
+      if (!fit || !term) return
+      fit.fit()
+      if (sessionId) void window.api.k8s.resizeExec(sessionId, term.cols, term.rows)
+      term.focus()
+    }, 0)
+    return () => window.clearTimeout(id)
+  }, [active, execOpen])
+
   const openPortForward = (pod: K8sPodRow): void => {
     setPfPod(pod)
     setPfOpen(true)
@@ -987,7 +1006,11 @@ function K8sManage(): React.JSX.Element {
   ]
 
   return (
-    <div className="k8s-page flex flex-col">
+    <div
+      ref={pageRef}
+      className={`k8s-page flex flex-col${active ? '' : ' hidden'}`}
+      aria-hidden={!active}
+    >
       <div className="k8s-page-header shrink-0 bg-[var(--content-bg)]">
         <p className="text-xs text-[var(--text-secondary)] m-0 pt-4 px-6 pb-2">{t('k8sDesc')}</p>
 
@@ -1034,6 +1057,7 @@ function K8sManage(): React.JSX.Element {
             disabled={!connected}
             onChange={(v) => {
               setNamespace(v)
+              localStorage.setItem(LS_K8S_NAMESPACE, v)
               setPage(1)
             }}
             options={[
@@ -1217,6 +1241,7 @@ function K8sManage(): React.JSX.Element {
         onOk={() => void saveCluster()}
         okText={t('memoStickySave')}
         destroyOnHidden
+        getContainer={overlayContainer}
         width={560}
       >
         <div className="flex flex-col gap-3 pt-2">
@@ -1306,6 +1331,7 @@ function K8sManage(): React.JSX.Element {
         mask={false}
         maskClosable={false}
         destroyOnHidden
+        getContainer={overlayContainer}
         focusable={{ trap: false }}
         rootClassName="k8s-drawer-no-mask"
         styles={{
@@ -1381,6 +1407,7 @@ function K8sManage(): React.JSX.Element {
         mask={false}
         maskClosable={false}
         destroyOnHidden
+        getContainer={overlayContainer}
         focusable={{ trap: false }}
         rootClassName="k8s-drawer-no-mask"
         styles={{
@@ -1447,6 +1474,7 @@ function K8sManage(): React.JSX.Element {
         mask={false}
         maskClosable={false}
         destroyOnHidden
+        getContainer={overlayContainer}
         focusable={{ trap: false }}
         rootClassName="k8s-drawer-no-mask"
         styles={{
@@ -1483,6 +1511,7 @@ function K8sManage(): React.JSX.Element {
         open={pfOpen}
         onCancel={() => setPfOpen(false)}
         onOk={() => void startPortForward()}
+        getContainer={overlayContainer}
         okText={t('k8sStart')}
         destroyOnHidden
       >

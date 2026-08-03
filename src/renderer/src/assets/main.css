@@ -507,7 +507,12 @@
 
 /* ── K8s Manage ── */
 
+.content-area:has(.k8s-page:not(.hidden)) {
+  overflow: hidden;
+}
+
 .k8s-page {
+  position: relative;
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
