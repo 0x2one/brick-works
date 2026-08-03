@@ -5,21 +5,54 @@ import { join } from 'path'
 
 export interface AppSettings {
   closeToTray: boolean
+  openAtLogin: boolean
 }
 
 interface StoreFile {
   version: 1
   closeToTray?: boolean
+  openAtLogin?: boolean
 }
 
 const DEFAULTS: AppSettings = {
-  closeToTray: false
+  closeToTray: false,
+  openAtLogin: false
 }
 
 export interface AppSettingsStore {
   init: () => Promise<void>
   get: () => AppSettings
   setCloseToTray: (value: boolean) => AppSettings
+  setOpenAtLogin: (value: boolean) => AppSettings
+}
+
+function applyOpenAtLogin(enabled: boolean): void {
+  if (app.isPackaged) {
+    app.setLoginItemSettings({ openAtLogin: enabled })
+    return
+  }
+  // Dev: register electron + app path so the project can still launch.
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    path: process.execPath,
+    args: [app.getAppPath()]
+  })
+}
+
+function readOpenAtLoginFromOs(): boolean {
+  try {
+    if (app.isPackaged) {
+      return Boolean(app.getLoginItemSettings().openAtLogin)
+    }
+    return Boolean(
+      app.getLoginItemSettings({
+        path: process.execPath,
+        args: [app.getAppPath()]
+      }).openAtLogin
+    )
+  } catch {
+    return false
+  }
 }
 
 export function createAppSettingsStore(): AppSettingsStore {
@@ -31,7 +64,10 @@ export function createAppSettingsStore(): AppSettingsStore {
       const raw = await fsp.readFile(file, 'utf-8')
       const data = JSON.parse(raw) as StoreFile
       settings = {
-        closeToTray: typeof data?.closeToTray === 'boolean' ? data.closeToTray : DEFAULTS.closeToTray
+        closeToTray:
+          typeof data?.closeToTray === 'boolean' ? data.closeToTray : DEFAULTS.closeToTray,
+        openAtLogin:
+          typeof data?.openAtLogin === 'boolean' ? data.openAtLogin : DEFAULTS.openAtLogin
       }
     } catch {
       settings = { ...DEFAULTS }
@@ -39,7 +75,11 @@ export function createAppSettingsStore(): AppSettingsStore {
   }
 
   function persist(): void {
-    const payload: StoreFile = { version: 1, closeToTray: settings.closeToTray }
+    const payload: StoreFile = {
+      version: 1,
+      closeToTray: settings.closeToTray,
+      openAtLogin: settings.openAtLogin
+    }
     try {
       mkdirSync(app.getPath('userData'), { recursive: true })
       writeFileSync(file, JSON.stringify(payload, null, 2), 'utf-8')
@@ -49,12 +89,24 @@ export function createAppSettingsStore(): AppSettingsStore {
   }
 
   return {
-    init: () => readFile(),
-    get: () => ({ ...settings }),
+    init: async () => {
+      await readFile()
+      // Prefer OS registry as source of truth (user may disable via Task Manager).
+      settings = { ...settings, openAtLogin: readOpenAtLoginFromOs() }
+      persist()
+    },
+    get: () => ({ ...settings, openAtLogin: readOpenAtLoginFromOs() }),
     setCloseToTray: (value: boolean) => {
       settings = { ...settings, closeToTray: Boolean(value) }
       persist()
-      return { ...settings }
+      return { ...settings, openAtLogin: readOpenAtLoginFromOs() }
+    },
+    setOpenAtLogin: (value: boolean) => {
+      const enabled = Boolean(value)
+      applyOpenAtLogin(enabled)
+      settings = { ...settings, openAtLogin: enabled }
+      persist()
+      return { ...settings, openAtLogin: readOpenAtLoginFromOs() }
     }
   }
 }

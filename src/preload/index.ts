@@ -7,7 +7,8 @@ const api = {
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
-    setCloseToTray: (value: boolean) => ipcRenderer.invoke('settings:setCloseToTray', value)
+    setCloseToTray: (value: boolean) => ipcRenderer.invoke('settings:setCloseToTray', value),
+    setOpenAtLogin: (value: boolean) => ipcRenderer.invoke('settings:setOpenAtLogin', value)
   },
   fetchSvg: (url: string) => ipcRenderer.invoke('fetch:svg', url),
   windowControls: {

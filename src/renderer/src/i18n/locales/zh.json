@@ -18,6 +18,8 @@
   "settings": "设置",
   "preferences": "偏好设置",
   "autoSave": "自动保存",
+  "openAtLogin": "开机自启",
+  "openAtLoginDesc": "随系统启动自动运行积木工坊",
   "closeToTray": "关闭时最小化到托盘",
   "closeToTrayDesc": "勾选后点击关闭会隐藏到系统托盘，取消则直接退出",
   "language": "语言",

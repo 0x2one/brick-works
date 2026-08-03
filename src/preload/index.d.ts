@@ -122,11 +122,13 @@ interface AppApi {
 
 interface AppSettings {
   closeToTray: boolean
+  openAtLogin: boolean
 }
 
 interface SettingsApi {
   get: () => Promise<AppSettings>
   setCloseToTray: (value: boolean) => Promise<AppSettings>
+  setOpenAtLogin: (value: boolean) => Promise<AppSettings>
 }
 
 interface Api {

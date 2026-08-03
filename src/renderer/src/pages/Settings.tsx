@@ -64,7 +64,11 @@ function ThemeRadio(): React.JSX.Element {
   )
 }
 
-function CloseToTraySwitch(): React.JSX.Element {
+function SettingsToggle(props: {
+  labelKey: string
+  descKey: string
+  field: 'openAtLogin' | 'closeToTray'
+}): React.JSX.Element {
   const { t } = useTranslation()
   const [checked, setChecked] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -73,26 +77,30 @@ function CloseToTraySwitch(): React.JSX.Element {
     let alive = true
     void window.api.settings.get().then((settings) => {
       if (!alive) return
-      setChecked(settings.closeToTray)
+      setChecked(settings[props.field])
       setLoading(false)
     })
     return () => {
       alive = false
     }
-  }, [])
+  }, [props.field])
 
   const onChange = (value: boolean): void => {
     setChecked(value)
-    void window.api.settings.setCloseToTray(value).then((settings) => {
-      setChecked(settings.closeToTray)
+    const req =
+      props.field === 'openAtLogin'
+        ? window.api.settings.setOpenAtLogin(value)
+        : window.api.settings.setCloseToTray(value)
+    void req.then((settings) => {
+      setChecked(settings[props.field])
     })
   }
 
   return (
     <div className="settings-row">
       <div className="settings-label-block">
-        <span className="settings-label">{t('closeToTray')}</span>
-        <span className="settings-value">{t('closeToTrayDesc')}</span>
+        <span className="settings-label">{t(props.labelKey)}</span>
+        <span className="settings-value">{t(props.descKey)}</span>
       </div>
       <Switch checked={checked} loading={loading} onChange={onChange} />
     </div>
@@ -117,7 +125,16 @@ function Settings(): React.JSX.Element {
               <span className="settings-label">{t('autoSave')}</span>
               <Switch defaultChecked />
             </div>
-            <CloseToTraySwitch />
+            <SettingsToggle
+              labelKey="openAtLogin"
+              descKey="openAtLoginDesc"
+              field="openAtLogin"
+            />
+            <SettingsToggle
+              labelKey="closeToTray"
+              descKey="closeToTrayDesc"
+              field="closeToTray"
+            />
           </div>
         </section>
 

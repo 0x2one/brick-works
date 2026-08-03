@@ -321,6 +321,10 @@ ipcMain.handle('settings:setCloseToTray', (_event, value: boolean) => {
   return settings
 })
 
+ipcMain.handle('settings:setOpenAtLogin', (_event, value: boolean) => {
+  return appSettingsStore.setOpenAtLogin(Boolean(value))
+})
+
 ipcMain.handle('fetch:image', async (_event, url: string): Promise<string | null> => {
   const safe = await assertSafeFetchUrl(url)
   if (!safe) return null
