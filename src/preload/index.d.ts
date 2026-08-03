@@ -10,6 +10,7 @@ interface WindowControls {
 
 interface Api {
   fetchImage: (url: string) => Promise<string | null>
+  fetchSvg: (url: string) => Promise<string | null>
   windowControls: WindowControls
 }
 

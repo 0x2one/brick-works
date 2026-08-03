@@ -72,6 +72,16 @@ ipcMain.handle('fetch:image', async (_event, url: string): Promise<string | null
   }
 })
 
+ipcMain.handle('fetch:svg', async (_event, url: string): Promise<string | null> => {
+  try {
+    const response = await net.fetch(url)
+    if (!response.ok) return null
+    return await response.text()
+  } catch {
+    return null
+  }
+})
+
 ipcMain.handle('window:isMaximized', () => {
   return mainWindow?.isMaximized() ?? false
 })

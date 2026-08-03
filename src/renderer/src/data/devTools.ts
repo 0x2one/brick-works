@@ -43,6 +43,27 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolTimestampDesc',
     tags: ['工具', '时间'],
     route: '/dev-tools/timestamp-converter'
+  },
+  {
+    id: 'uuid-generator',
+    nameKey: 'devToolUuidGen',
+    descKey: 'devToolUuidGenDesc',
+    tags: ['工具', '生成'],
+    route: '/dev-tools/uuid-generator'
+  },
+  {
+    id: 'qr-code',
+    nameKey: 'devToolQrCode',
+    descKey: 'devToolQrCodeDesc',
+    tags: ['工具', '图片'],
+    route: '/dev-tools/qr-code'
+  },
+  {
+    id: 'svg-to-image',
+    nameKey: 'devToolSvgToImg',
+    descKey: 'devToolSvgToImgDesc',
+    tags: ['工具', '图片'],
+    route: '/dev-tools/svg-to-image'
   }
 ]
 
