@@ -230,6 +230,7 @@ function createTray(): void {
       }
     }
   ])
+  // Let the OS place the menu next to the tray icon (avoids wrong manual offsets).
   tray.setContextMenu(menu)
   tray.on('click', () => showMainWindow())
   tray.on('double-click', () => showMainWindow())
