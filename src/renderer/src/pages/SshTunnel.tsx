@@ -8,7 +8,7 @@ import {
   useImperativeHandle
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Modal, Form, Input, InputNumber, Radio, Segmented, Empty, Button } from 'antd'
+import { App, Modal, Form, Input, InputNumber, Radio, Segmented, Empty, Button, Select } from 'antd'
 import {
   PlusOutlined,
   ApiOutlined,
@@ -124,7 +124,12 @@ const SSH_ERROR_CODES = [
   'NODE_NOT_FOUND',
   'TUNNEL_NOT_FOUND',
   'LISTEN_LOOPBACK_REQUIRED',
-  'SOCKS_AUTH_REQUIRED'
+  'SOCKS_AUTH_REQUIRED',
+  'JUMP_NOT_FOUND',
+  'JUMP_SELF',
+  'JUMP_CYCLE',
+  'JUMP_TOO_DEEP',
+  'JUMP_FORWARD_FAILED'
 ] as const
 
 function extractSshErrorCode(raw: unknown): string {
@@ -159,6 +164,11 @@ function mapSshError(
   if (code === 'TUNNEL_NOT_FOUND') return t('sshTunnelNotFound')
   if (code === 'LISTEN_LOOPBACK_REQUIRED') return t('sshListenLoopbackRequired')
   if (code === 'SOCKS_AUTH_REQUIRED') return t('sshSocksAuthRequired')
+  if (code === 'JUMP_NOT_FOUND') return t('sshJumpNotFound')
+  if (code === 'JUMP_SELF') return t('sshJumpSelf')
+  if (code === 'JUMP_CYCLE') return t('sshJumpCycle')
+  if (code === 'JUMP_TOO_DEEP') return t('sshJumpTooDeep')
+  if (code === 'JUMP_FORWARD_FAILED') return t('sshJumpForwardFailed')
   return t('sshConnectFail', { msg: code })
 }
 
@@ -171,6 +181,7 @@ interface EditorValues {
   password?: string
   privateKeyPath?: string
   passphrase?: string
+  jumpHostId?: string | null
 }
 
 function Field({
@@ -430,17 +441,30 @@ const TunnelForm = forwardRef<TunnelFormHandle, TunnelFormProps>(function Tunnel
 function NodeEditor({
   open,
   editing,
+  nodes,
   onCancel,
   onSaved
 }: {
   open: boolean
   editing: SshNodeView | null
+  nodes: SshNodeView[]
   onCancel: () => void
   onSaved: (node: SshNodeView) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const [form] = Form.useForm<EditorValues>()
+
+  const jumpOptions = useMemo(
+    () =>
+      nodes
+        .filter((n) => n.id !== editing?.id)
+        .map((n) => ({
+          value: n.id,
+          label: `${n.name} (${n.username}@${n.host}:${n.port})`
+        })),
+    [nodes, editing?.id]
+  )
 
   useEffect(() => {
     if (!open) return
@@ -452,7 +476,8 @@ function NodeEditor({
       authType: editing?.authType ?? 'password',
       password: '',
       privateKeyPath: editing?.privateKeyPath ?? '',
-      passphrase: ''
+      passphrase: '',
+      jumpHostId: editing?.jumpHostId ?? null
     })
   }, [open, editing, form])
 
@@ -473,13 +498,14 @@ function NodeEditor({
         authType: values.authType,
         password: values.authType === 'password' ? values.password : undefined,
         privateKeyPath: values.authType === 'privateKey' ? values.privateKeyPath : undefined,
-        passphrase: values.authType === 'privateKey' ? values.passphrase : undefined
+        passphrase: values.authType === 'privateKey' ? values.passphrase : undefined,
+        jumpHostId: values.jumpHostId || null
       })
       message.success(t('sshSaved'))
       onSaved(node)
     } catch (err) {
       if ((err as { errorFields?: unknown }).errorFields) return
-      const msg = (err as Error)?.message ?? ''
+      const msg = mapSshError(err, t)
       message.error(t('sshNodeSaveFail', { msg }))
     }
   }, [form, editing, message, onSaved, t])
@@ -524,6 +550,19 @@ function NodeEditor({
         </div>
         <Form.Item name="username" label={t('sshUsername')} rules={[{ required: true }]}>
           <Input placeholder="root" />
+        </Form.Item>
+        <Form.Item
+          name="jumpHostId"
+          label={t('sshJumpHost')}
+          extra={t('sshJumpHostHint')}
+        >
+          <Select
+            allowClear
+            placeholder={t('sshJumpHostNone')}
+            options={jumpOptions}
+            optionFilterProp="label"
+            showSearch
+          />
         </Form.Item>
         {editing && (
           <div className="mb-4">
@@ -944,10 +983,15 @@ function SshTunnel(): React.JSX.Element {
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] font-mono text-[var(--text-secondary)] mt-0.5 flex items-center gap-2">
+                  <div className="text-[11px] font-mono text-[var(--text-secondary)] mt-0.5 flex items-center gap-2 flex-wrap">
                     <span>
                       {node.username}@{node.host}:{node.port}
                     </span>
+                    {node.jumpHostId && (
+                      <span className="text-[var(--text-secondary)]">
+                        via {nodes.find((n) => n.id === node.jumpHostId)?.name ?? t('sshJumpHost')}
+                      </span>
+                    )}
                     <span className="px-1 py-px rounded bg-[var(--bg-warm)] border border-[var(--border-subtle)]">
                       {node.authType === 'password' ? t('sshAuthPassword') : t('sshAuthKey')}
                     </span>
@@ -1388,6 +1432,7 @@ function SshTunnel(): React.JSX.Element {
       <NodeEditor
         open={editorOpen}
         editing={editing}
+        nodes={nodes}
         onCancel={() => setEditorOpen(false)}
         onSaved={(node) => {
           setNodes((prev) => {

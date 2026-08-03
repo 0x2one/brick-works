@@ -6,7 +6,7 @@ import { isIP } from 'net'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import iconPng from '../../resources/icon.png?asset'
 import { createLanServer, generateLanToken, type LanStatus } from './lan-server'
-import { createSshStore, type SshNodeInput } from './ssh-store'
+import { createSshStore, type SshNodeInput, validateJumpHostId } from './ssh-store'
 import {
   createSshManager,
   isLoopbackAddr,
@@ -403,6 +403,7 @@ function confirmNewHostKey(host: string, port: number, fingerprint: string): boo
 
 const sshStore = createSshStore()
 const sshManager = createSshManager({
+  getNode: (nodeId) => sshStore.get(nodeId),
   verifyHostKey: (host, port, key) =>
     sshStore.verifyHostKey(host, port, key, (fp) => confirmNewHostKey(host, port, fp))
 })
@@ -437,6 +438,15 @@ function validateNodeInput(input: SshNodeInput): string | null {
   if (input.authType !== 'password' && input.authType !== 'privateKey') return 'AUTH_INVALID'
   if (input.authType === 'privateKey' && !input.privateKeyPath?.trim()) {
     return 'KEY_REQUIRED'
+  }
+  if (input.jumpHostId !== undefined && input.jumpHostId !== null && input.jumpHostId !== '') {
+    const jumpErr = validateJumpHostId(
+      input.id,
+      input.jumpHostId,
+      (id) => sshStore.get(id)?.jumpHostId ?? null,
+      (id) => Boolean(sshStore.get(id))
+    )
+    if (jumpErr) return jumpErr
   }
   return null
 }

@@ -1,9 +1,8 @@
-import { Client, type ConnectConfig, type ClientChannel } from 'ssh2'
+import { Client, type ClientChannel } from 'ssh2'
 import { createServer, connect, type Server as NetServer, type Socket } from 'net'
-import { promises as fsp } from 'fs'
 import { randomUUID } from 'crypto'
 import type { SshNode, SshTunnelSpec, SshTunnelType } from './ssh-store'
-import { assertAllowedLocalPath } from './path-allowlist'
+import { connectViaJump, endClientChain } from './ssh-connect'
 
 export type { SshTunnelSpec, SshTunnelType } from './ssh-store'
 
@@ -84,6 +83,7 @@ interface TunnelRuntime {
 interface SessionRuntime {
   node: SshNode
   client: Client | null
+  jumpClients: Client[]
   state: SshSessionStateName
   error?: string
   connectedAt?: number
@@ -97,33 +97,8 @@ interface SessionRuntime {
 }
 
 export interface SshManagerOptions {
+  getNode?: (nodeId: string) => SshNode | null | undefined
   verifyHostKey?: (host: string, port: number, key: Buffer) => boolean
-}
-
-async function makeConnectConfig(
-  node: SshNode,
-  verifyHostKey?: SshManagerOptions['verifyHostKey']
-): Promise<ConnectConfig> {
-  const cfg: ConnectConfig = {
-    host: node.host,
-    port: node.port,
-    username: node.username,
-    keepaliveInterval: 10000,
-    keepaliveCountMax: 3,
-    readyTimeout: 15000,
-    timeout: 30000
-  }
-  if (node.auth.type === 'password' && node.auth.password) {
-    cfg.password = node.auth.password
-  } else if (node.auth.type === 'privateKey' && node.auth.privateKeyPath) {
-    assertAllowedLocalPath(node.auth.privateKeyPath)
-    cfg.privateKey = await fsp.readFile(node.auth.privateKeyPath)
-    if (node.auth.passphrase) cfg.passphrase = node.auth.passphrase
-  }
-  if (verifyHostKey) {
-    cfg.hostVerifier = (key: Buffer) => verifyHostKey(node.host, node.port, key)
-  }
-  return cfg
 }
 
 function tunnelStateFromSpec(spec: SshTunnelSpec): SshTunnelState {
@@ -547,18 +522,40 @@ export function createSshManager(options: SshManagerOptions = {}): SshManager {
   }
 
   async function doConnect(session: SessionRuntime): Promise<void> {
-    let cfg: ConnectConfig
+    const getNode = options.getNode ?? ((): null => null)
+    let client: Client
+    let jumpClients: Client[]
     try {
-      cfg = await makeConnectConfig(session.node, options.verifyHostKey)
+      const result = await connectViaJump(session.node, getNode, options.verifyHostKey)
+      client = result.client
+      jumpClients = result.jumpClients
     } catch (err) {
       if (session.stopRequested) return
+      const message = normalizeSshError((err as Error).message)
       session.state = 'error'
-      session.error = (err as Error).message
-      emitLog(session.node.id, session.node.name, 'error', `连接失败: ${(err as Error).message}`)
+      session.error = message
+      emitLog(
+        session.node.id,
+        session.node.name,
+        'error',
+        message === 'HOST_KEY_MISMATCH'
+          ? '主机密钥不匹配，可能存在安全风险。可在节点编辑中重置信任后重试'
+          : message === 'AUTH_FAILED'
+            ? '认证失败，请检查用户名、密码或私钥'
+            : message.startsWith('JUMP_')
+              ? `跳板连接失败: ${message}`
+              : `连接失败: ${(err as Error).message}`
+      )
       emitStatus()
-      throw err
+      throw new Error(message)
     }
-    if (session.stopRequested) return
+    if (session.stopRequested) {
+      endClientChain(client, jumpClients)
+      return
+    }
+
+    session.client = client
+    session.jumpClients = jumpClients
 
     return new Promise((resolve, reject) => {
       let settled = false
@@ -572,48 +569,6 @@ export function createSshManager(options: SshManagerOptions = {}): SshManager {
         settled = true
         reject(err)
       }
-
-      const client = new Client()
-      session.client = client
-
-      client.on('ready', () => {
-        if (session.stopRequested || session.client !== client) {
-          try {
-            client.end()
-          } catch {
-            // ignore
-          }
-          succeed()
-          return
-        }
-        session.state = 'connected'
-        session.error = undefined
-        session.everConnected = true
-        session.connectedAt = Date.now()
-        session.retryCount = 0
-        clearRetry(session)
-        emitLog(
-          session.node.id,
-          session.node.name,
-          'info',
-          `已建立 SSH 连接: ${session.node.username}@${session.node.host}:${session.node.port}`
-        )
-        const seen = new Set<string>()
-        const specs = session.pending.filter((s) => {
-          if (!s.id) return true
-          if (seen.has(s.id)) return false
-          seen.add(s.id)
-          return true
-        })
-        session.pending = []
-        teardownTunnels(session)
-        session.tunnels = new Map()
-        emitStatus()
-        for (const spec of specs) {
-          bindTunnel(session, spec)
-        }
-        succeed()
-      })
 
       client.on('tcp connection', (details, accept, rejectTcp) => {
         if (session.client !== client) {
@@ -673,6 +628,9 @@ export function createSshManager(options: SshManagerOptions = {}): SshManager {
       client.on('close', () => {
         if (session.client !== client) return
         session.client = null
+        const jumps = session.jumpClients
+        session.jumpClients = []
+        endClientChain(null, jumps)
         teardownTunnels(session)
         if (session.stopRequested) {
           session.state = 'disconnected'
@@ -711,7 +669,36 @@ export function createSshManager(options: SshManagerOptions = {}): SshManager {
         }
       })
 
-      client.connect(cfg)
+      // Client is already ready from connectViaJump
+      session.state = 'connected'
+      session.error = undefined
+      session.everConnected = true
+      session.connectedAt = Date.now()
+      session.retryCount = 0
+      clearRetry(session)
+      const via =
+        jumpClients.length > 0 ? ` (via ${jumpClients.length} jump${jumpClients.length > 1 ? 's' : ''})` : ''
+      emitLog(
+        session.node.id,
+        session.node.name,
+        'info',
+        `已建立 SSH 连接: ${session.node.username}@${session.node.host}:${session.node.port}${via}`
+      )
+      const seen = new Set<string>()
+      const specs = session.pending.filter((s) => {
+        if (!s.id) return true
+        if (seen.has(s.id)) return false
+        seen.add(s.id)
+        return true
+      })
+      session.pending = []
+      teardownTunnels(session)
+      session.tunnels = new Map()
+      emitStatus()
+      for (const spec of specs) {
+        bindTunnel(session, spec)
+      }
+      succeed()
     })
   }
 
@@ -745,10 +732,12 @@ export function createSshManager(options: SshManagerOptions = {}): SshManager {
         session.retryCount = 0
         session.pending = tunnels
         session.tunnels = new Map()
+        session.jumpClients = []
       } else {
         session = {
           node,
           client: null,
+          jumpClients: [],
           state: 'connecting',
           error: undefined,
           everConnected: false,
@@ -790,9 +779,10 @@ export function createSshManager(options: SshManagerOptions = {}): SshManager {
       session.everConnected = false
       session.connectedAt = undefined
       const client = session.client
-      if (client) {
-        client.end()
-      }
+      const jumps = session.jumpClients
+      session.client = null
+      session.jumpClients = []
+      endClientChain(client, jumps)
       sessions.delete(nodeId)
       emitStatus()
       return emptyStatus(nodeId)
@@ -912,24 +902,18 @@ export function createSshManager(options: SshManagerOptions = {}): SshManager {
       return disconnectIfIdle(session)
     },
     test(node: SshNode): Promise<{ ok: boolean; error?: string; latencyMs: number }> {
-      return new Promise((resolve) => {
-        const client = new Client()
-        const started = Date.now()
-        let settled = false
-        const finish = (ok: boolean, error?: string): void => {
-          if (settled) return
-          settled = true
-          client.end()
-          resolve({ ok, error, latencyMs: Date.now() - started })
-        }
-        client.on('ready', () => finish(true))
-        client.on('error', (err) => {
-          finish(false, normalizeSshError(err.message))
+      const started = Date.now()
+      const getNode = options.getNode ?? ((): null => null)
+      return connectViaJump(node, getNode, options.verifyHostKey)
+        .then(({ client, jumpClients }) => {
+          endClientChain(client, jumpClients)
+          return { ok: true, latencyMs: Date.now() - started }
         })
-        makeConnectConfig(node, options.verifyHostKey)
-          .then((cfg) => client.connect(cfg))
-          .catch((err) => finish(false, err.message))
-      })
+        .catch((err: Error) => ({
+          ok: false,
+          error: normalizeSshError(err.message),
+          latencyMs: Date.now() - started
+        }))
     },
     onStatusChange(cb: (statuses: SshSessionStatus[]) => void): () => void {
       statusCbs.add(cb)
@@ -944,8 +928,11 @@ export function createSshManager(options: SshManagerOptions = {}): SshManager {
         session.stopRequested = true
         clearRetry(session)
         teardownTunnels(session)
-        session.client?.end()
+        const client = session.client
+        const jumps = session.jumpClients
         session.client = null
+        session.jumpClients = []
+        endClientChain(client, jumps)
       }
       sessions.clear()
     }

@@ -1,9 +1,9 @@
-import { Client, type ConnectConfig, type ClientChannel, type SFTPWrapper } from 'ssh2'
+import { Client, type ClientChannel, type SFTPWrapper } from 'ssh2'
 import { promises as fsp } from 'fs'
 import { dirname, join, basename } from 'path'
 import { randomUUID } from 'crypto'
 import type { SshNode } from './ssh-store'
-import { assertAllowedLocalPath } from './path-allowlist'
+import { connectViaJump, endClientChain } from './ssh-connect'
 
 export interface SshShellStartOpts {
   nodeId: string
@@ -51,32 +51,6 @@ export interface SshClientManagerOptions {
   verifyHostKey?: (host: string, port: number, key: Buffer) => boolean
 }
 
-async function makeConnectConfig(
-  node: SshNode,
-  verifyHostKey?: SshClientManagerOptions['verifyHostKey']
-): Promise<ConnectConfig> {
-  const cfg: ConnectConfig = {
-    host: node.host,
-    port: node.port,
-    username: node.username,
-    keepaliveInterval: 10000,
-    keepaliveCountMax: 3,
-    readyTimeout: 15000,
-    timeout: 30000
-  }
-  if (node.auth.type === 'password' && node.auth.password) {
-    cfg.password = node.auth.password
-  } else if (node.auth.type === 'privateKey' && node.auth.privateKeyPath) {
-    assertAllowedLocalPath(node.auth.privateKeyPath)
-    cfg.privateKey = await fsp.readFile(node.auth.privateKeyPath)
-    if (node.auth.passphrase) cfg.passphrase = node.auth.passphrase
-  }
-  if (verifyHostKey) {
-    cfg.hostVerifier = (key: Buffer) => verifyHostKey(node.host, node.port, key)
-  }
-  return cfg
-}
-
 function posixJoin(base: string, name: string): string {
   if (base === '/' || base === '') return `/${name}`
   return `${base.replace(/\/+$/, '')}/${name}`
@@ -111,12 +85,14 @@ interface ShellSession {
   sessionId: string
   nodeId: string
   client: Client
+  jumpClients: Client[]
   channel: ClientChannel
 }
 
 interface SftpSession {
   nodeId: string
   client: Client
+  jumpClients: Client[]
   sftp: SFTPWrapper
 }
 
@@ -176,44 +152,21 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     } catch {
       // ignore
     }
-    try {
-      session.client.end()
-    } catch {
-      // ignore
-    }
+    endClientChain(session.client, session.jumpClients)
     if (!silent) emitShellExit({ sessionId, reason })
   }
 
-  async function openClient(nodeId: string): Promise<{ node: SshNode; client: Client }> {
+  async function openClient(
+    nodeId: string
+  ): Promise<{ node: SshNode; client: Client; jumpClients: Client[] }> {
     const node = options.getNode(nodeId)
     if (!node) throw new Error('NODE_NOT_FOUND')
-    const cfg = await makeConnectConfig(node, options.verifyHostKey)
-    return new Promise((resolve, reject) => {
-      const client = new Client()
-      let settled = false
-      const succeed = (): void => {
-        if (settled) return
-        settled = true
-        resolve({ node, client })
-      }
-      const fail = (err: Error): void => {
-        if (settled) return
-        settled = true
-        try {
-          client.end()
-        } catch {
-          // ignore
-        }
-        reject(err)
-      }
-      client.on('ready', () => succeed())
-      client.on('error', (err) => fail(new Error(normalizeSshError(err.message))))
-      try {
-        client.connect(cfg)
-      } catch (err) {
-        fail(err as Error)
-      }
-    })
+    const { client, jumpClients } = await connectViaJump(
+      node,
+      options.getNode,
+      options.verifyHostKey
+    )
+    return { node, client, jumpClients }
   }
 
   async function ensureSftp(nodeId: string): Promise<SftpSession> {
@@ -223,40 +176,31 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     if (inflight) return inflight
 
     const promise = (async (): Promise<SftpSession> => {
-      const { client } = await openClient(nodeId)
+      const { client, jumpClients } = await openClient(nodeId)
       try {
         return await new Promise<SftpSession>((resolve, reject) => {
           client.sftp((err, sftp) => {
             if (err || !sftp) {
-              try {
-                client.end()
-              } catch {
-                // ignore
-              }
+              endClientChain(client, jumpClients)
               reject(new Error(err?.message || 'SFTP_FAILED'))
               return
             }
-            const session: SftpSession = { nodeId, client, sftp }
+            const session: SftpSession = { nodeId, client, jumpClients, sftp }
             const prev = sftps.get(nodeId)
             if (prev && prev !== session) {
-              try {
-                prev.client.end()
-              } catch {
-                // ignore
-              }
+              endClientChain(prev.client, prev.jumpClients)
             }
             sftps.set(nodeId, session)
             client.on('close', () => {
-              if (sftps.get(nodeId) === session) sftps.delete(nodeId)
+              if (sftps.get(nodeId) === session) {
+                sftps.delete(nodeId)
+                endClientChain(null, jumpClients)
+              }
             })
             client.on('error', () => {
               if (sftps.get(nodeId) === session) {
                 sftps.delete(nodeId)
-                try {
-                  client.end()
-                } catch {
-                  // ignore
-                }
+                endClientChain(client, jumpClients)
               }
             })
             resolve(session)
@@ -351,11 +295,7 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     const sftp = sftps.get(nodeId)
     if (!sftp) return
     sftps.delete(nodeId)
-    try {
-      sftp.client.end()
-    } catch {
-      // ignore
-    }
+    endClientChain(sftp.client, sftp.jumpClients)
   }
 
   async function downloadTree(
@@ -400,15 +340,11 @@ export function createSshClientManager(options: SshClientManagerOptions): {
       const cols = Math.max(2, opts.cols ?? 80)
       const rows = Math.max(1, opts.rows ?? 24)
       const term = opts.term || 'xterm-256color'
-      const { client } = await openClient(opts.nodeId)
+      const { client, jumpClients } = await openClient(opts.nodeId)
       return new Promise((resolve, reject) => {
         client.shell({ term, cols, rows }, (err, channel) => {
           if (err || !channel) {
-            try {
-              client.end()
-            } catch {
-              // ignore
-            }
+            endClientChain(client, jumpClients)
             reject(new Error(normalizeSshError(err?.message || 'SHELL_FAILED')))
             return
           }
@@ -417,6 +353,7 @@ export function createSshClientManager(options: SshClientManagerOptions): {
             sessionId,
             nodeId: opts.nodeId,
             client,
+            jumpClients,
             channel
           }
           shells.set(sessionId, session)

@@ -13,7 +13,8 @@ import {
   Breadcrumb,
   Spin,
   Dropdown,
-  Tooltip
+  Tooltip,
+  Select
 } from 'antd'
 import type { MenuProps } from 'antd'
 import {
@@ -68,6 +69,11 @@ const SSH_ERROR_CODES = [
   'HOST_KEY_MISMATCH',
   'AUTH_FAILED',
   'NODE_NOT_FOUND',
+  'JUMP_NOT_FOUND',
+  'JUMP_SELF',
+  'JUMP_CYCLE',
+  'JUMP_TOO_DEEP',
+  'JUMP_FORWARD_FAILED',
   'SFTP_FAILED',
   'SFTP_LIST_FAILED',
   'SFTP_DOWNLOAD_FAILED',
@@ -105,6 +111,7 @@ interface EditorValues {
   password?: string
   privateKeyPath?: string
   passphrase?: string
+  jumpHostId?: string | null
 }
 
 function extractSshErrorCode(raw: unknown): string {
@@ -126,6 +133,11 @@ function mapSshError(
   if (code === 'HOST_KEY_MISMATCH') return t('sshHostKeyMismatch')
   if (code === 'AUTH_FAILED') return t('sshAuthFailed')
   if (code === 'NODE_NOT_FOUND') return t('sshNodeNotFound')
+  if (code === 'JUMP_NOT_FOUND') return t('sshJumpNotFound')
+  if (code === 'JUMP_SELF') return t('sshJumpSelf')
+  if (code === 'JUMP_CYCLE') return t('sshJumpCycle')
+  if (code === 'JUMP_TOO_DEEP') return t('sshJumpTooDeep')
+  if (code === 'JUMP_FORWARD_FAILED') return t('sshJumpForwardFailed')
   if (code === 'SFTP_FAILED' || code === 'SFTP_LIST_FAILED') return t('sshClientSftpFail')
   if (code === 'SFTP_DOWNLOAD_FAILED') return t('sshClientDownloadFail')
   if (code === 'SFTP_UPLOAD_FAILED') return t('sshClientUploadFail')
@@ -190,17 +202,30 @@ function newTabId(): string {
 function NodeEditor({
   open,
   editing,
+  nodes,
   onCancel,
   onSaved
 }: {
   open: boolean
   editing: SshNodeView | null
+  nodes: SshNodeView[]
   onCancel: () => void
   onSaved: (node: SshNodeView) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const [form] = Form.useForm<EditorValues>()
+
+  const jumpOptions = useMemo(
+    () =>
+      nodes
+        .filter((n) => n.id !== editing?.id)
+        .map((n) => ({
+          value: n.id,
+          label: `${n.name} (${n.username}@${n.host}:${n.port})`
+        })),
+    [nodes, editing?.id]
+  )
 
   useEffect(() => {
     if (!open) return
@@ -212,7 +237,8 @@ function NodeEditor({
       authType: editing?.authType ?? 'password',
       password: '',
       privateKeyPath: editing?.privateKeyPath ?? '',
-      passphrase: ''
+      passphrase: '',
+      jumpHostId: editing?.jumpHostId ?? null
     })
   }, [open, editing, form])
 
@@ -233,13 +259,14 @@ function NodeEditor({
         authType: values.authType,
         password: values.authType === 'password' ? values.password : undefined,
         privateKeyPath: values.authType === 'privateKey' ? values.privateKeyPath : undefined,
-        passphrase: values.authType === 'privateKey' ? values.passphrase : undefined
+        passphrase: values.authType === 'privateKey' ? values.passphrase : undefined,
+        jumpHostId: values.jumpHostId || null
       })
       message.success(t('sshSaved'))
       onSaved(node)
     } catch (err) {
       if ((err as { errorFields?: unknown }).errorFields) return
-      const msg = (err as Error)?.message ?? ''
+      const msg = mapSshError(err, t)
       message.error(t('sshNodeSaveFail', { msg }))
     }
   }, [form, editing, message, onSaved, t])
@@ -284,6 +311,19 @@ function NodeEditor({
         </div>
         <Form.Item name="username" label={t('sshUsername')} rules={[{ required: true }]}>
           <Input placeholder="root" />
+        </Form.Item>
+        <Form.Item
+          name="jumpHostId"
+          label={t('sshJumpHost')}
+          extra={t('sshJumpHostHint')}
+        >
+          <Select
+            allowClear
+            placeholder={t('sshJumpHostNone')}
+            options={jumpOptions}
+            optionFilterProp="label"
+            showSearch
+          />
         </Form.Item>
         {editing && (
           <div className="mb-4">
@@ -1088,6 +1128,13 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                           <div className="text-[10px] font-mono text-[var(--text-secondary)] truncate leading-tight mt-0.5">
                             {node.username}@{node.host}:{node.port}
                           </div>
+                          {node.jumpHostId && (
+                            <div className="text-[10px] text-[var(--text-secondary)] truncate leading-tight mt-0.5">
+                              via{' '}
+                              {nodes.find((n) => n.id === node.jumpHostId)?.name ??
+                                t('sshJumpHost')}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-[grid-template-rows] duration-150 ease-out">
@@ -1442,6 +1489,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       <NodeEditor
         open={editorOpen}
         editing={editing}
+        nodes={nodes}
         onCancel={() => setEditorOpen(false)}
         onSaved={(node) => {
           setNodes((prev) => {

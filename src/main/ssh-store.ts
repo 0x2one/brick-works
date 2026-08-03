@@ -40,6 +40,8 @@ export interface SshNode {
   port: number
   username: string
   auth: SshAuthConfig
+  /** Optional ProxyJump hop — id of another node */
+  jumpHostId?: string | null
   /** Display order; lower first */
   sortOrder: number
   createdAt: number
@@ -56,6 +58,7 @@ export interface SshNodeView {
   privateKeyPath: string | null
   hasPassword: boolean
   hasPassphrase: boolean
+  jumpHostId: string | null
   createdAt: number
   updatedAt: number
 }
@@ -70,6 +73,8 @@ export interface SshNodeInput {
   password?: string
   privateKeyPath?: string
   passphrase?: string
+  /** undefined = keep existing; null / '' = clear */
+  jumpHostId?: string | null
 }
 
 interface StoredSecret {
@@ -87,6 +92,7 @@ interface StoredNode {
   password: StoredSecret | null
   privateKeyPath: string | null
   passphrase: StoredSecret | null
+  jumpHostId?: string | null
   sortOrder?: number
   createdAt: number
   updatedAt: number
@@ -153,6 +159,7 @@ function toView(node: SshNode): SshNodeView {
     privateKeyPath: node.auth.privateKeyPath ?? null,
     hasPassword: Boolean(node.auth.password),
     hasPassphrase: Boolean(node.auth.passphrase),
+    jumpHostId: node.jumpHostId ?? null,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt
   }
@@ -169,6 +176,7 @@ function toStored(node: SshNode): StoredNode {
     password: encryptSecret(node.auth.password),
     privateKeyPath: node.auth.privateKeyPath ?? null,
     passphrase: encryptSecret(node.auth.passphrase),
+    jumpHostId: node.jumpHostId ?? null,
     sortOrder: node.sortOrder,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt
@@ -188,10 +196,38 @@ function fromStored(stored: StoredNode, fallbackOrder: number): SshNode {
       privateKeyPath: stored.privateKeyPath ?? undefined,
       passphrase: decryptSecret(stored.passphrase)
     },
+    jumpHostId: stored.jumpHostId || null,
     sortOrder: typeof stored.sortOrder === 'number' ? stored.sortOrder : fallbackOrder,
     createdAt: stored.createdAt,
     updatedAt: stored.updatedAt
   }
+}
+
+const MAX_JUMP_DEPTH = 5
+
+/** Resolve jumpHostId for save validation; returns error code or null */
+export function validateJumpHostId(
+  nodeId: string | undefined,
+  jumpHostId: string | null | undefined,
+  getJumpHostId: (id: string) => string | null | undefined,
+  hasNode: (id: string) => boolean
+): string | null {
+  if (jumpHostId === undefined) return null
+  if (jumpHostId === null || jumpHostId === '') return null
+  if (!hasNode(jumpHostId)) return 'JUMP_NOT_FOUND'
+  if (nodeId && jumpHostId === nodeId) return 'JUMP_SELF'
+  let current: string | null | undefined = jumpHostId
+  const seen = new Set<string>()
+  if (nodeId) seen.add(nodeId)
+  let depth = 0
+  while (current) {
+    if (seen.has(current)) return 'JUMP_CYCLE'
+    seen.add(current)
+    depth += 1
+    if (depth > MAX_JUMP_DEPTH) return 'JUMP_TOO_DEEP'
+    current = getJumpHostId(current)
+  }
+  return null
 }
 
 function toStoredTunnel(spec: SshTunnelSpec, socksPass: StoredSecret | null): StoredTunnel {
@@ -397,6 +433,23 @@ export function createSshStore(): SshStore {
               : existing?.auth.passphrase
         }
       }
+
+      let jumpHostId: string | null
+      if (input.jumpHostId === undefined) {
+        jumpHostId = existing?.jumpHostId ?? null
+      } else if (!input.jumpHostId) {
+        jumpHostId = null
+      } else {
+        jumpHostId = input.jumpHostId
+      }
+      const jumpErr = validateJumpHostId(
+        existing?.id ?? input.id,
+        jumpHostId,
+        (id) => nodes.get(id)?.jumpHostId ?? null,
+        (id) => nodes.has(id)
+      )
+      if (jumpErr) throw new Error(jumpErr)
+
       const host = input.host.trim()
       const port = input.port
       if (
@@ -413,6 +466,7 @@ export function createSshStore(): SshStore {
         port,
         username: input.username.trim(),
         auth,
+        jumpHostId,
         sortOrder: existing?.sortOrder ?? maxOrder + 1,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now
@@ -426,6 +480,12 @@ export function createSshStore(): SshStore {
       const existed = nodes.delete(id)
       for (const tunnel of tunnels.values()) {
         if (tunnel.nodeId === id) tunnels.delete(tunnel.id)
+      }
+      // Clear jumpHostId references pointing at the removed node
+      for (const [nid, n] of nodes) {
+        if (n.jumpHostId === id) {
+          nodes.set(nid, { ...n, jumpHostId: null, updatedAt: Date.now() })
+        }
       }
       if (node) knownHosts.delete(hostKeyId(node.host, node.port))
       if (existed) {

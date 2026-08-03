@@ -49,6 +49,7 @@ interface SshNodeView {
   privateKeyPath: string | null
   hasPassword: boolean
   hasPassphrase: boolean
+  jumpHostId: string | null
   createdAt: number
   updatedAt: number
 }
@@ -63,6 +64,8 @@ interface SshNodeInput {
   password?: string
   privateKeyPath?: string
   passphrase?: string
+  /** undefined = keep existing; null / '' = clear */
+  jumpHostId?: string | null
 }
 
 interface SshTunnelSpec {
