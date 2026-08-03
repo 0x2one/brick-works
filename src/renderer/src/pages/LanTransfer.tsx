@@ -105,7 +105,7 @@ function LanTransfer(): React.JSX.Element {
     <div className="flex flex-col p-6 gap-4">
       <p className="text-xs text-[var(--text-secondary)]">{t('lanDesc')}</p>
 
-      <div className="flex flex-col gap-4 max-w-[720px]">
+      <div className="flex flex-col gap-4 max-w-[840px]">
         {/* Service status */}
         <section className={CARD_CLS}>
           <div className="px-5 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between">
@@ -186,6 +186,20 @@ function LanTransfer(): React.JSX.Element {
                 <code className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-warm)] text-xs font-mono text-[var(--text-primary)] select-all truncate">
                   {baseUrl}
                 </code>
+                {status?.ips && status.ips.length > 0 && (
+                  <Select
+                    className="w-[132px] shrink-0"
+                    value={status.ip ?? undefined}
+                    onChange={(ip) => {
+                      void window.api.lan
+                        .setIp(ip)
+                        .then(setStatus)
+                        .catch(() => {})
+                    }}
+                    options={status.ips.map((ip) => ({ value: ip, label: ip }))}
+                    placeholder={t('lanNetworkIp')}
+                  />
+                )}
                 <button onClick={() => handleCopy(baseUrl)} className={BTN_CLS}>
                   <CopyOutlined />
                   {t('lanCopy')}
@@ -199,6 +213,9 @@ function LanTransfer(): React.JSX.Element {
                   {t('lanQrCode')}
                 </button>
               </div>
+              {status?.ips && status.ips.length > 0 && (
+                <p className="text-[11px] text-[var(--text-secondary)]">{t('lanNetworkIpHint')}</p>
+              )}
 
               {token && (
                 <div>
@@ -214,27 +231,6 @@ function LanTransfer(): React.JSX.Element {
                   </div>
                   <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
                     {t('lanTokenHint')}
-                  </p>
-                </div>
-              )}
-
-              {status?.ips && status.ips.length > 0 && (
-                <div>
-                  <label className={LABEL_CLS}>{t('lanNetworkIp')}</label>
-                  <Select
-                    className="w-full"
-                    size="small"
-                    value={status.ip ?? undefined}
-                    onChange={(ip) => {
-                      void window.api.lan
-                        .setIp(ip)
-                        .then(setStatus)
-                        .catch(() => {})
-                    }}
-                    options={status.ips.map((ip) => ({ value: ip, label: ip }))}
-                  />
-                  <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
-                    {t('lanNetworkIpHint')}
                   </p>
                 </div>
               )}
