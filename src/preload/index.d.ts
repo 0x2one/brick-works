@@ -124,12 +124,21 @@ interface AppApi {
 interface AppSettings {
   closeToTray: boolean
   openAtLogin: boolean
+  showShortcut: string
+}
+
+interface SetShowShortcutResult {
+  ok: boolean
+  error?: string
+  shortcut: string
 }
 
 interface SettingsApi {
   get: () => Promise<AppSettings>
   setCloseToTray: (value: boolean) => Promise<AppSettings>
   setOpenAtLogin: (value: boolean) => Promise<AppSettings>
+  setShowShortcut: (value: string | null) => Promise<SetShowShortcutResult>
+  resetShowShortcut: () => Promise<SetShowShortcutResult>
 }
 
 interface Api {

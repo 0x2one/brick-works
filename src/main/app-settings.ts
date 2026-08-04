@@ -3,20 +3,25 @@ import { promises as fsp } from 'fs'
 import { mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
+export const DEFAULT_SHOW_SHORTCUT = 'Alt+Space'
+
 export interface AppSettings {
   closeToTray: boolean
   openAtLogin: boolean
+  showShortcut: string
 }
 
 interface StoreFile {
   version: 1
   closeToTray?: boolean
   openAtLogin?: boolean
+  showShortcut?: string
 }
 
 const DEFAULTS: AppSettings = {
   closeToTray: false,
-  openAtLogin: false
+  openAtLogin: false,
+  showShortcut: DEFAULT_SHOW_SHORTCUT
 }
 
 export interface AppSettingsStore {
@@ -24,6 +29,7 @@ export interface AppSettingsStore {
   get: () => AppSettings
   setCloseToTray: (value: boolean) => AppSettings
   setOpenAtLogin: (value: boolean) => AppSettings
+  setShowShortcut: (value: string | null) => AppSettings
 }
 
 function applyOpenAtLogin(enabled: boolean): void {
@@ -67,7 +73,9 @@ export function createAppSettingsStore(): AppSettingsStore {
         closeToTray:
           typeof data?.closeToTray === 'boolean' ? data.closeToTray : DEFAULTS.closeToTray,
         openAtLogin:
-          typeof data?.openAtLogin === 'boolean' ? data.openAtLogin : DEFAULTS.openAtLogin
+          typeof data?.openAtLogin === 'boolean' ? data.openAtLogin : DEFAULTS.openAtLogin,
+        showShortcut:
+          typeof data?.showShortcut === 'string' ? data.showShortcut : DEFAULTS.showShortcut
       }
     } catch {
       settings = { ...DEFAULTS }
@@ -78,7 +86,8 @@ export function createAppSettingsStore(): AppSettingsStore {
     const payload: StoreFile = {
       version: 1,
       closeToTray: settings.closeToTray,
-      openAtLogin: settings.openAtLogin
+      openAtLogin: settings.openAtLogin,
+      showShortcut: settings.showShortcut
     }
     try {
       mkdirSync(app.getPath('userData'), { recursive: true })
@@ -105,6 +114,12 @@ export function createAppSettingsStore(): AppSettingsStore {
       const enabled = Boolean(value)
       applyOpenAtLogin(enabled)
       settings = { ...settings, openAtLogin: enabled }
+      persist()
+      return { ...settings, openAtLogin: readOpenAtLoginFromOs() }
+    },
+    setShowShortcut: (value: string | null) => {
+      const shortcut = typeof value === 'string' ? value.trim() : ''
+      settings = { ...settings, showShortcut: shortcut }
       persist()
       return { ...settings, openAtLogin: readOpenAtLoginFromOs() }
     }

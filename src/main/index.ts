@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, dialog, ipcMain, nativeImage, net, Tray, Menu } from 'electron'
+import { app, shell, BrowserWindow, dialog, ipcMain, nativeImage, net, Tray, Menu, globalShortcut } from 'electron'
 import { promises as dns } from 'dns'
 import { join, basename } from 'path'
 import { promises as fsp } from 'fs'
@@ -17,7 +17,7 @@ import { createSshClientManager, type SshShellStartOpts } from './ssh-client-man
 import { createK8sStore, defaultKubeconfigPath, type K8sClusterInput } from './k8s-store'
 import { createK8sManager } from './k8s-manager'
 import { createStickyStore, type StickyData } from './sticky-store'
-import { createAppSettingsStore } from './app-settings'
+import { createAppSettingsStore, DEFAULT_SHOW_SHORTCUT } from './app-settings'
 import {
   allowLocalPath,
   assertAllowedLocalPath,
@@ -199,6 +199,53 @@ function showMainWindow(): void {
   mainWindow.focus()
 }
 
+/* ── Global "show window" shortcut ── */
+
+let registeredShortcut: string | null = null
+
+function toggleShowWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow()
+    return
+  }
+  // Visible + focused → hide (tray-style). Otherwise → show and focus.
+  if (mainWindow.isVisible() && mainWindow.isFocused()) {
+    mainWindow.setSkipTaskbar(true)
+    mainWindow.hide()
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.setSkipTaskbar(false)
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function registerAccel(accel: string): boolean {
+  try {
+    if (globalShortcut.register(accel, () => toggleShowWindow())) {
+      registeredShortcut = accel
+      return true
+    }
+  } catch {
+    // invalid accelerator
+  }
+  return false
+}
+
+function applyShowShortcut(accel: string | null): { ok: boolean; error?: string; shortcut: string } {
+  const prev = registeredShortcut
+  const trimmed = accel?.trim() ?? ''
+  if (prev) {
+    globalShortcut.unregister(prev)
+    registeredShortcut = null
+  }
+  if (!trimmed) return { ok: true, shortcut: '' }
+  if (registerAccel(trimmed)) return { ok: true, shortcut: trimmed }
+  // Registration failed — restore the previous shortcut and report why.
+  if (prev) registerAccel(prev)
+  return { ok: false, error: 'CONFLICT', shortcut: prev ?? '' }
+}
+
 function trayLabels(): { show: string; quit: string } {
   const zh = app.getLocale().toLowerCase().startsWith('zh')
   return zh ? { show: '显示窗口', quit: '退出' } : { show: 'Show', quit: 'Quit' }
@@ -323,6 +370,18 @@ ipcMain.handle('settings:setCloseToTray', (_event, value: boolean) => {
 
 ipcMain.handle('settings:setOpenAtLogin', (_event, value: boolean) => {
   return appSettingsStore.setOpenAtLogin(Boolean(value))
+})
+
+ipcMain.handle('settings:setShowShortcut', (_event, value: string | null) => {
+  const res = applyShowShortcut(value)
+  if (res.ok) appSettingsStore.setShowShortcut(res.shortcut)
+  return res
+})
+
+ipcMain.handle('settings:resetShowShortcut', () => {
+  const res = applyShowShortcut(DEFAULT_SHOW_SHORTCUT)
+  if (res.ok) appSettingsStore.setShowShortcut(res.shortcut)
+  return res
 })
 
 ipcMain.handle('fetch:image', async (_event, url: string): Promise<string | null> => {
@@ -1066,6 +1125,7 @@ let quittingCleaned = false
 app.on('before-quit', (event) => {
   isQuitting = true
   destroyTray()
+  globalShortcut.unregisterAll()
   if (quittingCleaned) return
   event.preventDefault()
   quittingCleaned = true
@@ -1104,6 +1164,9 @@ if (!gotTheLock) {
     seedAllowedPaths()
     broadcastSshStatus()
     broadcastK8sStatus()
+
+    const savedShortcut = appSettingsStore.get().showShortcut
+    if (savedShortcut) registerAccel(savedShortcut)
 
     createWindow()
     syncTrayWithSettings()

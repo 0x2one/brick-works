@@ -1,18 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Switch, Radio } from 'antd'
+import { Switch, Radio, App, Button, Tooltip } from 'antd'
 import type { RadioChangeEvent } from 'antd'
 import {
   SettingOutlined,
   InfoCircleOutlined,
   LaptopOutlined,
   SunOutlined,
-  MoonOutlined
+  MoonOutlined,
+  UndoOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons'
 import i18n from '../i18n'
 import { useTheme, type ThemeMode } from '../theme/ThemeProvider'
 
-type SettingsSection = 'preferences' | 'appearance' | 'about'
+type SettingsSection = 'preferences' | 'shortcut' | 'appearance' | 'about'
 
 const NAV_ITEMS: {
   key: SettingsSection
@@ -20,6 +22,7 @@ const NAV_ITEMS: {
   icon: typeof SettingOutlined
 }[] = [
   { key: 'preferences', labelKey: 'preferences', icon: SettingOutlined },
+  { key: 'shortcut', labelKey: 'shortcutSection', icon: ThunderboltOutlined },
   { key: 'appearance', labelKey: 'appearance', icon: SunOutlined },
   { key: 'about', labelKey: 'about', icon: InfoCircleOutlined }
 ]
@@ -116,11 +119,175 @@ function SettingsToggle(props: {
   )
 }
 
+const DEFAULT_SHORTCUT = 'Alt+Space'
+const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+
+const SHORTCUT_KEY_MAP: Record<string, string> = {
+  ' ': 'Space',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  Escape: 'Esc',
+  Enter: 'Return',
+  Tab: 'Tab',
+  Backspace: 'Backspace',
+  Delete: 'Delete',
+  Insert: 'Insert',
+  Home: 'Home',
+  End: 'End',
+  PageUp: 'PageUp',
+  PageDown: 'PageDown',
+  CapsLock: 'Capslock'
+}
+
+function buildAccelerator(e: React.KeyboardEvent): string | null {
+  const { key, ctrlKey, altKey, shiftKey, metaKey } = e
+  const mods: string[] = []
+  if (ctrlKey) mods.push('Ctrl')
+  if (altKey) mods.push('Alt')
+  if (shiftKey) mods.push('Shift')
+  if (metaKey) mods.push(IS_MAC ? 'Command' : 'Super')
+  let main = SHORTCUT_KEY_MAP[key]
+  if (!main) {
+    if (/^F\d{1,2}$/.test(key)) main = key
+    else if (/^[a-zA-Z0-9]$/.test(key)) main = key.toUpperCase()
+  }
+  if (!main) return null
+  const isFunction = /^F\d{1,2}$/.test(main)
+  if (mods.length === 0 && !isFunction) return null
+  if (isFunction && mods.length === 0) return main
+  return [...mods, main].join('+')
+}
+
+function ShortcutSetting(): React.JSX.Element {
+  const { t } = useTranslation()
+  const { message } = App.useApp()
+  const [loading, setLoading] = useState(true)
+  const [enabled, setEnabled] = useState(false)
+  const [value, setValue] = useState(DEFAULT_SHORTCUT)
+  const [recording, setRecording] = useState(false)
+  const captureRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let alive = true
+    void window.api.settings.get().then((settings) => {
+      if (!alive) return
+      setEnabled(Boolean(settings.showShortcut))
+      if (settings.showShortcut) setValue(settings.showShortcut)
+      setLoading(false)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const apply = (accel: string): void => {
+    void window.api.settings.setShowShortcut(accel).then((res) => {
+      if (!res.ok) {
+        message.error(res.error === 'CONFLICT' ? t('shortcutConflict') : t('shortcutInvalid'))
+        return
+      }
+      if (res.shortcut) {
+        setValue(res.shortcut)
+        setEnabled(true)
+      } else {
+        setEnabled(false)
+      }
+      message.success(t('shortcutSaved'))
+    })
+  }
+
+  const toggle = (checked: boolean): void => {
+    if (checked) {
+      apply(value || DEFAULT_SHORTCUT)
+    } else {
+      apply('')
+    }
+  }
+
+  const reset = (): void => {
+    void window.api.settings.resetShowShortcut().then((res) => {
+      if (!res.ok) {
+        message.error(res.error === 'CONFLICT' ? t('shortcutConflict') : t('shortcutInvalid'))
+        return
+      }
+      setValue(res.shortcut || DEFAULT_SHORTCUT)
+      setEnabled(Boolean(res.shortcut))
+      message.success(t('shortcutSaved'))
+    })
+  }
+
+  const startRecording = (): void => {
+    setRecording(true)
+    requestAnimationFrame(() => captureRef.current?.focus())
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
+    if (!recording) return
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.key === 'Escape') {
+      setRecording(false)
+      return
+    }
+    const accel = buildAccelerator(e)
+    if (accel) {
+      setRecording(false)
+      apply(accel)
+    }
+  }
+
+  return (
+    <div className="settings-row settings-row-stack">
+      <div className="shortcut-head">
+        <div className="settings-label-block">
+          <span className="settings-label">{t('showWindowShortcut')}</span>
+          <span className="settings-value">{t('showWindowShortcutDesc')}</span>
+        </div>
+        <Switch checked={enabled} loading={loading} onChange={toggle} />
+      </div>
+      {enabled && (
+        <div className="shortcut-row">
+          <div
+            ref={captureRef}
+            tabIndex={0}
+            className={`shortcut-capture${recording ? ' is-recording' : ''}`}
+            onClick={startRecording}
+            onKeyDown={handleKeyDown}
+            onBlur={() => setRecording(false)}
+          >
+            {recording ? (
+              <span className="shortcut-capture-hint">{t('shortcutRecording')}</span>
+            ) : (
+              <span className="shortcut-key">
+                <ThunderboltOutlined />
+                <kbd>{value || t('shortcutNone')}</kbd>
+              </span>
+            )}
+          </div>
+          <Tooltip title={t('shortcutReset')}>
+            <Button size="small" icon={<UndoOutlined />} onClick={reset} />
+          </Tooltip>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PreferencesPanel(): React.JSX.Element {
   return (
     <div className="settings-panel-card">
       <SettingsToggle labelKey="openAtLogin" descKey="openAtLoginDesc" field="openAtLogin" />
       <SettingsToggle labelKey="closeToTray" descKey="closeToTrayDesc" field="closeToTray" />
+    </div>
+  )
+}
+
+function ShortcutPanel(): React.JSX.Element {
+  return (
+    <div className="settings-panel-card">
+      <ShortcutSetting />
     </div>
   )
 }
@@ -200,6 +367,7 @@ function AboutPanel(): React.JSX.Element {
 
 const SECTION_DESC: Record<SettingsSection, string> = {
   preferences: 'preferencesDesc',
+  shortcut: 'shortcutDesc',
   appearance: 'appearanceDesc',
   about: 'settingsAboutDesc'
 }
@@ -235,6 +403,7 @@ function Settings(): React.JSX.Element {
         </header>
         <div className="settings-main-body">
           {section === 'preferences' && <PreferencesPanel />}
+          {section === 'shortcut' && <ShortcutPanel />}
           {section === 'appearance' && <AppearancePanel />}
           {section === 'about' && <AboutPanel />}
         </div>
