@@ -214,7 +214,7 @@
 .settings-shell {
   display: grid;
   grid-template-columns: 188px minmax(0, 1fr);
-  height: 420px;
+  height: 520px;
 }
 
 .settings-nav {
