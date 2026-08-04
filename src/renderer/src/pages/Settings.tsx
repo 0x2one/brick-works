@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Switch, Radio, App, Button, Tooltip, Input } from 'antd'
+import { Switch, Radio, App, Button, Tooltip, Input, Progress, Spin } from 'antd'
 import type { RadioChangeEvent, InputRef } from 'antd'
 import {
   SettingOutlined,
@@ -10,7 +10,9 @@ import {
   MoonOutlined,
   UndoOutlined,
   ThunderboltOutlined,
-  EditOutlined
+  EditOutlined,
+  DownloadOutlined,
+  SearchOutlined
 } from '@ant-design/icons'
 import i18n from '../i18n'
 import { useTheme, type ThemeMode } from '../theme/ThemeProvider'
@@ -80,7 +82,7 @@ function ThemeRadio(): React.JSX.Element {
 function SettingsToggle(props: {
   labelKey: string
   descKey: string
-  field: 'openAtLogin' | 'closeToTray'
+  field: 'openAtLogin' | 'closeToTray' | 'autoDownload'
 }): React.JSX.Element {
   const { t } = useTranslation()
   const [checked, setChecked] = useState(false)
@@ -103,7 +105,9 @@ function SettingsToggle(props: {
     const req =
       props.field === 'openAtLogin'
         ? window.api.settings.setOpenAtLogin(value)
-        : window.api.settings.setCloseToTray(value)
+        : props.field === 'closeToTray'
+          ? window.api.settings.setCloseToTray(value)
+          : window.api.settings.setAutoDownload(value)
     void req.then((settings) => {
       setChecked(settings[props.field])
     })
@@ -344,6 +348,11 @@ function PreferencesPanel(): React.JSX.Element {
     <div className="settings-panel-card">
       <SettingsToggle labelKey="openAtLogin" descKey="openAtLoginDesc" field="openAtLogin" />
       <SettingsToggle labelKey="closeToTray" descKey="closeToTrayDesc" field="closeToTray" />
+      <SettingsToggle
+        labelKey="updaterAutoDownload"
+        descKey="updaterAutoDownloadDesc"
+        field="autoDownload"
+      />
     </div>
   )
 }
@@ -382,6 +391,129 @@ function AppearancePanel(): React.JSX.Element {
   )
 }
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+function UpdateSection(): React.JSX.Element {
+  const { t } = useTranslation()
+  const { message } = App.useApp()
+  const [status, setStatus] = useState<UpdaterStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    void window.api.updater.getStatus().then((s) => {
+      if (alive) setStatus(s)
+    })
+    const unsub = window.api.updater.onStatus((s) => {
+      if (alive) setStatus(s)
+    })
+    return () => {
+      alive = false
+      unsub()
+    }
+  }, [])
+
+  const handleCheck = (): void => {
+    setBusy(true)
+    void window.api.updater
+      .check()
+      .then((s) => {
+        setStatus(s)
+        if (s.state === 'error') message.error(s.error || t('updaterError'))
+      })
+      .finally(() => setBusy(false))
+  }
+
+  const handleDownload = (): void => {
+    void window.api.updater.download().then(setStatus)
+  }
+
+  const handleInstall = (): void => {
+    void window.api.updater.install()
+  }
+
+  const state = status?.state ?? 'idle'
+
+  return (
+    <div className="settings-panel-card">
+      <div className="settings-row settings-row-stack">
+        <div className="settings-label-block">
+          <span className="settings-label">{t('updaterTitle')}</span>
+          <span className="settings-value">{t('updaterDesc')}</span>
+        </div>
+        {state === 'idle' && (
+          <Button type="primary" icon={<SearchOutlined />} loading={busy} onClick={handleCheck}>
+            {t('updaterCheck')}
+          </Button>
+        )}
+        {state === 'checking' && (
+          <div className="settings-value">
+            <Spin size="small" /> {t('updaterChecking')}
+          </div>
+        )}
+        {state === 'available' && (
+          <div className="settings-row-stack">
+            <div className="settings-value">
+              {t('updaterAvailable', { version: status?.version ?? '' })}
+            </div>
+            <Button type="primary" icon={<DownloadOutlined />} onClick={handleDownload}>
+              {t('updaterDownload')}
+            </Button>
+          </div>
+        )}
+        {state === 'downloading' && (
+          <div className="settings-row-stack">
+            <div className="settings-value">
+              {t('updaterDownloading')}
+              {status?.version ? ` v${status.version}` : ''}
+            </div>
+            <Progress
+              percent={Math.round(status?.progress?.percent ?? 0)}
+              size="small"
+              status="active"
+            />
+            <div className="settings-value">
+              {t('updaterProgress', {
+                percent: (status?.progress?.percent ?? 0).toFixed(0)
+              })}
+              {' · '}
+              {t('updaterSpeed', {
+                speed: formatBytes(status?.progress?.bytesPerSecond ?? 0)
+              })}
+            </div>
+          </div>
+        )}
+        {state === 'downloaded' && (
+          <div className="settings-row-stack">
+            <div className="settings-value">
+              {t('updaterDownloaded', { version: status?.version ?? '' })}
+            </div>
+            <Button type="primary" icon={<ThunderboltOutlined />} onClick={handleInstall}>
+              {t('updaterInstall')}
+            </Button>
+          </div>
+        )}
+        {state === 'not-available' && (
+          <div className="settings-value">{t('updaterNotAvailable')}</div>
+        )}
+        {state === 'error' && (
+          <div className="settings-value">
+            {t('updaterError')}
+            <Button size="small" icon={<SearchOutlined />} loading={busy} onClick={handleCheck}>
+              {t('updaterRetry')}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function AboutPanel(): React.JSX.Element {
   const { t } = useTranslation()
   const [info, setInfo] = useState<AppInfo | null>(null)
@@ -397,34 +529,25 @@ function AboutPanel(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="settings-panel-card settings-about">
-      <div className="settings-about-brand">
-        <span className="settings-about-mark">
-          <InfoCircleOutlined />
-        </span>
-        <div>
-          <div className="settings-label">BrickWorks · {t('appName')}</div>
-          <div className="settings-value">{t('aboutTagline')}</div>
+    <div className="settings-panel-stack">
+      <div className="settings-panel-card settings-about">
+        <div className="settings-about-brand">
+          <span className="settings-about-mark">
+            <InfoCircleOutlined />
+          </span>
+          <div>
+            <div className="settings-label">BrickWorks · {t('appName')}</div>
+            <div className="settings-value">{t('aboutTagline')}</div>
+          </div>
+        </div>
+        <div className="settings-about-meta">
+          <div className="settings-row">
+            <span className="settings-label">{t('version')}</span>
+            <span className="settings-value">{info?.version ?? '—'}</span>
+          </div>
         </div>
       </div>
-      <div className="settings-about-meta">
-        <div className="settings-row">
-          <span className="settings-label">{t('version')}</span>
-          <span className="settings-value">{info?.version ?? '—'}</span>
-        </div>
-        <div className="settings-row">
-          <span className="settings-label">Electron</span>
-          <span className="settings-value">{info?.electron ?? '—'}</span>
-        </div>
-        <div className="settings-row">
-          <span className="settings-label">Chrome</span>
-          <span className="settings-value">{info?.chrome ?? '—'}</span>
-        </div>
-        <div className="settings-row">
-          <span className="settings-label">Node</span>
-          <span className="settings-value">{info?.node ?? '—'}</span>
-        </div>
-      </div>
+      <UpdateSection />
     </div>
   )
 }

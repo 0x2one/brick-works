@@ -18,6 +18,7 @@ import { createK8sStore, defaultKubeconfigPath, type K8sClusterInput } from './k
 import { createK8sManager } from './k8s-manager'
 import { createStickyStore, type StickyData } from './sticky-store'
 import { createAppSettingsStore, DEFAULT_SHOW_SHORTCUT } from './app-settings'
+import { createUpdater, type UpdaterStatus } from './updater'
 import {
   allowLocalPath,
   assertAllowedLocalPath,
@@ -30,6 +31,7 @@ let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
 const appSettingsStore = createAppSettingsStore()
+const updater = createUpdater(sendToRenderer, () => appSettingsStore.get().autoDownload)
 
 const MAX_FETCH_IMAGE_BYTES = 10 * 1024 * 1024
 const MAX_FETCH_SVG_BYTES = 2 * 1024 * 1024
@@ -397,6 +399,10 @@ ipcMain.handle('settings:resetShowShortcut', () => {
   return res
 })
 
+ipcMain.handle('settings:setAutoDownload', (_event, value: boolean) => {
+  return appSettingsStore.setAutoDownload(Boolean(value))
+})
+
 ipcMain.handle('fetch:image', async (_event, url: string): Promise<string | null> => {
   const safe = await assertSafeFetchUrl(url)
   if (!safe) return null
@@ -447,6 +453,25 @@ ipcMain.handle('app:info', () => ({
   platform: process.platform,
   arch: process.arch
 }))
+
+/* ── Auto updater ── */
+
+ipcMain.handle('updater:check', () => {
+  updater.checkForUpdates()
+  return updater.getStatus()
+})
+
+ipcMain.handle('updater:download', () => {
+  updater.downloadUpdate()
+  return updater.getStatus()
+})
+
+ipcMain.handle('updater:install', () => {
+  updater.quitAndInstall()
+  return true
+})
+
+ipcMain.handle('updater:getStatus', (): UpdaterStatus => updater.getStatus())
 
 /* ── LAN transfer service ── */
 
@@ -1160,7 +1185,7 @@ if (!gotTheLock) {
   })
 
   app.whenReady().then(async () => {
-    electronApp.setAppUserModelId('com.brickworks')
+    electronApp.setAppUserModelId('top.xiaolannet.brickworks')
 
     app.on('browser-window-created', (_, window) => {
       optimizer.watchWindowShortcuts(window)
@@ -1183,6 +1208,7 @@ if (!gotTheLock) {
 
     createWindow()
     syncTrayWithSettings()
+    updater.init()
 
     app.on('activate', function () {
       if (BrowserWindow.getAllWindows().length === 0) {

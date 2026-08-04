@@ -125,6 +125,7 @@ interface AppSettings {
   closeToTray: boolean
   openAtLogin: boolean
   showShortcut: string
+  autoDownload: boolean
 }
 
 interface SetShowShortcutResult {
@@ -139,6 +140,15 @@ interface SettingsApi {
   setOpenAtLogin: (value: boolean) => Promise<AppSettings>
   setShowShortcut: (value: string | null) => Promise<SetShowShortcutResult>
   resetShowShortcut: () => Promise<SetShowShortcutResult>
+  setAutoDownload: (value: boolean) => Promise<AppSettings>
+}
+
+interface UpdaterApi {
+  check: () => Promise<UpdaterStatus>
+  download: () => Promise<UpdaterStatus>
+  install: () => Promise<boolean>
+  getStatus: () => Promise<UpdaterStatus>
+  onStatus: (callback: (status: UpdaterStatus) => void) => () => void
 }
 
 interface Api {
@@ -147,6 +157,7 @@ interface Api {
   windowControls: WindowControls
   app: AppApi
   settings: SettingsApi
+  updater: UpdaterApi
   lan: LanApi
   ssh: SshApi
   sticky: StickyApi

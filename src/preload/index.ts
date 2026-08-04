@@ -11,9 +11,24 @@ const api = {
     setOpenAtLogin: (value: boolean) => ipcRenderer.invoke('settings:setOpenAtLogin', value),
     setShowShortcut: (value: string | null) =>
       ipcRenderer.invoke('settings:setShowShortcut', value),
-    resetShowShortcut: () => ipcRenderer.invoke('settings:resetShowShortcut')
+    resetShowShortcut: () => ipcRenderer.invoke('settings:resetShowShortcut'),
+    setAutoDownload: (value: boolean) => ipcRenderer.invoke('settings:setAutoDownload', value)
   },
   fetchSvg: (url: string) => ipcRenderer.invoke('fetch:svg', url),
+  updater: {
+    check: () => ipcRenderer.invoke('updater:check'),
+    download: () => ipcRenderer.invoke('updater:download'),
+    install: () => ipcRenderer.invoke('updater:install'),
+    getStatus: () => ipcRenderer.invoke('updater:getStatus'),
+    onStatus: (callback: (status: UpdaterStatus) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: UpdaterStatus): void =>
+        callback(status)
+      ipcRenderer.on('updater:status', handler)
+      return () => {
+        ipcRenderer.removeListener('updater:status', handler)
+      }
+    }
+  },
   windowControls: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
     maximize: () => ipcRenderer.invoke('window:maximize'),

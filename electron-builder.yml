@@ -1,4 +1,4 @@
-appId: com.electron.app
+appId: top.xiaolannet.brickworks
 productName: 积木工坊
 directories:
   buildResources: build
@@ -40,6 +40,6 @@ appImage:
 npmRebuild: false
 publish:
   provider: generic
-  url: https://example.com/auto-updates
+  url: https://brick-works.xiaolannet.top
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
