@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Switch, Radio, App, Button, Tooltip, Input, Progress, Spin } from 'antd'
+import { Switch, Radio, App, Button, Tooltip, Input, Progress } from 'antd'
 import type { RadioChangeEvent, InputRef } from 'antd'
 import {
   SettingOutlined,
@@ -16,6 +16,7 @@ import {
 } from '@ant-design/icons'
 import i18n from '../i18n'
 import { useTheme, type ThemeMode } from '../theme/ThemeProvider'
+import logoUrl from '../assets/logo.svg'
 
 type SettingsSection = 'preferences' | 'shortcut' | 'appearance' | 'about'
 
@@ -438,79 +439,96 @@ function UpdateSection(): React.JSX.Element {
   }
 
   const state = status?.state ?? 'idle'
+  const version = status?.version ? ` v${status.version}` : ''
+
+  let hint: React.ReactNode
+  let action: React.ReactNode
+  switch (state) {
+    case 'checking':
+      hint = t('updaterChecking')
+      action = (
+        <Button loading icon={<SearchOutlined />}>
+          {t('updaterCheck')}
+        </Button>
+      )
+      break
+    case 'available':
+      hint = t('updaterAvailable', { version: status?.version ?? '' })
+      action = (
+        <Button type="primary" icon={<DownloadOutlined />} onClick={handleDownload}>
+          {t('updaterDownload')}
+        </Button>
+      )
+      break
+    case 'downloading':
+      hint = `${t('updaterDownloading')}${version}`
+      action = (
+        <Button disabled loading icon={<DownloadOutlined />}>
+          {t('updaterDownloading')}
+        </Button>
+      )
+      break
+    case 'downloaded':
+      hint = t('updaterDownloaded', { version: status?.version ?? '' })
+      action = (
+        <Button type="primary" icon={<ThunderboltOutlined />} onClick={handleInstall}>
+          {t('updaterInstall')}
+        </Button>
+      )
+      break
+    case 'not-available':
+      hint = t('updaterNotAvailable')
+      action = (
+        <Button icon={<SearchOutlined />} loading={busy} onClick={handleCheck}>
+          {t('updaterCheck')}
+        </Button>
+      )
+      break
+    case 'error':
+      hint = t('updaterError')
+      action = (
+        <Button icon={<SearchOutlined />} loading={busy} onClick={handleCheck}>
+          {t('updaterRetry')}
+        </Button>
+      )
+      break
+    default:
+      hint = t('updaterDesc')
+      action = (
+        <Button type="primary" icon={<SearchOutlined />} loading={busy} onClick={handleCheck}>
+          {t('updaterCheck')}
+        </Button>
+      )
+  }
 
   return (
-    <div className="settings-panel-card">
-      <div className="settings-row settings-row-stack">
+    <>
+      <div className="settings-row settings-update">
         <div className="settings-label-block">
           <span className="settings-label">{t('updaterTitle')}</span>
-          <span className="settings-value">{t('updaterDesc')}</span>
+          <span className="settings-value">{hint}</span>
         </div>
-        {state === 'idle' && (
-          <Button type="primary" icon={<SearchOutlined />} loading={busy} onClick={handleCheck}>
-            {t('updaterCheck')}
-          </Button>
-        )}
-        {state === 'checking' && (
-          <div className="settings-value">
-            <Spin size="small" /> {t('updaterChecking')}
-          </div>
-        )}
-        {state === 'available' && (
-          <div className="settings-row-stack">
-            <div className="settings-value">
-              {t('updaterAvailable', { version: status?.version ?? '' })}
-            </div>
-            <Button type="primary" icon={<DownloadOutlined />} onClick={handleDownload}>
-              {t('updaterDownload')}
-            </Button>
-          </div>
-        )}
-        {state === 'downloading' && (
-          <div className="settings-row-stack">
-            <div className="settings-value">
-              {t('updaterDownloading')}
-              {status?.version ? ` v${status.version}` : ''}
-            </div>
-            <Progress
-              percent={Math.round(status?.progress?.percent ?? 0)}
-              size="small"
-              status="active"
-            />
-            <div className="settings-value">
-              {t('updaterProgress', {
-                percent: (status?.progress?.percent ?? 0).toFixed(0)
-              })}
-              {' · '}
-              {t('updaterSpeed', {
-                speed: formatBytes(status?.progress?.bytesPerSecond ?? 0)
-              })}
-            </div>
-          </div>
-        )}
-        {state === 'downloaded' && (
-          <div className="settings-row-stack">
-            <div className="settings-value">
-              {t('updaterDownloaded', { version: status?.version ?? '' })}
-            </div>
-            <Button type="primary" icon={<ThunderboltOutlined />} onClick={handleInstall}>
-              {t('updaterInstall')}
-            </Button>
-          </div>
-        )}
-        {state === 'not-available' && (
-          <div className="settings-value">{t('updaterNotAvailable')}</div>
-        )}
-        {state === 'error' && (
-          <div className="settings-value">
-            {t('updaterError')}
-            <Button size="small" icon={<SearchOutlined />} loading={busy} onClick={handleCheck}>
-              {t('updaterRetry')}
-            </Button>
-          </div>
-        )}
+        {action}
       </div>
-    </div>
+      {state === 'downloading' && (
+        <div className="settings-update-progress">
+          <Progress
+            percent={Math.round(status?.progress?.percent ?? 0)}
+            size="small"
+            status="active"
+          />
+          <span className="settings-value">
+            {t('updaterProgress', {
+              percent: (status?.progress?.percent ?? 0).toFixed(0)
+            })}
+            {' · '}
+            {t('updaterSpeed', {
+              speed: formatBytes(status?.progress?.bytesPerSecond ?? 0)
+            })}
+          </span>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -529,24 +547,16 @@ function AboutPanel(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="settings-panel-stack">
-      <div className="settings-panel-card settings-about">
-        <div className="settings-about-brand">
-          <span className="settings-about-mark">
-            <InfoCircleOutlined />
-          </span>
-          <div>
-            <div className="settings-label">BrickWorks · {t('appName')}</div>
-            <div className="settings-value">{t('aboutTagline')}</div>
-          </div>
-        </div>
-        <div className="settings-about-meta">
-          <div className="settings-row">
-            <span className="settings-label">{t('version')}</span>
-            <span className="settings-value">{info?.version ?? '—'}</span>
-          </div>
+    <div className="settings-panel-card settings-about">
+      <div className="settings-about-head">
+        <img className="settings-about-logo" src={logoUrl} alt={t('appName')} />
+        <div className="settings-about-info">
+          <div className="settings-about-name">{t('appName')}</div>
+          <div className="settings-about-meta">BrickWorks · v{info?.version ?? '—'}</div>
         </div>
       </div>
+      <p className="settings-about-tagline">{t('aboutTagline')}</p>
+      <div className="settings-about-divider" />
       <UpdateSection />
     </div>
   )
