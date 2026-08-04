@@ -404,6 +404,16 @@
   gap: 8px;
 }
 
+.shortcut-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.shortcut-input {
+  max-width: 260px;
+}
+
 .shortcut-capture {
   display: flex;
   align-items: center;

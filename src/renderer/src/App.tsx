@@ -29,7 +29,10 @@ type FadeStage = 'idle' | 'exit' | 'enter'
 
 function AppLayout(): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    const stored = localStorage.getItem('sidebar-collapsed')
+    return stored === null ? true : stored === '1'
+  })
   const location = useLocation()
   const navigate = useNavigate()
   const [displayLocation, setDisplayLocation] = useState(location)
@@ -104,7 +107,10 @@ function AppLayout(): React.JSX.Element {
         collapsible
         collapsed={collapsed}
         collapsedWidth={48}
-        onCollapse={setCollapsed}
+        onCollapse={(value) => {
+          setCollapsed(value)
+          localStorage.setItem('sidebar-collapsed', value ? '1' : '0')
+        }}
         className="sidebar"
         trigger={
           <div className="sidebar-trigger">

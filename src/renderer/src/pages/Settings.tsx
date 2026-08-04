@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Switch, Radio, App, Button, Tooltip } from 'antd'
-import type { RadioChangeEvent } from 'antd'
+import { Switch, Radio, App, Button, Tooltip, Input } from 'antd'
+import type { RadioChangeEvent, InputRef } from 'antd'
 import {
   SettingOutlined,
   InfoCircleOutlined,
@@ -9,7 +9,8 @@ import {
   SunOutlined,
   MoonOutlined,
   UndoOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  EditOutlined
 } from '@ant-design/icons'
 import i18n from '../i18n'
 import { useTheme, type ThemeMode } from '../theme/ThemeProvider'
@@ -138,7 +139,19 @@ const SHORTCUT_KEY_MAP: Record<string, string> = {
   End: 'End',
   PageUp: 'PageUp',
   PageDown: 'PageDown',
-  CapsLock: 'Capslock'
+  CapsLock: 'Capslock',
+  ',': ',',
+  '.': '.',
+  '/': '/',
+  '\\': '\\',
+  ';': ';',
+  "'": "'",
+  '[': '[',
+  ']': ']',
+  '-': '-',
+  '=': '=',
+  '`': '`',
+  '+': 'Plus'
 }
 
 function buildAccelerator(e: React.KeyboardEvent): string | null {
@@ -167,7 +180,11 @@ function ShortcutSetting(): React.JSX.Element {
   const [enabled, setEnabled] = useState(false)
   const [value, setValue] = useState(DEFAULT_SHORTCUT)
   const [recording, setRecording] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
   const captureRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<InputRef>(null)
+  const editCancelledRef = useRef(false)
 
   useEffect(() => {
     let alive = true
@@ -238,6 +255,29 @@ function ShortcutSetting(): React.JSX.Element {
     }
   }
 
+  const startEditing = (): void => {
+    editCancelledRef.current = false
+    setEditing(true)
+    setDraft(value)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  const commitEdit = (raw: string): void => {
+    setEditing(false)
+    if (editCancelledRef.current) {
+      editCancelledRef.current = false
+      return
+    }
+    const accel = raw.trim()
+    if (!accel) return
+    apply(accel)
+  }
+
+  const cancelEdit = (): void => {
+    editCancelledRef.current = true
+    setEditing(false)
+  }
+
   return (
     <div className="settings-row settings-row-stack">
       <div className="shortcut-head">
@@ -249,28 +289,52 @@ function ShortcutSetting(): React.JSX.Element {
       </div>
       {enabled && (
         <div className="shortcut-row">
-          <div
-            ref={captureRef}
-            tabIndex={0}
-            className={`shortcut-capture${recording ? ' is-recording' : ''}`}
-            onClick={startRecording}
-            onKeyDown={handleKeyDown}
-            onBlur={() => setRecording(false)}
-          >
-            {recording ? (
-              <span className="shortcut-capture-hint">{t('shortcutRecording')}</span>
-            ) : (
-              <span className="shortcut-key">
-                <ThunderboltOutlined />
-                <kbd>{value || t('shortcutNone')}</kbd>
-              </span>
-            )}
-          </div>
-          <Tooltip title={t('shortcutReset')}>
-            <Button size="small" icon={<UndoOutlined />} onClick={reset} />
-          </Tooltip>
+          {editing ? (
+            <Input
+              ref={inputRef}
+              className="shortcut-input"
+              size="small"
+              value={draft}
+              placeholder={t('shortcutEditPlaceholder')}
+              onChange={(e) => setDraft(e.target.value)}
+              onPressEnter={() => commitEdit(draft)}
+              onBlur={() => commitEdit(draft)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') cancelEdit()
+              }}
+            />
+          ) : (
+            <div
+              ref={captureRef}
+              tabIndex={0}
+              className={`shortcut-capture${recording ? ' is-recording' : ''}`}
+              onClick={startRecording}
+              onKeyDown={handleKeyDown}
+              onBlur={() => setRecording(false)}
+            >
+              {recording ? (
+                <span className="shortcut-capture-hint">{t('shortcutRecording')}</span>
+              ) : (
+                <span className="shortcut-key">
+                  <ThunderboltOutlined />
+                  <kbd>{value || t('shortcutNone')}</kbd>
+                </span>
+              )}
+            </div>
+          )}
+          {!editing && (
+            <>
+              <Tooltip title={t('shortcutEdit')}>
+                <Button size="small" icon={<EditOutlined />} onClick={startEditing} />
+              </Tooltip>
+              <Tooltip title={t('shortcutReset')}>
+                <Button size="small" icon={<UndoOutlined />} onClick={reset} />
+              </Tooltip>
+            </>
+          )}
         </div>
       )}
+      <span className="shortcut-hint">{t('shortcutHint')}</span>
     </div>
   )
 }

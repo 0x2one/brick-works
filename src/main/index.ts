@@ -199,6 +199,15 @@ function showMainWindow(): void {
   mainWindow.focus()
 }
 
+function hideMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  // Only drop from the taskbar when a tray icon exists to re-open it from.
+  if (appSettingsStore.get().closeToTray) {
+    mainWindow.setSkipTaskbar(true)
+  }
+  mainWindow.hide()
+}
+
 /* ── Global "show window" shortcut ── */
 
 let registeredShortcut: string | null = null
@@ -208,28 +217,31 @@ function toggleShowWindow(): void {
     createWindow()
     return
   }
-  // Visible + focused → hide (tray-style). Otherwise → show and focus.
-  if (mainWindow.isVisible() && mainWindow.isFocused()) {
-    mainWindow.setSkipTaskbar(true)
-    mainWindow.hide()
+  // Second press while the window is in the foreground → hide it.
+  if (mainWindow.isVisible() && (mainWindow.isFocused() || BrowserWindow.getFocusedWindow() === mainWindow)) {
+    hideMainWindow()
     return
   }
+  // First press (hidden) or summoned from the background → show + focus.
   if (mainWindow.isMinimized()) mainWindow.restore()
   mainWindow.setSkipTaskbar(false)
   mainWindow.show()
   mainWindow.focus()
 }
 
-function registerAccel(accel: string): boolean {
+function tryRegisterAccel(accel: string): 'ok' | 'conflict' | 'invalid' {
   try {
     if (globalShortcut.register(accel, () => toggleShowWindow())) {
       registeredShortcut = accel
-      return true
+      return 'ok'
     }
+    // register() returns false when another application (or the OS) already
+    // owns this accelerator — it is silently taken, never delivered to us.
+    return 'conflict'
   } catch {
-    // invalid accelerator
+    // Invalid accelerator string
+    return 'invalid'
   }
-  return false
 }
 
 function applyShowShortcut(accel: string | null): { ok: boolean; error?: string; shortcut: string } {
@@ -240,10 +252,11 @@ function applyShowShortcut(accel: string | null): { ok: boolean; error?: string;
     registeredShortcut = null
   }
   if (!trimmed) return { ok: true, shortcut: '' }
-  if (registerAccel(trimmed)) return { ok: true, shortcut: trimmed }
+  const result = tryRegisterAccel(trimmed)
+  if (result === 'ok') return { ok: true, shortcut: trimmed }
   // Registration failed — restore the previous shortcut and report why.
-  if (prev) registerAccel(prev)
-  return { ok: false, error: 'CONFLICT', shortcut: prev ?? '' }
+  if (prev) tryRegisterAccel(prev)
+  return { ok: false, error: result === 'conflict' ? 'CONFLICT' : 'INVALID', shortcut: prev ?? '' }
 }
 
 function trayLabels(): { show: string; quit: string } {
@@ -1166,7 +1179,7 @@ if (!gotTheLock) {
     broadcastK8sStatus()
 
     const savedShortcut = appSettingsStore.get().showShortcut
-    if (savedShortcut) registerAccel(savedShortcut)
+    if (savedShortcut) tryRegisterAccel(savedShortcut)
 
     createWindow()
     syncTrayWithSettings()
