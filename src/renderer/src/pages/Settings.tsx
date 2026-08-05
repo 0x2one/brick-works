@@ -407,6 +407,33 @@ function ShortcutPanel(): React.JSX.Element {
   )
 }
 
+function DevToolTabsRadio(): React.JSX.Element {
+  const { t } = useTranslation()
+  const [position, setPosition] = useState<'top' | 'bottom'>(
+    () => (localStorage.getItem('dev-tools-tab-position') === 'bottom' ? 'bottom' : 'top')
+  )
+
+  const changePosition = (e: RadioChangeEvent): void => {
+    const value = e.target.value as 'top' | 'bottom'
+    setPosition(value)
+    localStorage.setItem('dev-tools-tab-position', value)
+    window.dispatchEvent(new CustomEvent('dev-tools-tab-position-change', { detail: value }))
+  }
+
+  return (
+    <Radio.Group
+      value={position}
+      onChange={changePosition}
+      optionType="button"
+      buttonStyle="solid"
+      className="settings-radio"
+    >
+      <Radio value="top">{t('devToolsTabTop')}</Radio>
+      <Radio value="bottom">{t('devToolsTabBottom')}</Radio>
+    </Radio.Group>
+  )
+}
+
 function AppearancePanel(): React.JSX.Element {
   const { t } = useTranslation()
   return (
@@ -427,6 +454,15 @@ function AppearancePanel(): React.JSX.Element {
             <span className="settings-value">{t('themeDesc')}</span>
           </div>
           <ThemeRadio />
+        </div>
+      </div>
+      <div className="settings-panel-card">
+        <div className="settings-row settings-row-stack">
+          <div className="settings-label-block">
+            <span className="settings-label">{t('devToolsTabPosition')}</span>
+            <span className="settings-value">{t('devToolsTabPositionDesc')}</span>
+          </div>
+          <DevToolTabsRadio />
         </div>
       </div>
     </div>
