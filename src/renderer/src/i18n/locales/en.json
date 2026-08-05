@@ -51,6 +51,7 @@
   "devToolsTabPositionDesc": "Choose whether the tab bar shows at the top or the bottom",
   "devToolsTabTop": "Top",
   "devToolsTabBottom": "Bottom",
+  "devToolsTabHidden": "Hidden",
   "version": "Version",
   "updaterAutoDownload": "Auto-download updates",
   "updaterAutoDownloadDesc": "Automatically download new versions and prompt to restart when ready",

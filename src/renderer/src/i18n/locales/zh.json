@@ -51,6 +51,7 @@
   "devToolsTabPositionDesc": "选择标签栏显示在顶部还是底部",
   "devToolsTabTop": "顶部",
   "devToolsTabBottom": "底部",
+  "devToolsTabHidden": "隐藏",
   "version": "版本",
   "updaterAutoDownload": "自动下载更新",
   "updaterAutoDownloadDesc": "检测到新版本时自动下载，下载完成后提示重启安装",

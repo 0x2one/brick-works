@@ -409,12 +409,13 @@ function ShortcutPanel(): React.JSX.Element {
 
 function DevToolTabsRadio(): React.JSX.Element {
   const { t } = useTranslation()
-  const [position, setPosition] = useState<'top' | 'bottom'>(
-    () => (localStorage.getItem('dev-tools-tab-position') === 'bottom' ? 'bottom' : 'top')
-  )
+  const [position, setPosition] = useState<'top' | 'bottom' | 'hidden'>(() => {
+    const v = localStorage.getItem('dev-tools-tab-position')
+    return v === 'bottom' || v === 'hidden' ? v : 'top'
+  })
 
   const changePosition = (e: RadioChangeEvent): void => {
-    const value = e.target.value as 'top' | 'bottom'
+    const value = e.target.value as 'top' | 'bottom' | 'hidden'
     setPosition(value)
     localStorage.setItem('dev-tools-tab-position', value)
     window.dispatchEvent(new CustomEvent('dev-tools-tab-position-change', { detail: value }))
@@ -430,6 +431,7 @@ function DevToolTabsRadio(): React.JSX.Element {
     >
       <Radio value="top">{t('devToolsTabTop')}</Radio>
       <Radio value="bottom">{t('devToolsTabBottom')}</Radio>
+      <Radio value="hidden">{t('devToolsTabHidden')}</Radio>
     </Radio.Group>
   )
 }
