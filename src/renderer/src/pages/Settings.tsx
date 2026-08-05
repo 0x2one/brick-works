@@ -12,10 +12,12 @@ import {
   ThunderboltOutlined,
   EditOutlined,
   DownloadOutlined,
-  SearchOutlined
+  SearchOutlined,
+  CheckOutlined
 } from '@ant-design/icons'
 import i18n from '../i18n'
 import { useTheme, type ThemeMode } from '../theme/ThemeProvider'
+import { ACCENT_PALETTES } from '../theme/accent'
 import logoUrl from '../assets/logo.svg'
 
 type SettingsSection = 'preferences' | 'shortcut' | 'appearance' | 'about'
@@ -436,6 +438,43 @@ function DevToolTabsRadio(): React.JSX.Element {
   )
 }
 
+function AccentSwatches(): React.JSX.Element {
+  const { t } = useTranslation()
+  const { accent, setAccent } = useTheme()
+
+  return (
+    <div className="flex flex-wrap items-center gap-2.5">
+      {ACCENT_PALETTES.map((palette) => {
+        const selected = palette.key === accent
+        return (
+          <button
+            key={palette.key}
+            type="button"
+            onClick={() => setAccent(palette.key)}
+            title={t(palette.nameKey)}
+            aria-label={t(palette.nameKey)}
+            aria-pressed={selected}
+            className={`relative h-7 w-7 rounded-full cursor-pointer border-none p-0 transition-transform duration-150
+              hover:scale-110 active:scale-95
+              ${
+                selected
+                  ? 'ring-2 ring-offset-2 ring-[var(--text-primary)] ring-offset-[var(--content-bg)]'
+                  : ''
+              }`}
+            style={{ background: palette.light }}
+          >
+            {selected && (
+              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <CheckOutlined style={{ color: '#fff', fontSize: 11 }} />
+              </span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function AppearancePanel(): React.JSX.Element {
   const { t } = useTranslation()
   return (
@@ -456,6 +495,15 @@ function AppearancePanel(): React.JSX.Element {
             <span className="settings-value">{t('themeDesc')}</span>
           </div>
           <ThemeRadio />
+        </div>
+      </div>
+      <div className="settings-panel-card">
+        <div className="settings-row settings-row-stack">
+          <div className="settings-label-block">
+            <span className="settings-label">{t('accentColor')}</span>
+            <span className="settings-value">{t('accentColorDesc')}</span>
+          </div>
+          <AccentSwatches />
         </div>
       </div>
       <div className="settings-panel-card">

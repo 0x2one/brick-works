@@ -72,6 +72,46 @@
   --sticky-text: #d5cdc0;
 }
 
+/* ── Accent palettes (light) ── */
+:root[data-accent='blue'] {
+  --accent: #3b82f6;
+}
+:root[data-accent='green'] {
+  --accent: #16a34a;
+}
+:root[data-accent='purple'] {
+  --accent: #8b5cf6;
+}
+:root[data-accent='rose'] {
+  --accent: #e11d48;
+}
+:root[data-accent='cyan'] {
+  --accent: #0891b2;
+}
+:root[data-accent='amber'] {
+  --accent: #d97706;
+}
+
+/* ── Accent palettes (dark) ── */
+[data-theme='dark'][data-accent='blue'] {
+  --accent: #60a5fa;
+}
+[data-theme='dark'][data-accent='green'] {
+  --accent: #4ade80;
+}
+[data-theme='dark'][data-accent='purple'] {
+  --accent: #a78bfa;
+}
+[data-theme='dark'][data-accent='rose'] {
+  --accent: #fb7185;
+}
+[data-theme='dark'][data-accent='cyan'] {
+  --accent: #22d3ee;
+}
+[data-theme='dark'][data-accent='amber'] {
+  --accent: #fbbf24;
+}
+
 .title-bar {
   display: flex;
   height: 40px;
