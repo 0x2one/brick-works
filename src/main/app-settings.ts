@@ -10,6 +10,7 @@ export interface AppSettings {
   openAtLogin: boolean
   showShortcut: string
   navShortcut: boolean
+  autoDownload: boolean
 }
 
 interface StoreFile {
@@ -18,13 +19,15 @@ interface StoreFile {
   openAtLogin?: boolean
   showShortcut?: string
   navShortcut?: boolean
+  autoDownload?: boolean
 }
 
 const DEFAULTS: AppSettings = {
   closeToTray: false,
   openAtLogin: false,
   showShortcut: DEFAULT_SHOW_SHORTCUT,
-  navShortcut: true
+  navShortcut: true,
+  autoDownload: true
 }
 
 export interface AppSettingsStore {
@@ -34,6 +37,7 @@ export interface AppSettingsStore {
   setOpenAtLogin: (value: boolean) => AppSettings
   setShowShortcut: (value: string | null) => AppSettings
   setNavShortcut: (value: boolean) => AppSettings
+  setAutoDownload: (value: boolean) => AppSettings
 }
 
 function applyOpenAtLogin(enabled: boolean): void {
@@ -81,7 +85,9 @@ export function createAppSettingsStore(): AppSettingsStore {
         showShortcut:
           typeof data?.showShortcut === 'string' ? data.showShortcut : DEFAULTS.showShortcut,
         navShortcut:
-          typeof data?.navShortcut === 'boolean' ? data.navShortcut : DEFAULTS.navShortcut
+          typeof data?.navShortcut === 'boolean' ? data.navShortcut : DEFAULTS.navShortcut,
+        autoDownload:
+          typeof data?.autoDownload === 'boolean' ? data.autoDownload : DEFAULTS.autoDownload
       }
     } catch {
       settings = { ...DEFAULTS }
@@ -94,7 +100,8 @@ export function createAppSettingsStore(): AppSettingsStore {
       closeToTray: settings.closeToTray,
       openAtLogin: settings.openAtLogin,
       showShortcut: settings.showShortcut,
-      navShortcut: settings.navShortcut
+      navShortcut: settings.navShortcut,
+      autoDownload: settings.autoDownload
     }
     try {
       mkdirSync(app.getPath('userData'), { recursive: true })
@@ -132,6 +139,11 @@ export function createAppSettingsStore(): AppSettingsStore {
     },
     setNavShortcut: (value: boolean) => {
       settings = { ...settings, navShortcut: Boolean(value) }
+      persist()
+      return { ...settings, openAtLogin: readOpenAtLoginFromOs() }
+    },
+    setAutoDownload: (value: boolean) => {
+      settings = { ...settings, autoDownload: Boolean(value) }
       persist()
       return { ...settings, openAtLogin: readOpenAtLoginFromOs() }
     }

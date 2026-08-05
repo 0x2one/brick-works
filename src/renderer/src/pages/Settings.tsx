@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Switch, Radio, App, Button, Tooltip, Input } from 'antd'
+import { Switch, Radio, App, Button, Tooltip, Input, Progress } from 'antd'
 import type { RadioChangeEvent, InputRef } from 'antd'
 import {
   SettingOutlined,
@@ -10,10 +10,13 @@ import {
   MoonOutlined,
   UndoOutlined,
   ThunderboltOutlined,
-  EditOutlined
+  EditOutlined,
+  DownloadOutlined,
+  SearchOutlined
 } from '@ant-design/icons'
 import i18n from '../i18n'
 import { useTheme, type ThemeMode } from '../theme/ThemeProvider'
+import logoUrl from '../assets/logo.svg'
 
 type SettingsSection = 'preferences' | 'shortcut' | 'appearance' | 'about'
 
@@ -80,7 +83,7 @@ function ThemeRadio(): React.JSX.Element {
 function SettingsToggle(props: {
   labelKey: string
   descKey: string
-  field: 'openAtLogin' | 'closeToTray'
+  field: 'openAtLogin' | 'closeToTray' | 'autoDownload'
 }): React.JSX.Element {
   const { t } = useTranslation()
   const [checked, setChecked] = useState(false)
@@ -103,7 +106,9 @@ function SettingsToggle(props: {
     const req =
       props.field === 'openAtLogin'
         ? window.api.settings.setOpenAtLogin(value)
-        : window.api.settings.setCloseToTray(value)
+        : props.field === 'closeToTray'
+          ? window.api.settings.setCloseToTray(value)
+          : window.api.settings.setAutoDownload(value)
     void req.then((settings) => {
       setChecked(settings[props.field])
     })
@@ -344,6 +349,11 @@ function PreferencesPanel(): React.JSX.Element {
     <div className="settings-panel-card">
       <SettingsToggle labelKey="openAtLogin" descKey="openAtLoginDesc" field="openAtLogin" />
       <SettingsToggle labelKey="closeToTray" descKey="closeToTrayDesc" field="closeToTray" />
+      <SettingsToggle
+        labelKey="updaterAutoDownload"
+        descKey="updaterAutoDownloadDesc"
+        field="autoDownload"
+      />
     </div>
   )
 }
@@ -423,6 +433,146 @@ function AppearancePanel(): React.JSX.Element {
   )
 }
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+function UpdateSection(): React.JSX.Element {
+  const { t } = useTranslation()
+  const { message } = App.useApp()
+  const [status, setStatus] = useState<UpdaterStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    void window.api.updater.getStatus().then((s) => {
+      if (alive) setStatus(s)
+    })
+    const unsub = window.api.updater.onStatus((s) => {
+      if (alive) setStatus(s)
+    })
+    return () => {
+      alive = false
+      unsub()
+    }
+  }, [])
+
+  const handleCheck = (): void => {
+    setBusy(true)
+    void window.api.updater
+      .check()
+      .then((s) => {
+        setStatus(s)
+        if (s.state === 'error') message.error(s.error || t('updaterError'))
+      })
+      .finally(() => setBusy(false))
+  }
+
+  const handleDownload = (): void => {
+    void window.api.updater.download().then(setStatus)
+  }
+
+  const handleInstall = (): void => {
+    void window.api.updater.install()
+  }
+
+  const state = status?.state ?? 'idle'
+  const version = status?.version ? ` v${status.version}` : ''
+
+  let hint: React.ReactNode
+  let action: React.ReactNode
+  switch (state) {
+    case 'checking':
+      hint = t('updaterChecking')
+      action = (
+        <Button loading icon={<SearchOutlined />}>
+          {t('updaterCheck')}
+        </Button>
+      )
+      break
+    case 'available':
+      hint = t('updaterAvailable', { version: status?.version ?? '' })
+      action = (
+        <Button type="primary" icon={<DownloadOutlined />} onClick={handleDownload}>
+          {t('updaterDownload')}
+        </Button>
+      )
+      break
+    case 'downloading':
+      hint = `${t('updaterDownloading')}${version}`
+      action = (
+        <Button disabled loading icon={<DownloadOutlined />}>
+          {t('updaterDownloading')}
+        </Button>
+      )
+      break
+    case 'downloaded':
+      hint = t('updaterDownloaded', { version: status?.version ?? '' })
+      action = (
+        <Button type="primary" icon={<ThunderboltOutlined />} onClick={handleInstall}>
+          {t('updaterInstall')}
+        </Button>
+      )
+      break
+    case 'not-available':
+      hint = t('updaterNotAvailable')
+      action = (
+        <Button icon={<SearchOutlined />} loading={busy} onClick={handleCheck}>
+          {t('updaterCheck')}
+        </Button>
+      )
+      break
+    case 'error':
+      hint = t('updaterError')
+      action = (
+        <Button icon={<SearchOutlined />} loading={busy} onClick={handleCheck}>
+          {t('updaterRetry')}
+        </Button>
+      )
+      break
+    default:
+      hint = t('updaterDesc')
+      action = (
+        <Button type="primary" icon={<SearchOutlined />} loading={busy} onClick={handleCheck}>
+          {t('updaterCheck')}
+        </Button>
+      )
+  }
+
+  return (
+    <>
+      <div className="settings-row settings-update">
+        <div className="settings-label-block">
+          <span className="settings-label">{t('updaterTitle')}</span>
+          <span className="settings-value">{hint}</span>
+        </div>
+        {action}
+      </div>
+      {state === 'downloading' && (
+        <div className="settings-update-progress">
+          <Progress
+            percent={Math.round(status?.progress?.percent ?? 0)}
+            size="small"
+            status="active"
+          />
+          <span className="settings-value">
+            {t('updaterProgress', {
+              percent: (status?.progress?.percent ?? 0).toFixed(0)
+            })}
+            {' · '}
+            {t('updaterSpeed', {
+              speed: formatBytes(status?.progress?.bytesPerSecond ?? 0)
+            })}
+          </span>
+        </div>
+      )}
+    </>
+  )
+}
+
 function AboutPanel(): React.JSX.Element {
   const { t } = useTranslation()
   const [info, setInfo] = useState<AppInfo | null>(null)
@@ -439,33 +589,16 @@ function AboutPanel(): React.JSX.Element {
 
   return (
     <div className="settings-panel-card settings-about">
-      <div className="settings-about-brand">
-        <span className="settings-about-mark">
-          <InfoCircleOutlined />
-        </span>
-        <div>
-          <div className="settings-label">BrickWorks · {t('appName')}</div>
-          <div className="settings-value">{t('aboutTagline')}</div>
+      <div className="settings-about-head">
+        <img className="settings-about-logo" src={logoUrl} alt={t('appName')} />
+        <div className="settings-about-info">
+          <div className="settings-about-name">{t('appName')}</div>
+          <div className="settings-about-meta">BrickWorks · v{info?.version ?? '—'}</div>
         </div>
       </div>
-      <div className="settings-about-meta">
-        <div className="settings-row">
-          <span className="settings-label">{t('version')}</span>
-          <span className="settings-value">{info?.version ?? '—'}</span>
-        </div>
-        <div className="settings-row">
-          <span className="settings-label">Electron</span>
-          <span className="settings-value">{info?.electron ?? '—'}</span>
-        </div>
-        <div className="settings-row">
-          <span className="settings-label">Chrome</span>
-          <span className="settings-value">{info?.chrome ?? '—'}</span>
-        </div>
-        <div className="settings-row">
-          <span className="settings-label">Node</span>
-          <span className="settings-value">{info?.node ?? '—'}</span>
-        </div>
-      </div>
+      <p className="settings-about-tagline">{t('aboutTagline')}</p>
+      <div className="settings-about-divider" />
+      <UpdateSection />
     </div>
   )
 }
