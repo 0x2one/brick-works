@@ -94,7 +94,6 @@ function TitleBar(): React.JSX.Element {
         footer={null}
         width={820}
         centered
-        zIndex={3000}
         className="settings-modal"
         styles={{ body: { padding: 0 } }}
         destroyOnHidden
