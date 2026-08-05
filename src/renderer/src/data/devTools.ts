@@ -6,6 +6,7 @@ export interface DevToolItem {
   descKey: string
   tags: string[]
   route: string
+  fill?: boolean
 }
 
 export const devTools: DevToolItem[] = [
@@ -28,49 +29,56 @@ export const devTools: DevToolItem[] = [
     nameKey: 'devToolJsonBeautify',
     descKey: 'devToolJsonBeautifyDesc',
     tags: ['devTagTool', 'devTagJson'],
-    route: '/dev-tools/json-beautify'
+    route: '/dev-tools/json-beautify',
+    fill: true
   },
   {
     id: 'codec-converter',
     nameKey: 'devToolCodec',
     descKey: 'devToolCodecDesc',
     tags: ['devTagTool', 'devTagCodec'],
-    route: '/dev-tools/codec-converter'
+    route: '/dev-tools/codec-converter',
+    fill: true
   },
   {
     id: 'timestamp-converter',
     nameKey: 'devToolTimestamp',
     descKey: 'devToolTimestampDesc',
     tags: ['devTagTool', 'devTagTime'],
-    route: '/dev-tools/timestamp-converter'
+    route: '/dev-tools/timestamp-converter',
+    fill: true
   },
   {
     id: 'uuid-generator',
     nameKey: 'devToolUuidGen',
     descKey: 'devToolUuidGenDesc',
     tags: ['devTagTool', 'devTagGenerate'],
-    route: '/dev-tools/uuid-generator'
+    route: '/dev-tools/uuid-generator',
+    fill: true
   },
   {
     id: 'qr-code',
     nameKey: 'devToolQrCode',
     descKey: 'devToolQrCodeDesc',
     tags: ['devTagTool', 'devTagImage'],
-    route: '/dev-tools/qr-code'
+    route: '/dev-tools/qr-code',
+    fill: true
   },
   {
     id: 'svg-to-image',
     nameKey: 'devToolSvgToImg',
     descKey: 'devToolSvgToImgDesc',
     tags: ['devTagTool', 'devTagImage'],
-    route: '/dev-tools/svg-to-image'
+    route: '/dev-tools/svg-to-image',
+    fill: true
   },
   {
     id: 'pdf-image-annotate',
     nameKey: 'devToolPdfImageAnnotate',
     descKey: 'devToolPdfImageAnnotateDesc',
     tags: ['devTagTool', 'devTagDoc', 'devTagImage'],
-    route: '/dev-tools/pdf-image-annotate'
+    route: '/dev-tools/pdf-image-annotate',
+    fill: true
   },
   {
     id: 'pdf-merge-split',

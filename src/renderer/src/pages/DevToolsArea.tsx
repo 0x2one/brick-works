@@ -117,14 +117,16 @@ function DevToolsArea({ active = true }: { active?: boolean }): React.JSX.Elemen
         })}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className={showGrid ? '' : 'hidden'}>
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+        <div className={showGrid ? 'shrink-0' : 'hidden'}>
           <DevTools />
         </div>
         {openToolIds.map((id) => {
-          if (!toolById.has(id)) return null
+          const tool = toolById.get(id)
+          if (!tool) return null
+          const panelCls = tool.fill ? 'flex flex-col flex-1 min-h-0' : 'shrink-0'
           return (
-            <div key={id} className={activeToolId === id ? '' : 'hidden'}>
+            <div key={id} className={`${panelCls} ${activeToolId === id ? '' : 'hidden'}`}>
               <DevToolDetail toolId={id} />
             </div>
           )

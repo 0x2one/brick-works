@@ -281,7 +281,7 @@ function JsonBeautify(): React.JSX.Element {
   const inputStats = input ? `${input.length} chars · ${input.split('\n').length} lines` : ''
 
   return (
-    <div className="flex flex-col p-6" style={{ height: 'calc(100vh - 56px)' }}>
+    <div className="flex flex-col p-6 flex-1 min-h-0">
       <div className="sticky top-0 z-10 bg-[var(--content-bg)] pb-3">
         {/* Header bar */}
         <div className="flex flex-wrap items-center gap-3">

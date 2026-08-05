@@ -41,7 +41,7 @@ function DevToolDetail({ toolId }: { toolId: string }): React.JSX.Element {
   const ToolComponent = toolComponents[tool.id]
 
   return (
-    <div>
+    <div className={tool.fill ? 'flex flex-col flex-1 min-h-0' : undefined}>
       {ToolComponent ? (
         <ToolComponent />
       ) : (
