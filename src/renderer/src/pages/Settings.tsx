@@ -441,7 +441,7 @@ function AppearancePanel(): React.JSX.Element {
   return (
     <div className="settings-panel-stack">
       <div className="settings-panel-card">
-        <div className="settings-row settings-row-stack">
+        <div className="settings-row">
           <div className="settings-label-block">
             <span className="settings-label">{t('language')}</span>
             <span className="settings-value">{t('languageDesc')}</span>
@@ -450,7 +450,7 @@ function AppearancePanel(): React.JSX.Element {
         </div>
       </div>
       <div className="settings-panel-card">
-        <div className="settings-row settings-row-stack">
+        <div className="settings-row">
           <div className="settings-label-block">
             <span className="settings-label">{t('theme')}</span>
             <span className="settings-value">{t('themeDesc')}</span>
@@ -459,7 +459,7 @@ function AppearancePanel(): React.JSX.Element {
         </div>
       </div>
       <div className="settings-panel-card">
-        <div className="settings-row settings-row-stack">
+        <div className="settings-row">
           <div className="settings-label-block">
             <span className="settings-label">{t('devToolsTabPosition')}</span>
             <span className="settings-value">{t('devToolsTabPositionDesc')}</span>
