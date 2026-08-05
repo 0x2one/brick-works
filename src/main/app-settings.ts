@@ -9,6 +9,7 @@ export interface AppSettings {
   closeToTray: boolean
   openAtLogin: boolean
   showShortcut: string
+  navShortcut: boolean
 }
 
 interface StoreFile {
@@ -16,12 +17,14 @@ interface StoreFile {
   closeToTray?: boolean
   openAtLogin?: boolean
   showShortcut?: string
+  navShortcut?: boolean
 }
 
 const DEFAULTS: AppSettings = {
   closeToTray: false,
   openAtLogin: false,
-  showShortcut: DEFAULT_SHOW_SHORTCUT
+  showShortcut: DEFAULT_SHOW_SHORTCUT,
+  navShortcut: true
 }
 
 export interface AppSettingsStore {
@@ -30,6 +33,7 @@ export interface AppSettingsStore {
   setCloseToTray: (value: boolean) => AppSettings
   setOpenAtLogin: (value: boolean) => AppSettings
   setShowShortcut: (value: string | null) => AppSettings
+  setNavShortcut: (value: boolean) => AppSettings
 }
 
 function applyOpenAtLogin(enabled: boolean): void {
@@ -75,7 +79,9 @@ export function createAppSettingsStore(): AppSettingsStore {
         openAtLogin:
           typeof data?.openAtLogin === 'boolean' ? data.openAtLogin : DEFAULTS.openAtLogin,
         showShortcut:
-          typeof data?.showShortcut === 'string' ? data.showShortcut : DEFAULTS.showShortcut
+          typeof data?.showShortcut === 'string' ? data.showShortcut : DEFAULTS.showShortcut,
+        navShortcut:
+          typeof data?.navShortcut === 'boolean' ? data.navShortcut : DEFAULTS.navShortcut
       }
     } catch {
       settings = { ...DEFAULTS }
@@ -87,7 +93,8 @@ export function createAppSettingsStore(): AppSettingsStore {
       version: 1,
       closeToTray: settings.closeToTray,
       openAtLogin: settings.openAtLogin,
-      showShortcut: settings.showShortcut
+      showShortcut: settings.showShortcut,
+      navShortcut: settings.navShortcut
     }
     try {
       mkdirSync(app.getPath('userData'), { recursive: true })
@@ -120,6 +127,11 @@ export function createAppSettingsStore(): AppSettingsStore {
     setShowShortcut: (value: string | null) => {
       const shortcut = typeof value === 'string' ? value.trim() : ''
       settings = { ...settings, showShortcut: shortcut }
+      persist()
+      return { ...settings, openAtLogin: readOpenAtLoginFromOs() }
+    },
+    setNavShortcut: (value: boolean) => {
+      settings = { ...settings, navShortcut: Boolean(value) }
       persist()
       return { ...settings, openAtLogin: readOpenAtLoginFromOs() }
     }

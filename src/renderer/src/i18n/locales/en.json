@@ -29,6 +29,8 @@
   "showWindowShortcutDesc": "Press the shortcut from any app to show the window; press again while focused to hide it",
   "shortcutSection": "Shortcut",
   "shortcutDesc": "Set a global shortcut to show or hide the main window",
+  "navShortcut": "Navigation shortcuts",
+  "navShortcutDesc": "Alt+1 through Alt+6 open the matching left nav item (in-app only)",
   "shortcutRecording": "Press the new combination (Esc to cancel)",
   "shortcutEdit": "Enter manually",
   "shortcutEditPlaceholder": "Type a shortcut, e.g. Ctrl+Alt+X",

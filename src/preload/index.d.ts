@@ -125,6 +125,7 @@ interface AppSettings {
   closeToTray: boolean
   openAtLogin: boolean
   showShortcut: string
+  navShortcut: boolean
 }
 
 interface SetShowShortcutResult {
@@ -139,6 +140,7 @@ interface SettingsApi {
   setOpenAtLogin: (value: boolean) => Promise<AppSettings>
   setShowShortcut: (value: string | null) => Promise<SetShowShortcutResult>
   resetShowShortcut: () => Promise<SetShowShortcutResult>
+  setNavShortcut: (value: boolean) => Promise<AppSettings>
 }
 
 interface Api {

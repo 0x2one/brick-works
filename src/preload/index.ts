@@ -11,7 +11,8 @@ const api = {
     setOpenAtLogin: (value: boolean) => ipcRenderer.invoke('settings:setOpenAtLogin', value),
     setShowShortcut: (value: string | null) =>
       ipcRenderer.invoke('settings:setShowShortcut', value),
-    resetShowShortcut: () => ipcRenderer.invoke('settings:resetShowShortcut')
+    resetShowShortcut: () => ipcRenderer.invoke('settings:resetShowShortcut'),
+    setNavShortcut: (value: boolean) => ipcRenderer.invoke('settings:setNavShortcut', value)
   },
   fetchSvg: (url: string) => ipcRenderer.invoke('fetch:svg', url),
   windowControls: {

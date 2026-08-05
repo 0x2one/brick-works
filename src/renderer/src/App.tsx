@@ -27,12 +27,22 @@ const { Sider, Content } = Layout
 
 type FadeStage = 'idle' | 'exit' | 'enter'
 
+const NAV_ROUTE_KEYS = [
+  '/memo-sticky',
+  '/lan-transfer',
+  '/ssh-tunnel',
+  '/ssh-client',
+  '/k8s',
+  '/dev-tools'
+] as const
+
 function AppLayout(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [collapsed, setCollapsed] = useState(() => {
     const stored = localStorage.getItem('sidebar-collapsed')
     return stored === null ? true : stored === '1'
   })
+  const [navShortcut, setNavShortcut] = useState(true)
   const location = useLocation()
   const navigate = useNavigate()
   const [displayLocation, setDisplayLocation] = useState(location)
@@ -47,6 +57,38 @@ function AppLayout(): React.JSX.Element {
   useEffect(() => {
     window.api.lan.setLang(i18n.language === 'en' ? 'en' : 'zh')
   }, [i18n.language])
+
+  useEffect(() => {
+    let alive = true
+    void window.api.settings.get().then((settings) => {
+      if (alive) setNavShortcut(settings.navShortcut)
+    })
+    const onToggle = (e: Event): void => {
+      setNavShortcut(Boolean((e as CustomEvent<boolean>).detail))
+    }
+    window.addEventListener('nav-shortcut-toggle', onToggle)
+    return () => {
+      alive = false
+      window.removeEventListener('nav-shortcut-toggle', onToggle)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!navShortcut) return
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (!e.altKey || e.ctrlKey || e.shiftKey || e.metaKey) return
+      const index = Number(e.key)
+      if (!Number.isInteger(index) || index < 1 || index > NAV_ROUTE_KEYS.length) return
+      // Don't hijack navigation while typing in form fields.
+      const target = e.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      const route = NAV_ROUTE_KEYS[index - 1]
+      e.preventDefault()
+      if (route !== location.pathname) navigate(route)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [navShortcut, location.pathname, navigate])
 
   useEffect(() => {
     if (location.pathname === '/ssh-client') setSshClientMounted(true)

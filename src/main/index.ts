@@ -397,6 +397,10 @@ ipcMain.handle('settings:resetShowShortcut', () => {
   return res
 })
 
+ipcMain.handle('settings:setNavShortcut', (_event, value: boolean) => {
+  return appSettingsStore.setNavShortcut(Boolean(value))
+})
+
 ipcMain.handle('fetch:image', async (_event, url: string): Promise<string | null> => {
   const safe = await assertSafeFetchUrl(url)
   if (!safe) return null

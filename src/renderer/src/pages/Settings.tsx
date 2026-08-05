@@ -348,10 +348,51 @@ function PreferencesPanel(): React.JSX.Element {
   )
 }
 
+function NavShortcutToggle(): React.JSX.Element {
+  const { t } = useTranslation()
+  const [checked, setChecked] = useState(true)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    void window.api.settings.get().then((settings) => {
+      if (!alive) return
+      setChecked(settings.navShortcut)
+      setLoading(false)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const onChange = (value: boolean): void => {
+    setChecked(value)
+    void window.api.settings.setNavShortcut(value).then((settings) => {
+      setChecked(settings.navShortcut)
+      window.dispatchEvent(new CustomEvent('nav-shortcut-toggle', { detail: settings.navShortcut }))
+    })
+  }
+
+  return (
+    <div className="settings-row">
+      <div className="settings-label-block">
+        <span className="settings-label">{t('navShortcut')}</span>
+        <span className="settings-value">{t('navShortcutDesc')}</span>
+      </div>
+      <Switch checked={checked} loading={loading} onChange={onChange} />
+    </div>
+  )
+}
+
 function ShortcutPanel(): React.JSX.Element {
   return (
-    <div className="settings-panel-card">
-      <ShortcutSetting />
+    <div className="settings-panel-stack">
+      <div className="settings-panel-card">
+        <ShortcutSetting />
+      </div>
+      <div className="settings-panel-card">
+        <NavShortcutToggle />
+      </div>
     </div>
   )
 }

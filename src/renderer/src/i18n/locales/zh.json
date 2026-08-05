@@ -29,6 +29,8 @@
   "showWindowShortcutDesc": "在任意应用中按下快捷键唤出主窗口，窗口聚焦时再次按下则隐藏",
   "shortcutSection": "快捷键",
   "shortcutDesc": "设置全局快捷键，用于唤出或隐藏主窗口",
+  "navShortcut": "导航快捷键",
+  "navShortcutDesc": "Alt+1 至 Alt+6 快速打开左侧导航对应项（仅程序内有效）",
   "shortcutRecording": "请按下新的组合键（Esc 取消）",
   "shortcutEdit": "手动输入",
   "shortcutEditPlaceholder": "输入快捷键，如 Ctrl+Alt+X",
