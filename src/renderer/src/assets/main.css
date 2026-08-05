@@ -91,6 +91,15 @@
 :root[data-accent='amber'] {
   --accent: #d97706;
 }
+:root[data-accent='indigo'] {
+  --accent: #6366f1;
+}
+:root[data-accent='slate'] {
+  --accent: #64748b;
+}
+:root[data-accent='gold'] {
+  --accent: #ca8a04;
+}
 
 /* ── Accent palettes (dark) ── */
 [data-theme='dark'][data-accent='blue'] {
@@ -110,6 +119,15 @@
 }
 [data-theme='dark'][data-accent='amber'] {
   --accent: #fbbf24;
+}
+[data-theme='dark'][data-accent='indigo'] {
+  --accent: #818cf8;
+}
+[data-theme='dark'][data-accent='slate'] {
+  --accent: #94a3b8;
+}
+[data-theme='dark'][data-accent='gold'] {
+  --accent: #facc15;
 }
 
 .title-bar {
