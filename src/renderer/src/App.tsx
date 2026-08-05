@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback, Component } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -25,6 +25,36 @@ import K8sManage from './pages/K8sManage'
 const { Sider, Content } = Layout
 
 type FadeStage = 'idle' | 'exit' | 'enter'
+
+class PageErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false }
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true }
+  }
+
+  render(): React.ReactNode {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col flex-1 min-h-0 items-center justify-center gap-2 p-6 text-center">
+          <span className="text-sm text-[var(--text-secondary)]">Page failed to render</span>
+          <button
+            type="button"
+            onClick={() => {
+              this.setState({ hasError: false })
+            }}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border-none
+              bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)]
+              hover:bg-[var(--border-subtle)]"
+          >
+            Retry
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const NAV_ROUTE_KEYS = [
   '/memo-sticky',
@@ -56,6 +86,16 @@ function AppLayout(): React.JSX.Element {
   const showSshClient = displayLocation.pathname === '/ssh-client'
   const showK8s = displayLocation.pathname === '/k8s'
   const showDevTools = displayLocation.pathname.startsWith('/dev-tools')
+
+  const latestLocationRef = useRef(location)
+  useEffect(() => {
+    latestLocationRef.current = location
+  }, [location])
+
+  const commitDisplay = useCallback(() => {
+    setDisplayLocation(latestLocationRef.current)
+    setFadeStage('enter')
+  }, [])
 
   useEffect(() => {
     window.api.lan.setLang(i18n.language === 'en' ? 'en' : 'zh')
@@ -117,6 +157,23 @@ function AppLayout(): React.JSX.Element {
     }
     setFadeStage('exit')
   }, [location, displayLocation.pathname, fadeStage])
+
+  // Watchdog: if the exit animation's `animationend` is ever missed (e.g. the
+  // animation is cancelled mid-flight), force the transition instead of leaving
+  // the page stuck at opacity 0 (blank). 250ms > the 120ms exit duration.
+  useEffect(() => {
+    if (fadeStage !== 'exit') return
+    const timer = window.setTimeout(commitDisplay, 250)
+    return () => window.clearTimeout(timer)
+  }, [fadeStage, commitDisplay])
+
+  // Watchdog for the enter phase: guarantees the stage returns to idle so the
+  // fade machinery can never remain latched in a transitional state.
+  useEffect(() => {
+    if (fadeStage !== 'enter') return
+    const timer = window.setTimeout(() => setFadeStage('idle'), 250)
+    return () => window.clearTimeout(timer)
+  }, [fadeStage])
 
   const menuItems = [
     {
@@ -200,26 +257,27 @@ function AppLayout(): React.JSX.Element {
             onAnimationEnd={(e) => {
               if (e.target !== e.currentTarget) return
               if (fadeStage === 'exit') {
-                setDisplayLocation(location)
-                setFadeStage('enter')
+                commitDisplay()
               } else if (fadeStage === 'enter') {
                 setFadeStage('idle')
               }
             }}
           >
-            {sshClientMounted && <SshClient active={showSshClient} />}
-            {k8sMounted && <K8sManage active={showK8s} />}
-            {devToolsMounted && <DevToolsArea active={showDevTools} />}
-            {!showSshClient && !showK8s && !showDevTools && (
-              <Routes location={displayLocation}>
-                <Route path="/memo-sticky" element={<MemoSticky />} />
-                <Route path="/lan-transfer" element={<LanTransfer />} />
-                <Route path="/ssh-tunnel" element={<SshTunnel />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/" element={<Navigate to="/dev-tools" replace />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            )}
+            <PageErrorBoundary>
+              {sshClientMounted && <SshClient active={showSshClient} />}
+              {k8sMounted && <K8sManage active={showK8s} />}
+              {devToolsMounted && <DevToolsArea active={showDevTools} />}
+              {!showSshClient && !showK8s && !showDevTools && (
+                <Routes location={displayLocation}>
+                  <Route path="/memo-sticky" element={<MemoSticky />} />
+                  <Route path="/lan-transfer" element={<LanTransfer />} />
+                  <Route path="/ssh-tunnel" element={<SshTunnel />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/" element={<Navigate to="/dev-tools" replace />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              )}
+            </PageErrorBoundary>
           </div>
         </Content>
       </Layout>
