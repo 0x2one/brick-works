@@ -100,6 +100,7 @@
   "useCount": "Uses",
   "allTools": "All Tools",
   "closeTab": "Close tab",
+  "closeAllTabs": "Close all tabs",
   "devToolRandomPassword": "Random Password",
   "devToolRandomPasswordDesc": "Combine digits, letters, and special characters into random passwords with configurable length.",
   "toolNotFound": "Tool not found",

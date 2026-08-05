@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
@@ -36,6 +36,8 @@ function DevToolsArea({ active = true }: { active?: boolean }): React.JSX.Elemen
   const navigate = useNavigate()
   const [openToolIds, setOpenToolIds] = useState<string[]>(loadOpenTabs)
   const [tabPosition, setTabPosition] = useState<DevToolTabPosition>(loadTabPosition)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const showGrid = location.pathname === '/dev-tools'
   const activeToolId = location.pathname.startsWith('/dev-tools/')
@@ -45,6 +47,40 @@ function DevToolsArea({ active = true }: { active?: boolean }): React.JSX.Elemen
   useEffect(() => {
     localStorage.setItem(TABS_STORAGE_KEY, JSON.stringify(openToolIds))
   }, [openToolIds])
+
+  useEffect(() => {
+    if (!ctxMenu) return
+    const onMouseDown = (e: MouseEvent): void => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setCtxMenu(null)
+    }
+    const onBlur = (): void => setCtxMenu(null)
+    const onResize = (): void => setCtxMenu(null)
+    const onScroll = (): void => setCtxMenu(null)
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setCtxMenu(null)
+    }
+    const onContextMenu = (): void => setCtxMenu(null)
+    window.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('blur', onBlur)
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('contextmenu', onContextMenu)
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('blur', onBlur)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('contextmenu', onContextMenu)
+    }
+  }, [ctxMenu])
+
+  const closeAllTabs = (): void => {
+    setOpenToolIds([])
+    if (activeToolId) navigate('/dev-tools')
+    setCtxMenu(null)
+  }
 
   useEffect(() => {
     const onChange = (e: Event): void => {
@@ -82,6 +118,11 @@ function DevToolsArea({ active = true }: { active?: boolean }): React.JSX.Elemen
         <button
           type="button"
           onClick={() => navigate('/dev-tools')}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setCtxMenu({ x: e.clientX, y: e.clientY })
+          }}
           title={t('allTools')}
           className={`${tabBase} ${
             showGrid
@@ -160,6 +201,41 @@ function DevToolsArea({ active = true }: { active?: boolean }): React.JSX.Elemen
       </div>
 
       {tabPosition === 'bottom' && tabBar}
+
+      {ctxMenu &&
+        (() => {
+          const MENU_W = 160
+          const MENU_H = 36
+          const OFFSET = 4
+          const x = Math.min(ctxMenu.x, window.innerWidth - MENU_W - OFFSET)
+          const y =
+            tabPosition === 'bottom'
+              ? Math.max(OFFSET, ctxMenu.y - MENU_H - OFFSET)
+              : Math.min(ctxMenu.y + OFFSET, window.innerHeight - MENU_H - OFFSET)
+          return (
+            <div
+              ref={menuRef}
+              className="fixed z-50 py-1 rounded-lg border border-[var(--border-subtle)]
+                bg-[var(--surface)] shadow-lg"
+              style={{ left: x, top: y, minWidth: MENU_W }}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+            >
+              <button
+                type="button"
+                onClick={closeAllTabs}
+                className="w-full px-3 py-1.5 text-xs flex items-center gap-2 cursor-pointer border-none
+                  bg-transparent text-[var(--text-primary)] hover:bg-[var(--border-subtle)]
+                  transition-colors duration-100"
+              >
+                <CloseOutlined style={{ fontSize: 10 }} />
+                <span>{t('closeAllTabs')}</span>
+              </button>
+            </div>
+          )
+        })()}
     </div>
   )
 }

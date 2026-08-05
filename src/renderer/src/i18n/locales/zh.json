@@ -100,6 +100,7 @@
   "useCount": "使用次数",
   "allTools": "所有工具",
   "closeTab": "关闭标签页",
+  "closeAllTabs": "关闭所有标签页",
   "devToolRandomPassword": "随机密码",
   "devToolRandomPasswordDesc": "将数字、大小写字母、特殊符号随机组合生成密码，支持指定长度。",
   "toolNotFound": "工具未找到",
