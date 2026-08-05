@@ -14,8 +14,7 @@ import {
   CodeOutlined
 } from '@ant-design/icons'
 import TitleBar from './components/TitleBar'
-import DevTools from './pages/DevTools'
-import DevToolDetail from './pages/DevToolDetail'
+import DevToolsArea from './pages/DevToolsArea'
 import About from './pages/About'
 import MemoSticky from './pages/MemoSticky'
 import LanTransfer from './pages/LanTransfer'
@@ -51,8 +50,12 @@ function AppLayout(): React.JSX.Element {
     () => location.pathname === '/ssh-client'
   )
   const [k8sMounted, setK8sMounted] = useState(() => location.pathname === '/k8s')
+  const [devToolsMounted, setDevToolsMounted] = useState(() =>
+    location.pathname.startsWith('/dev-tools')
+  )
   const showSshClient = displayLocation.pathname === '/ssh-client'
   const showK8s = displayLocation.pathname === '/k8s'
+  const showDevTools = displayLocation.pathname.startsWith('/dev-tools')
 
   useEffect(() => {
     window.api.lan.setLang(i18n.language === 'en' ? 'en' : 'zh')
@@ -93,6 +96,7 @@ function AppLayout(): React.JSX.Element {
   useEffect(() => {
     if (location.pathname === '/ssh-client') setSshClientMounted(true)
     if (location.pathname === '/k8s') setK8sMounted(true)
+    if (location.pathname.startsWith('/dev-tools')) setDevToolsMounted(true)
   }, [location.pathname])
 
   useEffect(() => {
@@ -102,7 +106,11 @@ function AppLayout(): React.JSX.Element {
       setDisplayLocation(location)
       return
     }
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    // Skip animation for navigation within the dev-tools section (tab switching)
+    const internalDevTools =
+      location.pathname.startsWith('/dev-tools') &&
+      displayLocation.pathname.startsWith('/dev-tools')
+    if (internalDevTools || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setDisplayLocation(location)
       setFadeStage('idle')
       return
@@ -183,7 +191,11 @@ function AppLayout(): React.JSX.Element {
         <Content className="overflow-auto content-area flex flex-col flex-1 min-h-0">
           <div
             className={`page-fade flex flex-col flex-1 min-h-0${
-              fadeStage === 'exit' ? ' page-fade-exit' : fadeStage === 'enter' ? ' page-fade-enter' : ''
+              fadeStage === 'exit'
+                ? ' page-fade-exit'
+                : fadeStage === 'enter'
+                  ? ' page-fade-enter'
+                  : ''
             }`}
             onAnimationEnd={(e) => {
               if (e.target !== e.currentTarget) return
@@ -197,10 +209,9 @@ function AppLayout(): React.JSX.Element {
           >
             {sshClientMounted && <SshClient active={showSshClient} />}
             {k8sMounted && <K8sManage active={showK8s} />}
-            {!showSshClient && !showK8s && (
+            {devToolsMounted && <DevToolsArea active={showDevTools} />}
+            {!showSshClient && !showK8s && !showDevTools && (
               <Routes location={displayLocation}>
-                <Route path="/dev-tools" element={<DevTools />} />
-                <Route path="/dev-tools/:toolId" element={<DevToolDetail />} />
                 <Route path="/memo-sticky" element={<MemoSticky />} />
                 <Route path="/lan-transfer" element={<LanTransfer />} />
                 <Route path="/ssh-tunnel" element={<SshTunnel />} />

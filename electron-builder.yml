@@ -39,7 +39,8 @@ appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
 publish:
-  provider: generic
-  url: https://brick-works.xiaolannet.top
+  provider: github
+  owner: deepLwcg
+  repo: brick-works
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

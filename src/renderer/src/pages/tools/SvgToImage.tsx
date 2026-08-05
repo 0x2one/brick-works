@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, Image, InputNumber, Spin } from 'antd'
 import {
@@ -139,7 +139,7 @@ const dashedBtnCls = `
   transition-all duration-150 cursor-pointer
 `
 
-function SvgToImage({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
+function SvgToImage(): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
 
@@ -297,8 +297,6 @@ function SvgToImage({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Eleme
 
   return (
     <div className="flex flex-col p-6" style={{ height: 'calc(100vh - 56px)' }}>
-      {breadcrumb ? <div className="mb-3 shrink-0">{breadcrumb}</div> : <div className="mb-3" />}
-
       <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-y-auto">
         {/* ── Input ── */}
         <section>

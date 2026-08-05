@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, type ReactNode } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App } from 'antd'
 import { SnippetsOutlined, DeleteOutlined, FolderOpenOutlined } from '@ant-design/icons'
@@ -217,7 +217,7 @@ function formatCookie(input: string): string {
 
 const PANEL_HEADER_CLS = 'text-[11px] font-semibold tracking-widest text-[var(--text-secondary)]'
 
-function CodecConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
+function CodecConverter(): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -359,8 +359,6 @@ function CodecConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
 
   return (
     <div className="flex flex-col p-6" style={{ height: 'calc(100vh - 56px)' }}>
-      {breadcrumb ? <div className="mb-3 shrink-0">{breadcrumb}</div> : <div className="mb-3" />}
-
       <input
         ref={fileRef}
         type="file"

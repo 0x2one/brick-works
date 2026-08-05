@@ -36,7 +36,7 @@ function isValidDataUrl(s: string): boolean {
 const LABEL_CLS =
   'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
 
-function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
+function ImageToBase64(): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -135,8 +135,6 @@ function ImageToBase64({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
   return (
     <div className="p-6">
       <div className="sticky top-0 z-10 bg-[var(--content-bg)]">
-        {breadcrumb ?? <div className="mb-4" />}
-
         {/* Mode pills */}
         <div className="mb-4">
           <label className={LABEL_CLS}>{t('imgToBase64InputMode')}</label>

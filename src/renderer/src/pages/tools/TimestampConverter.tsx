@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, Select, Tooltip } from 'antd'
 import { SnippetsOutlined, CloseOutlined, ClockCircleOutlined } from '@ant-design/icons'
@@ -32,9 +32,7 @@ function nowInTimezone(tz: string): string {
   return `${m.year}-${m.month}-${m.day} ${m.hour}:${m.minute}:${m.second}`
 }
 
-function parseDateTimeText(
-  input: string
-): {
+function parseDateTimeText(input: string): {
   year: number
   month: number
   day: number
@@ -132,7 +130,7 @@ function tzDisplayName(zone: string): string {
 
 const TZ_OPTIONS = ALL_TIMEZONES.map((z) => ({ value: z, label: tzDisplayName(z) }))
 
-function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
+function TimestampConverter(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { message } = App.useApp()
   const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
@@ -219,8 +217,6 @@ function TimestampConverter({ breadcrumb }: { breadcrumb?: ReactNode }): React.J
 
   return (
     <div className="flex flex-col p-6" style={{ height: 'calc(100vh - 56px)' }}>
-      {breadcrumb ? <div className="mb-3 shrink-0">{breadcrumb}</div> : <div className="mb-3" />}
-
       <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-y-auto">
         {/* ── World Clocks ── */}
         <section>

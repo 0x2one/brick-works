@@ -104,7 +104,7 @@ async function loadPdfItem(file: File): Promise<PdfItem> {
   }
 }
 
-function PdfMergeSplit({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
+function PdfMergeSplit(): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -324,8 +324,6 @@ function PdfMergeSplit({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
   return (
     <div className="p-6">
       <div className="sticky top-0 z-10 bg-[var(--content-bg)] pb-1">
-        {breadcrumb ?? <div className="mb-4" />}
-
         <div className="mb-4">
           <label className={LABEL_CLS}>{t('pdfMsMode')}</label>
           <div className="flex flex-wrap gap-2">

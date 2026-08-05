@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, type ReactNode } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, InputNumber, Select } from 'antd'
 import { SnippetsOutlined, ReloadOutlined, CheckOutlined } from '@ant-design/icons'
@@ -178,7 +178,7 @@ function ResultList({
   )
 }
 
-function UuidGenerator({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
+function UuidGenerator(): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
 
@@ -335,8 +335,6 @@ function UuidGenerator({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.El
 
   return (
     <div className="flex flex-col p-6" style={{ height: 'calc(100vh - 56px)' }}>
-      {breadcrumb ? <div className="mb-3 shrink-0">{breadcrumb}</div> : <div className="mb-3" />}
-
       <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-y-auto">
         {/* ── Mode switch ── */}
         <section>

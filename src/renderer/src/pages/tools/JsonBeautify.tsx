@@ -51,7 +51,7 @@ function decodeUnicode(text: string): string {
 const SORT_OPTIONS = ['default', 'asc', 'desc'] as const
 const PANEL_HEADER_CLS = 'text-[11px] font-semibold tracking-widest text-[var(--text-secondary)]'
 
-function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
+function JsonBeautify(): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -283,8 +283,6 @@ function JsonBeautify({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Ele
   return (
     <div className="flex flex-col p-6" style={{ height: 'calc(100vh - 56px)' }}>
       <div className="sticky top-0 z-10 bg-[var(--content-bg)] pb-3">
-        {breadcrumb ?? <div className="mb-3" />}
-
         {/* Header bar */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Format / Minify */}

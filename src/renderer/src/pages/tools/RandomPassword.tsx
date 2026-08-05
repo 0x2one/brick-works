@@ -1,4 +1,4 @@
-import { useState, useCallback, type ReactNode } from 'react'
+import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { InputNumber, App } from 'antd'
 import { SnippetsOutlined, ReloadOutlined, CheckOutlined } from '@ant-design/icons'
@@ -39,7 +39,7 @@ const LABEL_CLS =
   'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
 const INPUT_LABEL_CLS = 'block text-xs font-medium text-[var(--text-secondary)] mb-1.5'
 
-function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
+function RandomPassword(): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const [length, setLength] = useState(16)
@@ -90,10 +90,8 @@ function RandomPassword({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.E
 
   return (
     <div className="flex flex-col min-h-0 p-6">
-      {/* Sticky zone: breadcrumb + controls + results header */}
+      {/* Sticky zone: controls + results header */}
       <div className="sticky top-0 z-10 bg-[var(--content-bg)]">
-        {breadcrumb ?? <div className="mb-4" />}
-
         {/* Config bar — pills left, inputs right */}
         <div className="flex flex-wrap items-start gap-4 mb-4">
           {/* Character sets */}

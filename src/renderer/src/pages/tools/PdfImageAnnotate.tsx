@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode
-} from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, ColorPicker, Input, InputNumber, Modal, Popconfirm, Slider } from 'antd'
 import {
@@ -97,7 +89,7 @@ function loadStored(): StoredMap {
   }
 }
 
-function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX.Element {
+function PdfImageAnnotate(): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -721,8 +713,6 @@ function PdfImageAnnotate({ breadcrumb }: { breadcrumb?: ReactNode }): React.JSX
   return (
     <div className="flex flex-col p-6" style={{ height: 'calc(100vh - 56px)' }}>
       <div className="shrink-0 pb-3">
-        {breadcrumb ?? <div className="mb-3" />}
-
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => fileRef.current?.click()} className={BTN_CLS}>

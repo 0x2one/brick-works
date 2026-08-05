@@ -1,7 +1,5 @@
-import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Breadcrumb, Button, Typography } from 'antd'
-import { ArrowLeftOutlined } from '@ant-design/icons'
+import { Typography } from 'antd'
 import { devTools } from '../data/devTools'
 import RandomPassword from './tools/RandomPassword'
 import ImageToBase64 from './tools/ImageToBase64'
@@ -14,11 +12,7 @@ import SvgToImage from './tools/SvgToImage'
 import PdfImageAnnotate from './tools/PdfImageAnnotate'
 import PdfMergeSplit from './tools/PdfMergeSplit'
 
-interface ToolProps {
-  breadcrumb?: React.ReactNode
-}
-
-const toolComponents: Record<string, React.ComponentType<ToolProps>> = {
+const toolComponents: Record<string, React.ComponentType> = {
   'random-password': RandomPassword,
   'image-to-base64': ImageToBase64,
   'json-beautify': JsonBeautify,
@@ -31,10 +25,8 @@ const toolComponents: Record<string, React.ComponentType<ToolProps>> = {
   'pdf-merge-split': PdfMergeSplit
 }
 
-function DevToolDetail(): React.JSX.Element {
+function DevToolDetail({ toolId }: { toolId: string }): React.JSX.Element {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-  const { toolId } = useParams<{ toolId: string }>()
 
   const tool = devTools.find((item) => item.id === toolId)
 
@@ -48,24 +40,10 @@ function DevToolDetail(): React.JSX.Element {
 
   const ToolComponent = toolComponents[tool.id]
 
-  const breadcrumb = (
-    <div className="flex items-center gap-2 mb-3">
-      <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/dev-tools')}>
-        {t('back')}
-      </Button>
-      <Breadcrumb
-        items={[
-          { title: <a onClick={() => navigate('/dev-tools')}>{t('devTools')}</a> },
-          { title: t(tool.nameKey) }
-        ]}
-      />
-    </div>
-  )
-
   return (
     <div>
       {ToolComponent ? (
-        <ToolComponent breadcrumb={breadcrumb as React.ReactNode} />
+        <ToolComponent />
       ) : (
         <Typography.Text type="secondary">{t('toolNotImplemented')}</Typography.Text>
       )}
