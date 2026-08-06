@@ -12,6 +12,8 @@ import {
 } from '@ant-design/icons'
 import Settings from '../pages/Settings'
 
+const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+
 const pathToLabelKey: Record<string, string> = {
   '/dev-tools': 'devTools',
   '/about': 'about',
@@ -40,7 +42,7 @@ function TitleBar(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="title-bar">
+    <div className={`title-bar${IS_MAC ? ' title-bar--mac' : ''}`}>
       {labelKey && (
         <div
           className="title-bar-page ml-3 text-sm font-medium select-none"
@@ -51,11 +53,7 @@ function TitleBar(): React.JSX.Element {
       )}
       <div className="title-bar-drag" />
       <div className="title-bar-controls">
-        <button
-          className="title-bar-btn"
-          onClick={() => navigate('/about')}
-          title={t('about')}
-        >
+        <button className="title-bar-btn" onClick={() => navigate('/about')} title={t('about')}>
           <InfoCircleOutlined />
         </button>
         <button
@@ -65,27 +63,31 @@ function TitleBar(): React.JSX.Element {
         >
           <SettingOutlined />
         </button>
-        <button
-          className="title-bar-btn"
-          onClick={() => window.api.windowControls.minimize()}
-          title="Minimize"
-        >
-          <MinusOutlined />
-        </button>
-        <button
-          className="title-bar-btn"
-          onClick={() => window.api.windowControls.maximize()}
-          title={maximized ? 'Restore' : 'Maximize'}
-        >
-          {maximized ? <CompressOutlined /> : <BorderOutlined />}
-        </button>
-        <button
-          className="title-bar-btn title-bar-close"
-          onClick={() => window.api.windowControls.close()}
-          title="Close"
-        >
-          <CloseOutlined />
-        </button>
+        {!IS_MAC && (
+          <>
+            <button
+              className="title-bar-btn"
+              onClick={() => window.api.windowControls.minimize()}
+              title="Minimize"
+            >
+              <MinusOutlined />
+            </button>
+            <button
+              className="title-bar-btn"
+              onClick={() => window.api.windowControls.maximize()}
+              title={maximized ? 'Restore' : 'Maximize'}
+            >
+              {maximized ? <CompressOutlined /> : <BorderOutlined />}
+            </button>
+            <button
+              className="title-bar-btn title-bar-close"
+              onClick={() => window.api.windowControls.close()}
+              title="Close"
+            >
+              <CloseOutlined />
+            </button>
+          </>
+        )}
       </div>
       <Modal
         title={t('settings')}

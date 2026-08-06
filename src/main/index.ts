@@ -1,4 +1,15 @@
-import { app, shell, BrowserWindow, dialog, ipcMain, nativeImage, net, Tray, Menu, globalShortcut } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  nativeImage,
+  net,
+  Tray,
+  Menu,
+  globalShortcut
+} from 'electron'
 import { promises as dns } from 'dns'
 import { join, basename } from 'path'
 import { promises as fsp } from 'fs'
@@ -220,7 +231,10 @@ function toggleShowWindow(): void {
     return
   }
   // Second press while the window is in the foreground → hide it.
-  if (mainWindow.isVisible() && (mainWindow.isFocused() || BrowserWindow.getFocusedWindow() === mainWindow)) {
+  if (
+    mainWindow.isVisible() &&
+    (mainWindow.isFocused() || BrowserWindow.getFocusedWindow() === mainWindow)
+  ) {
     hideMainWindow()
     return
   }
@@ -246,7 +260,11 @@ function tryRegisterAccel(accel: string): 'ok' | 'conflict' | 'invalid' {
   }
 }
 
-function applyShowShortcut(accel: string | null): { ok: boolean; error?: string; shortcut: string } {
+function applyShowShortcut(accel: string | null): {
+  ok: boolean
+  error?: string
+  shortcut: string
+} {
   const prev = registeredShortcut
   const trimmed = accel?.trim() ?? ''
   if (prev) {
@@ -307,20 +325,27 @@ function syncTrayWithSettings(): void {
 }
 
 function createWindow(): void {
-  mainWindow = new BrowserWindow({
+  const winOptions: Electron.BrowserWindowConstructorOptions = {
     width: 1280,
     height: 800,
     minWidth: 1024,
     minHeight: 680,
     show: false,
-    frame: false,
     autoHideMenuBar: true,
     icon: nativeImage.createFromPath(iconPng),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
-  })
+  }
+  if (process.platform === 'darwin') {
+    // Native macOS traffic lights over a full-width custom title bar
+    winOptions.titleBarStyle = 'hiddenInset'
+    winOptions.trafficLightPosition = { x: 14, y: 13 }
+  } else {
+    winOptions.frame = false
+  }
+  mainWindow = new BrowserWindow(winOptions)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()

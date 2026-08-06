@@ -144,6 +144,16 @@
   -webkit-app-region: drag;
 }
 
+.title-bar--mac {
+  padding-left: 78px;
+  -webkit-app-region: drag;
+}
+
+.title-bar--mac .title-bar-controls,
+.title-bar--mac .title-bar-btn {
+  -webkit-app-region: no-drag;
+}
+
 .title-bar-controls {
   display: flex;
   height: 100%;
