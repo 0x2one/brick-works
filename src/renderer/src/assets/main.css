@@ -154,6 +154,27 @@
   -webkit-app-region: no-drag;
 }
 
+.title-bar-page {
+  order: 1;
+}
+
+.title-bar-drag {
+  order: 2;
+}
+
+.title-bar-controls {
+  order: 3;
+}
+
+.title-bar--mac .title-bar-controls {
+  order: 2;
+  margin-left: 8px;
+}
+
+.title-bar--mac .title-bar-drag {
+  order: 3;
+}
+
 .title-bar-controls {
   display: flex;
   height: 100%;
