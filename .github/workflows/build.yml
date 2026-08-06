@@ -19,9 +19,12 @@ jobs:
           - platform: Windows
             os: windows-latest
             target: '--win'
-          - platform: macOS
-            os: macos-latest
-            target: '--mac'
+          - platform: macOS Intel
+            os: macos-13
+            target: '--mac --x64'
+          - platform: macOS Apple Silicon
+            os: macos-14
+            target: '--mac --arm64'
           - platform: Linux
             os: ubuntu-latest
             target: '--linux AppImage deb'
