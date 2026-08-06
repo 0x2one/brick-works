@@ -115,5 +115,5 @@ Released under the [MIT](./LICENSE) License.
 ---
 
 <div align="center">
-  Built with ❤️ · BrickWorks 1.0.1
+  Built with ❤️ · BrickWorks 1.0.0
 </div>

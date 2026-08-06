@@ -1,70 +1,61 @@
 # Changelog
 
-## BrickWorks v1.0.1
+## BrickWorks v1.0.0
 
-Polish release focusing on dev-tools workflow and personalization.
+First official release! A productivity workbench integrating dev tools, SSH tunnels, K8s management, LAN transfer, and more in one desktop app.
 
 ### ✨ Features
 
 **Dev Toolbox**
-- Tab bar position now configurable (top / bottom / hidden)
-- Right-click the "All tools" tab to close all open tabs at once
+- Tool hub homepage with detail pages, search, favorites, and usage tracking
+- Tab bar position configurable (top / bottom / hidden), right-click to close all tabs
 - Breadcrumb navigation on every tool detail page
-- Large tools (JSON, codec, etc.) now fill the full available height
+- 20+ tools: JSON beautifier (tree/text view, BigInt support), codec converter (Unicode / Base64 / URL), timestamp converter, random password (batch generation, custom charsets), image-to-Base64, QR code generate/decode, SVG to image, UUID generator (v4 / Snowflake / NanoID), PDF merge/split, PDF & image annotation
 
-**Personalization**
-- 10 accent colors: terracotta / blue / green / purple / rose / cyan / amber / indigo / slate / gold
-- Accent color adapts to light/dark mode and syncs with antd components
+**LAN Transfer**
+- QR-code scan to connect, file transfer between browser and desktop
+- Auto/IP selection detection with real-time transfer status
+- Access token protection and zh/en web UI
+
+**SSH Tunnels**
+- GUI config for local / remote / dynamic (SOCKS5) port forwarding with persistent node management
+- ProxyJump support, drag-and-drop node reordering
+- Per-tunnel start/stop with validation and port-conflict detection
+
+**SSH Client**
+- Built-in terminal + SFTP file manager, secrets secured via OS encryption (safeStorage)
+- Async host key verification with localized confirm dialog
+- Reconnect, terminal themes, clipboard copy
+
+**K8s Management**
+- Cluster management with kubeconfig validation (path & content)
+- Namespaces, pods, workloads, services, ingresses views with search
+- Log viewing (tail / follow / download), terminal exec with shell selection
+- Port forwarding with persistence and runtime error handling
+
+**Sticky Notes**
+- Desktop sticky notes with tags and persistent storage
+
+**Experience**
+- Frameless window with custom title bar, custom scrollbars, view transitions
+- Launch at login, system tray, global hotkey to show/hide window
+- Auto-update (check/download/install) with configurable auto-download
+- Single-instance lock, dark/light themes, 10 accent colors, zh/en i18n
+
+**Cross-platform & CI**
+- GitHub Actions pipeline building installers for Windows / macOS (Intel + Apple Silicon) / Linux
+- Unified artifact naming and auto-update publishing to GitHub Releases
 
 ### 🐛 Fixes
 - Fixed an occasional blank page when switching navigation quickly
 - Removed an antd Tooltip zIndex warning in the settings dialog
-- Cleaner single-line layout for appearance settings
-
----
-
-### Install
-
-- Download `BrickWorks-1.0.1-setup.exe` on Windows
-
-## BrickWorks v1.0.0
-
-First official release! A productivity workbench integrating multiple dev tools in one desktop app.
-
-### ✨ Features
-
-**Dev Toolbox**
-- Tool hub homepage with detail pages, tracks usage frequency
-
-**LAN Transfer**
-- QR-code scan to connect, file transfer between browser and desktop
-- Auto/IP-selection detection with real-time transfer status
-
-**SSH Tunnels**
-- GUI config for local/remote/dynamic port forwarding with persistent node management
-- ProxyJump support
-
-**SSH Client**
-- Built-in terminal + SFTP file manager, secrets secured via OS encryption
-- Automatic host key verification, zh/en bilingual
-
-**K8s Management**
-- Cluster management, log viewing, terminal exec, port forwarding
-
-**Sticky Notes**
-- Desktop sticky notes with persistent storage
-
-**Experience**
-- Launch at login, system tray, global hotkey to show/hide window
-- Auto-update (check/download/install) with configurable auto-download
-- Single-instance lock, dark/light themes, zh/en i18n
-- Frameless window, custom scrollbars
-
-### 🐛 Fixes
 - Improved SSH client and tunnel form usability
+- Adjusted window sizing and settings dialog layout for better ergonomics
 
 ---
 
 ### Install
 
-- Download `BrickWorks-1.0.0-setup.exe` on Windows
+- **Windows**: download `BrickWorks-1.0.0-setup.exe`
+- **macOS**: download `BrickWorks-1.0.0-mac-arm64.dmg` (Apple Silicon) or `BrickWorks-1.0.0-mac-x64.dmg` (Intel)
+- **Linux**: download `BrickWorks-1.0.0-linux-x64.AppImage` or `.deb`
