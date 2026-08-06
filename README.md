@@ -22,34 +22,44 @@ BrickWorks is an Electron + React desktop workbench that bundles everyday develo
 ## 🚀 Features
 
 ### 🧰 Dev Toolbox
-- Tool hub with a searchable grid and usage tracking
-- 10+ built-in tools: random password, JSON beautify/tree, codec converter, timestamp converter, UUID generator, QR code, SVG→image, image→base64, PDF merge/split, PDF image annotate
-- Multi-tab workflow — tab bar position (top / bottom / hidden) and accent color are configurable
+- Tool hub homepage with detail pages, search, favorites, and usage tracking
+- 20+ built-in tools: JSON beautifier (tree/text view, BigInt support), codec converter (Unicode / Base64 / URL), timestamp converter, random password (batch generation, custom charsets), image-to-Base64, QR code generate/decode, SVG to image, UUID generator (v4 / Snowflake / NanoID), PDF merge/split, PDF & image annotation
+- Multi-tab workflow — tab bar position (top / bottom / hidden) configurable, right-click to close all tabs
+- Breadcrumb navigation on every tool detail page
 
 ### ⚡ LAN Transfer
 - QR-code scan to connect, transfer files between browser and desktop
 - Auto / IP-selection detection with real-time transfer status
+- Access token protection and zh/en web UI
 
 ### 🔌 SSH Tunnels
-- GUI config for local / remote / dynamic port forwarding
-- Persistent node management with **ProxyJump** support
+- GUI config for local / remote / dynamic (SOCKS5) port forwarding
+- Persistent node management with **ProxyJump** support and drag-and-drop reordering
+- Per-tunnel start/stop with validation and port-conflict detection
 
 ### 💻 SSH Client
 - Built-in xterm terminal + SFTP file manager
 - Secrets secured via OS-level encryption (`safeStorage`)
-- Automatic host key verification, zh/en bilingual
+- Async host key verification with localized confirm dialog, reconnect, terminal themes, clipboard copy
 
 ### ☸️ K8s Management
-- Cluster management, log streaming, terminal exec, port forwarding
+- Cluster management with kubeconfig validation (path & content)
+- Namespaces, pods, workloads, services, ingresses views with search
+- Log viewing (tail / follow / download), terminal exec with shell selection
+- Port forwarding with persistence and runtime error handling
 
 ### 🗒️ Sticky Notes
-- Desktop sticky notes with persistent storage and drag-and-drop
+- Desktop sticky notes with tags and persistent storage
 
 ### 🎛️ Experience
 - Launch at login, system tray, global hotkey to show/hide window
 - Auto-update (check / download / install) with configurable auto-download
 - Single-instance lock, 10 accent themes, dark/light mode, zh/en i18n
-- Frameless window with custom scrollbars
+- Frameless window with custom title bar, custom scrollbars, view transitions
+
+### 🔁 Cross-platform & CI
+- GitHub Actions pipeline building installers for Windows / macOS (Intel + Apple Silicon) / Linux
+- Unified artifact naming and auto-update publishing to GitHub Releases
 
 ## 🧰 Tech Stack
 
@@ -60,6 +70,17 @@ BrickWorks is an Electron + React desktop workbench that bundles everyday develo
 | Terminal | @xterm/xterm |
 | Native | ssh2 · @kubernetes/client-node · pdf-lib · pdfjs-dist |
 | State | localStorage persistence · i18next |
+
+## 📦 Download
+
+Grab the latest release from the [Releases](https://github.com/zero2one/brick-works/releases) page:
+
+| Platform | Artifact |
+|---|---|
+| Windows | `BrickWorks-<version>-setup.exe` |
+| macOS (Apple Silicon) | `BrickWorks-<version>-mac-arm64.dmg` |
+| macOS (Intel) | `BrickWorks-<version>-mac-x64.dmg` |
+| Linux | `BrickWorks-<version>-linux-x64.AppImage` / `.deb` |
 
 ## 🚦 Getting Started
 
@@ -115,5 +136,5 @@ Released under the [MIT](./LICENSE) License.
 ---
 
 <div align="center">
-  Built with ❤️ · BrickWorks 1.0.1
+  Built with ❤️ · BrickWorks 1.0.0
 </div>
