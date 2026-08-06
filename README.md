@@ -61,16 +61,6 @@ BrickWorks is an Electron + React desktop workbench that bundles everyday develo
 - GitHub Actions pipeline building installers for Windows / macOS (Intel + Apple Silicon) / Linux
 - Unified artifact naming and auto-update publishing to GitHub Releases
 
-## 🧰 Tech Stack
-
-| Layer | Tech |
-|---|---|
-| Shell | Electron 39 · electron-vite 5 · electron-builder 26 |
-| UI | React 19 · TypeScript 5.9 · Ant Design 6 · Tailwind CSS 4 |
-| Terminal | @xterm/xterm |
-| Native | ssh2 · @kubernetes/client-node · pdf-lib · pdfjs-dist |
-| State | localStorage persistence · i18next |
-
 ## 📦 Download
 
 Grab the latest release from the [Releases](https://github.com/zero2one/brick-works/releases) page:
