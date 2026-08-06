@@ -1,4 +1,4 @@
 provider: github
-owner: deepLwcg
+owner: 0x2one
 repo: brick-works
 updaterCacheDirName: BrickWorks-updater
