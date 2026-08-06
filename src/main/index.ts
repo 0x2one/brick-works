@@ -1194,7 +1194,10 @@ let quittingCleaned = false
 app.on('before-quit', (event) => {
   isQuitting = true
   destroyTray()
-  globalShortcut.unregisterAll()
+  // globalShortcut throws if used before the app is ready — e.g. when a
+  // second instance loses the single-instance lock and calls app.quit()
+  // before app.whenReady() resolves.
+  if (app.isReady()) globalShortcut.unregisterAll()
   if (quittingCleaned) return
   event.preventDefault()
   quittingCleaned = true
