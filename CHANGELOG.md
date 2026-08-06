@@ -1,5 +1,15 @@
 # Changelog
 
+## BrickWorks v1.0.1
+
+Bugfix and polish release.
+
+### 🐛 Fixes
+- Fixed an uncaught `globalShortcut` error on app quit when a second instance loses the single-instance lock (crash dialog on startup)
+- Reorganized the macOS title bar layout — About/Settings buttons now sit next to the traffic lights instead of the far right, matching macOS conventions
+
+---
+
 ## BrickWorks v1.0.0
 
 First official release! A productivity workbench integrating dev tools, SSH tunnels, K8s management, LAN transfer, and more in one desktop app.
