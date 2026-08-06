@@ -3,6 +3,7 @@
   "version": "1.0.1",
   "description": "积木工坊 BrickWorks",
   "main": "./out/main/index.js",
+  "license": "MIT",
   "author": "zero2one",
   "homepage": "https://electron-vite.org",
   "scripts": {

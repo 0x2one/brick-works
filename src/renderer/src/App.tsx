@@ -26,6 +26,8 @@ const { Sider, Content } = Layout
 
 type FadeStage = 'idle' | 'exit' | 'enter'
 
+const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+
 class PageErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }> {
   state = { hasError: false }
 
@@ -209,77 +211,80 @@ function AppLayout(): React.JSX.Element {
   ]
 
   return (
-    <Layout className="h-screen">
-      <Sider
-        collapsible
-        collapsed={collapsed}
-        collapsedWidth={48}
-        onCollapse={(value) => {
-          setCollapsed(value)
-          localStorage.setItem('sidebar-collapsed', value ? '1' : '0')
-        }}
-        className="sidebar"
-        trigger={
-          <div className="sidebar-trigger">
-            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          </div>
-        }
-      >
-        <div className="sidebar-header">
-          <BuildOutlined className="text-xl" style={{ color: 'var(--accent)' }} />
-          {!collapsed && <span className="sidebar-title">{t('appName')}</span>}
-        </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[
-            location.pathname.startsWith('/dev-tools') ? '/dev-tools' : location.pathname
-          ]}
-          items={menuItems}
-          className="!bg-transparent !border-e-0"
-          onClick={({ key }) => {
-            if (typeof key === 'string' && key.startsWith('/') && key !== location.pathname) {
-              navigate(key)
-            }
+    <Layout className="h-screen flex flex-col">
+      {IS_MAC && <TitleBar />}
+      <Layout className="flex flex-1 min-h-0">
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          collapsedWidth={48}
+          onCollapse={(value) => {
+            setCollapsed(value)
+            localStorage.setItem('sidebar-collapsed', value ? '1' : '0')
           }}
-        />
-      </Sider>
-      <Layout className="layout-right flex flex-col min-h-0">
-        <TitleBar />
-        <Content className="overflow-auto content-area flex flex-col flex-1 min-h-0">
-          <div
-            className={`page-fade flex flex-col flex-1 min-h-0${
-              fadeStage === 'exit'
-                ? ' page-fade-exit'
-                : fadeStage === 'enter'
-                  ? ' page-fade-enter'
-                  : ''
-            }`}
-            onAnimationEnd={(e) => {
-              if (e.target !== e.currentTarget) return
-              if (fadeStage === 'exit') {
-                commitDisplay()
-              } else if (fadeStage === 'enter') {
-                setFadeStage('idle')
+          className="sidebar"
+          trigger={
+            <div className="sidebar-trigger">
+              {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            </div>
+          }
+        >
+          <div className="sidebar-header">
+            <BuildOutlined className="text-xl" style={{ color: 'var(--accent)' }} />
+            {!collapsed && <span className="sidebar-title">{t('appName')}</span>}
+          </div>
+          <Menu
+            mode="inline"
+            selectedKeys={[
+              location.pathname.startsWith('/dev-tools') ? '/dev-tools' : location.pathname
+            ]}
+            items={menuItems}
+            className="!bg-transparent !border-e-0"
+            onClick={({ key }) => {
+              if (typeof key === 'string' && key.startsWith('/') && key !== location.pathname) {
+                navigate(key)
               }
             }}
-          >
-            <PageErrorBoundary>
-              {sshClientMounted && <SshClient active={showSshClient} />}
-              {k8sMounted && <K8sManage active={showK8s} />}
-              {devToolsMounted && <DevToolsArea active={showDevTools} />}
-              {!showSshClient && !showK8s && !showDevTools && (
-                <Routes location={displayLocation}>
-                  <Route path="/memo-sticky" element={<MemoSticky />} />
-                  <Route path="/lan-transfer" element={<LanTransfer />} />
-                  <Route path="/ssh-tunnel" element={<SshTunnel />} />
-                  <Route path="/about" element={<About />} />
-                  <Route path="/" element={<Navigate to="/dev-tools" replace />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              )}
-            </PageErrorBoundary>
-          </div>
-        </Content>
+          />
+        </Sider>
+        <Layout className="layout-right flex flex-col min-h-0">
+          {!IS_MAC && <TitleBar />}
+          <Content className="overflow-auto content-area flex flex-col flex-1 min-h-0">
+            <div
+              className={`page-fade flex flex-col flex-1 min-h-0${
+                fadeStage === 'exit'
+                  ? ' page-fade-exit'
+                  : fadeStage === 'enter'
+                    ? ' page-fade-enter'
+                    : ''
+              }`}
+              onAnimationEnd={(e) => {
+                if (e.target !== e.currentTarget) return
+                if (fadeStage === 'exit') {
+                  commitDisplay()
+                } else if (fadeStage === 'enter') {
+                  setFadeStage('idle')
+                }
+              }}
+            >
+              <PageErrorBoundary>
+                {sshClientMounted && <SshClient active={showSshClient} />}
+                {k8sMounted && <K8sManage active={showK8s} />}
+                {devToolsMounted && <DevToolsArea active={showDevTools} />}
+                {!showSshClient && !showK8s && !showDevTools && (
+                  <Routes location={displayLocation}>
+                    <Route path="/memo-sticky" element={<MemoSticky />} />
+                    <Route path="/lan-transfer" element={<LanTransfer />} />
+                    <Route path="/ssh-tunnel" element={<SshTunnel />} />
+                    <Route path="/about" element={<About />} />
+                    <Route path="/" element={<Navigate to="/dev-tools" replace />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                )}
+              </PageErrorBoundary>
+            </div>
+          </Content>
+        </Layout>
       </Layout>
     </Layout>
   )
