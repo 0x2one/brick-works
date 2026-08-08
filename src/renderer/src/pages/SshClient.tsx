@@ -1160,8 +1160,9 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         else delete next[tabId]
         return next
       })
+      if (list.length === 1 && maximized === 'editor') setMaximized(null)
     },
-    [confirmCloseEditor]
+    [confirmCloseEditor, maximized]
   )
 
   const closeEditorPanel = useCallback(
@@ -1177,8 +1178,9 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         delete next[tabId]
         return next
       })
+      if (maximized === 'editor') setMaximized(null)
     },
-    [confirmDiscardAllEditors]
+    [confirmDiscardAllEditors, maximized]
   )
 
   const handleEditorDividerPointerDown = useCallback(
