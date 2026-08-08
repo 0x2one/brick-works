@@ -81,6 +81,14 @@ export const devTools: DevToolItem[] = [
     fill: true
   },
   {
+    id: 'pdf-preview',
+    nameKey: 'devToolPdfPreview',
+    descKey: 'devToolPdfPreviewDesc',
+    tags: ['devTagTool', 'devTagDoc'],
+    route: '/dev-tools/pdf-preview',
+    fill: true
+  },
+  {
     id: 'pdf-merge-split',
     nameKey: 'devToolPdfMergeSplit',
     descKey: 'devToolPdfMergeSplitDesc',

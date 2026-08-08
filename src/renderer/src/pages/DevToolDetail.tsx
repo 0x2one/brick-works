@@ -12,6 +12,7 @@ import UuidGenerator from './tools/UuidGenerator'
 import QrCodeTool from './tools/QrCodeTool'
 import SvgToImage from './tools/SvgToImage'
 import PdfImageAnnotate from './tools/PdfImageAnnotate'
+import PdfPreview from './tools/PdfPreview'
 import PdfMergeSplit from './tools/PdfMergeSplit'
 
 const toolComponents: Record<string, React.ComponentType> = {
@@ -24,6 +25,7 @@ const toolComponents: Record<string, React.ComponentType> = {
   'qr-code': QrCodeTool,
   'svg-to-image': SvgToImage,
   'pdf-image-annotate': PdfImageAnnotate,
+  'pdf-preview': PdfPreview,
   'pdf-merge-split': PdfMergeSplit
 }
 
