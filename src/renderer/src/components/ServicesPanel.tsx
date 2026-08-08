@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Button, Empty, Spin, Table } from 'antd'
-import { CloseOutlined, ReloadOutlined } from '@ant-design/icons'
+import { App, Button, Empty, Spin, Table, Tooltip } from 'antd'
+import {
+  CloseOutlined,
+  ReloadOutlined,
+  ExpandOutlined,
+  CompressOutlined
+} from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 
 function statusColor(active: string): string {
@@ -20,11 +25,18 @@ function statusColor(active: string): string {
 interface ServicesPanelProps {
   nodeId: string
   onClose: () => void
+  fullscreen?: boolean
+  onToggleFullscreen?: () => void
 }
 
 const ACTIONS: SshServiceAction[] = ['start', 'stop', 'restart', 'reload', 'enable', 'disable']
 
-function ServicesPanel({ nodeId, onClose }: ServicesPanelProps): React.JSX.Element {
+function ServicesPanel({
+  nodeId,
+  onClose,
+  fullscreen,
+  onToggleFullscreen
+}: ServicesPanelProps): React.JSX.Element {
   const { t } = useTranslation()
   const { message, modal } = App.useApp()
   const [services, setServices] = useState<SshServiceInfo[]>([])
@@ -32,6 +44,9 @@ function ServicesPanel({ nodeId, onClose }: ServicesPanelProps): React.JSX.Eleme
   const [error, setError] = useState<string | null>(null)
   const [acting, setActing] = useState<string | null>(null)
   const aliveRef = useRef(true)
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [tableScrollY, setTableScrollY] = useState(360)
 
   const load = useCallback(async (): Promise<void> => {
     if (!aliveRef.current) return
@@ -57,6 +72,18 @@ function ServicesPanel({ nodeId, onClose }: ServicesPanelProps): React.JSX.Eleme
       window.clearInterval(id)
     }
   }, [load])
+
+  useEffect(() => {
+    const el = bodyRef.current
+    if (!el) return
+    const update = (): void => {
+      setTableScrollY(Math.max(120, Math.floor(el.clientHeight)))
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const runAction = useCallback(
     async (unit: string, action: SshServiceAction): Promise<void> => {
@@ -96,8 +123,18 @@ function ServicesPanel({ nodeId, onClose }: ServicesPanelProps): React.JSX.Eleme
     {
       title: t('sshSvcUnit'),
       dataIndex: 'unit',
+      width: 280,
       ellipsis: true,
-      render: (v: string) => <span className="font-mono text-xs">{v}</span>
+      render: (v: string) => (
+        <Tooltip
+          title={v}
+          placement="topLeft"
+          getPopupContainer={() => rootRef.current ?? document.body}
+          styles={{ container: { maxWidth: 'min(60vw, 720px)', wordBreak: 'break-all' } }}
+        >
+          <span className="font-mono text-xs">{v}</span>
+        </Tooltip>
+      )
     },
     {
       title: t('sshSvcStatus'),
@@ -111,7 +148,7 @@ function ServicesPanel({ nodeId, onClose }: ServicesPanelProps): React.JSX.Eleme
     },
     {
       title: '',
-      width: 120,
+      width: 160,
       render: (_: unknown, row: SshServiceInfo) => (
         <div className="flex items-center gap-0.5">
           {ACTIONS.map((a) => (
@@ -132,10 +169,15 @@ function ServicesPanel({ nodeId, onClose }: ServicesPanelProps): React.JSX.Eleme
   ]
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-1.5 border-b border-[var(--border-subtle)]">
-        <div className="text-xs text-[var(--text-secondary)]">
-          {t('sshSvcCount', { count: services.length })}
+    <div ref={rootRef} className="flex h-full flex-col">
+      <div className="h-10 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+            {t('sshToolServices')}
+          </div>
+          <div className="text-[10px] text-[var(--text-secondary)] truncate">
+            {t('sshSvcCount', { count: services.length })}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -146,6 +188,16 @@ function ServicesPanel({ nodeId, onClose }: ServicesPanelProps): React.JSX.Eleme
           >
             <ReloadOutlined />
           </button>
+          {onToggleFullscreen && (
+            <button
+              type="button"
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
+              title={fullscreen ? t('sshClientExitFullscreen') : t('sshClientFullscreen')}
+              onClick={onToggleFullscreen}
+            >
+              {fullscreen ? <CompressOutlined /> : <ExpandOutlined />}
+            </button>
+          )}
           <button
             type="button"
             className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
@@ -156,7 +208,7 @@ function ServicesPanel({ nodeId, onClose }: ServicesPanelProps): React.JSX.Eleme
           </button>
         </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-auto p-2">
+      <div ref={bodyRef} className="flex-1 min-h-0">
         {error ? (
           <div className="h-full flex flex-col items-center justify-center gap-2">
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={error} />
@@ -173,6 +225,9 @@ function ServicesPanel({ nodeId, onClose }: ServicesPanelProps): React.JSX.Eleme
               dataSource={services}
               pagination={false}
               locale={{ emptyText: t('sshSvcEmpty') }}
+              tableLayout="fixed"
+              scroll={{ y: tableScrollY }}
+              sticky
             />
           </Spin>
         )}

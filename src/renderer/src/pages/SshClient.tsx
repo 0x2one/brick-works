@@ -561,6 +561,11 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const [editorsByTab, setEditorsByTab] = useState<Record<string, SshFileEditorState[]>>({})
   const [activeEditorPathByTab, setActiveEditorPathByTab] = useState<Record<string, string>>({})
   const [editorHeight, setEditorHeight] = useState(320)
+  const [toolHeight, setToolHeight] = useState<number | null>(null)
+  const toolHeightRef = useRef<number | null>(null)
+  useEffect(() => {
+    toolHeightRef.current = toolHeight
+  }, [toolHeight])
 
   const [fontSize, setFontSize] = useState(() => {
     const stored = parseInt(localStorage.getItem('ssh-term-fontsize') || '', 10)
@@ -1554,6 +1559,8 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       const container = consoleHostRef.current
       if (!container) return
       e.preventDefault()
+      const target = e.currentTarget
+      target.setPointerCapture(e.pointerId)
       const startY = e.clientY
       const startH = editorHeightRef.current
       const containerH = container.clientHeight
@@ -1564,6 +1571,36 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         setEditorHeight(Math.min(max, Math.max(min, next)))
       }
       const onUp = (): void => {
+        target.releasePointerCapture(e.pointerId)
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        fitActiveTerm()
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [fitActiveTerm]
+  )
+
+  const handleToolDividerPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>): void => {
+      const wrapper = consoleHostRef.current?.parentElement
+      const container = wrapper ?? consoleHostRef.current
+      if (!container) return
+      e.preventDefault()
+      const target = e.currentTarget
+      target.setPointerCapture(e.pointerId)
+      const startY = e.clientY
+      const startH = toolHeightRef.current ?? Math.round(container.clientHeight / 2)
+      const totalH = container.clientHeight
+      const onMove = (ev: PointerEvent): void => {
+        const next = startH - (ev.clientY - startY)
+        const min = 120
+        const max = Math.max(min + 60, totalH - 120)
+        setToolHeight(Math.min(max, Math.max(min, next)))
+      }
+      const onUp = (): void => {
+        target.releasePointerCapture(e.pointerId)
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
         fitActiveTerm()
@@ -1815,8 +1852,15 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const showConsoleTitle = showConsole && maximized !== 'editor'
   const showFiles = filesOpen && maximized !== 'console' && maximized !== 'info' && maximized !== 'tool'
   const showInfo = infoOpen && maximized !== 'console' && maximized !== 'files' && maximized !== 'tool'
+  const isCommands = toolPanel === 'commands'
+  const showCommands =
+    isCommands && maximized !== 'console' && maximized !== 'files' && maximized !== 'info'
   const showTools =
-    toolPanel !== null && maximized !== 'console' && maximized !== 'files' && maximized !== 'info'
+    toolPanel !== null &&
+    !isCommands &&
+    maximized !== 'console' &&
+    maximized !== 'files' &&
+    maximized !== 'info'
 
   const toolTitle = useMemo(() => {
     switch (toolPanel) {
@@ -1835,20 +1879,43 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
 
   const renderToolPanel = useCallback(
     (tab: SessionTab): React.JSX.Element | null => {
+      const toggleFullscreen = (): void =>
+        setMaximized((m) => (m === 'tool' ? null : 'tool'))
       switch (toolPanel) {
         case 'commands':
           return <CommandPanel shellSessionId={tab.shellSessionId} />
         case 'process':
-          return <ProcessPanel nodeId={tab.nodeId} onClose={closeTool} />
+          return (
+            <ProcessPanel
+              nodeId={tab.nodeId}
+              onClose={closeTool}
+              fullscreen={maximized === 'tool'}
+              onToggleFullscreen={toggleFullscreen}
+            />
+          )
         case 'services':
-          return <ServicesPanel nodeId={tab.nodeId} onClose={closeTool} />
+          return (
+            <ServicesPanel
+              nodeId={tab.nodeId}
+              onClose={closeTool}
+              fullscreen={maximized === 'tool'}
+              onToggleFullscreen={toggleFullscreen}
+            />
+          )
         case 'logs':
-          return <LogTailPanel nodeId={tab.nodeId} onClose={closeTool} />
+          return (
+            <LogTailPanel
+              nodeId={tab.nodeId}
+              onClose={closeTool}
+              fullscreen={maximized === 'tool'}
+              onToggleFullscreen={toggleFullscreen}
+            />
+          )
         default:
           return null
       }
     },
-    [toolPanel, closeTool]
+    [toolPanel, closeTool, maximized]
   )
   const entries = activeTab ? (entriesByTab[activeTab.id] ?? []) : []
   const crumbs = pathSegments(activeTab?.remotePath || '/')
@@ -2013,7 +2080,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       return
     const id = window.requestAnimationFrame(fitActiveTerm)
     return () => window.cancelAnimationFrame(id)
-  }, [active, activeTabId, maximized, fitActiveTerm])
+  }, [active, activeTabId, maximized, toolPanel, toolHeight, fitActiveTerm])
 
   return (
     <div
@@ -2315,7 +2382,11 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
               ) : (
                 showConsoleTitle && (
                 <div
-                  className={`${TITLE_BAR_CLS} ${showFiles ? 'flex-1 min-w-0 border-r border-[var(--border-subtle)]' : 'flex-1 min-w-0'}`}
+                  className={`${TITLE_BAR_CLS} ${
+                    showFiles || showInfo || showCommands
+                      ? 'flex-1 min-w-0 border-r border-[var(--border-subtle)]'
+                      : 'flex-1 min-w-0'
+                  }`}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-[var(--text-primary)] truncate">
@@ -2386,7 +2457,11 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
               )}
               {showFiles && (
                 <div
-                  className={`${TITLE_BAR_CLS} ${maximized === 'files' ? 'flex-1' : 'w-[380px] shrink-0'}`}
+                  className={`${TITLE_BAR_CLS} ${
+                    maximized === 'files'
+                      ? 'flex-1'
+                      : `w-[380px] shrink-0 ${showInfo || showCommands ? 'border-r border-[var(--border-subtle)]' : ''}`
+                  }`}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-[var(--text-primary)] truncate">
@@ -2436,7 +2511,11 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
               )}
               {showInfo && (
                 <div
-                  className={`${TITLE_BAR_CLS} ${maximized === 'info' ? 'flex-1' : 'w-[300px] shrink-0'}`}
+                  className={`${TITLE_BAR_CLS} ${
+                    maximized === 'info'
+                      ? 'flex-1'
+                      : `w-[300px] shrink-0 ${showCommands ? 'border-r border-[var(--border-subtle)]' : ''}`
+                  }`}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-[var(--text-primary)] truncate">
@@ -2478,7 +2557,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   </button>
                 </div>
               )}
-              {showTools && (
+              {showCommands && (
                 <div
                   className={`${TITLE_BAR_CLS} ${maximized === 'tool' ? 'flex-1' : 'w-[300px] shrink-0'}`}
                 >
@@ -2516,12 +2595,16 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
 
             <div className="flex-1 min-h-0 flex overflow-hidden">
               <div
-                ref={consoleHostRef}
-                className={`min-w-0 min-h-0 flex flex-col bg-[var(--bg-warm)] ${
+                className={`min-w-0 min-h-0 flex flex-col ${
                   showFiles ? 'flex-1 border-r border-[var(--border-subtle)]' : 'flex-1'
                 }`}
-                style={showConsole ? undefined : { display: 'none' }}
+                style={showConsole || showTools ? undefined : { display: 'none' }}
               >
+                <div
+                  ref={consoleHostRef}
+                  className="min-w-0 min-h-0 flex flex-col bg-[var(--bg-warm)] flex-1"
+                  style={showConsole ? undefined : { display: 'none' }}
+                >
                   <div
                     className="relative flex-1 min-h-0"
                     style={maximized === 'editor' ? { display: 'none' } : undefined}
@@ -2610,11 +2693,11 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                     <>
                       {maximized !== 'editor' && (
                         <div
-                          className="shrink-0 h-2 flex items-center justify-center cursor-row-resize text-[var(--text-secondary)] hover:bg-[var(--accent)]/15 active:bg-[var(--accent)]/25"
+                          className="group shrink-0 h-2.5 flex items-center justify-center cursor-row-resize touch-none select-none bg-[var(--surface)] hover:bg-[var(--surface)] active:bg-[var(--surface)]"
                           title={t('sshClientEditResize')}
                           onPointerDown={handleEditorDividerPointerDown}
                         >
-                          <HolderOutlined className="text-[10px]" />
+                          <span className="h-1 w-9 rounded-full bg-[var(--border-subtle)] group-hover:bg-[var(--text-secondary)]" />
                         </div>
                       )}
                       <div
@@ -2630,6 +2713,34 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                       </div>
                     </>
                   )}
+                </div>
+
+                {showTools && activeTab && (
+                  <>
+                    {maximized !== 'tool' && (
+                      <div
+                        className="group shrink-0 h-2.5 flex items-center justify-center cursor-row-resize touch-none select-none bg-[var(--surface)] hover:bg-[var(--surface)] active:bg-[var(--surface)]"
+                        title={t('sshClientToolResize')}
+                        onPointerDown={handleToolDividerPointerDown}
+                      >
+                        <span className="h-1 w-9 rounded-full bg-[var(--border-subtle)] group-hover:bg-[var(--text-secondary)]" />
+                      </div>
+                    )}
+                    <div
+                      key={activeTab.id}
+                      className={`min-h-0 flex flex-col bg-[var(--surface)] ${
+                        maximized === 'tool'
+                          ? 'flex-1'
+                          : toolHeight === null
+                            ? 'flex-1 border-t border-[var(--border-subtle)]'
+                            : 'shrink-0 border-t border-[var(--border-subtle)]'
+                      }`}
+                      style={maximized === 'tool' || toolHeight === null ? undefined : { height: toolHeight }}
+                    >
+                      <div className="flex-1 min-h-0">{renderToolPanel(activeTab)}</div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {showFiles && (
@@ -2815,7 +2926,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   </div>
                 </div>
               )}
-              {showTools && activeTab && (
+              {showCommands && activeTab && (
                 <div
                   key={activeTab.id}
                   className={`min-h-0 flex flex-col bg-[var(--content-bg)] ${

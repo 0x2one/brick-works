@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, Button, Empty, Modal, Select, Spin, Table, Tooltip } from 'antd'
-import { CloseOutlined, ReloadOutlined } from '@ant-design/icons'
+import {
+  CloseOutlined,
+  ReloadOutlined,
+  ExpandOutlined,
+  CompressOutlined
+} from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 
 function formatRss(kb: number): string {
@@ -26,9 +31,16 @@ function formatDuration(sec: number): string {
 interface ProcessPanelProps {
   nodeId: string
   onClose: () => void
+  fullscreen?: boolean
+  onToggleFullscreen?: () => void
 }
 
-function ProcessPanel({ nodeId, onClose }: ProcessPanelProps): React.JSX.Element {
+function ProcessPanel({
+  nodeId,
+  onClose,
+  fullscreen,
+  onToggleFullscreen
+}: ProcessPanelProps): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const [processes, setProcesses] = useState<SshProcessInfo[]>([])
@@ -38,6 +50,9 @@ function ProcessPanel({ nodeId, onClose }: ProcessPanelProps): React.JSX.Element
   const [signal, setSignal] = useState('TERM')
   const [killing, setKilling] = useState(false)
   const aliveRef = useRef(true)
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [tableScrollY, setTableScrollY] = useState(360)
 
   const load = useCallback(async (): Promise<void> => {
     if (!aliveRef.current) return
@@ -65,6 +80,18 @@ function ProcessPanel({ nodeId, onClose }: ProcessPanelProps): React.JSX.Element
       window.clearInterval(id)
     }
   }, [load])
+
+  useEffect(() => {
+    const el = bodyRef.current
+    if (!el) return
+    const update = (): void => {
+      setTableScrollY(Math.max(120, Math.floor(el.clientHeight)))
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const confirmKill = useCallback(async (): Promise<void> => {
     if (!killTarget) return
@@ -97,14 +124,14 @@ function ProcessPanel({ nodeId, onClose }: ProcessPanelProps): React.JSX.Element
     {
       title: '%CPU',
       dataIndex: 'cpu',
-      width: 64,
+      width: 88,
       sorter: (a, b) => a.cpu - b.cpu,
       render: (v: number) => v.toFixed(1)
     },
     {
       title: '%MEM',
       dataIndex: 'mem',
-      width: 64,
+      width: 88,
       sorter: (a, b) => a.mem - b.mem,
       render: (v: number) => v.toFixed(1)
     },
@@ -126,7 +153,12 @@ function ProcessPanel({ nodeId, onClose }: ProcessPanelProps): React.JSX.Element
       dataIndex: 'cmd',
       ellipsis: true,
       render: (v: string) => (
-        <Tooltip title={v}>
+        <Tooltip
+          title={v}
+          placement="topLeft"
+          getPopupContainer={() => rootRef.current ?? document.body}
+          styles={{ container: { maxWidth: 'min(60vw, 720px)', wordBreak: 'break-all' } }}
+        >
           <span className="font-mono text-xs">{v}</span>
         </Tooltip>
       )
@@ -151,10 +183,15 @@ function ProcessPanel({ nodeId, onClose }: ProcessPanelProps): React.JSX.Element
   ]
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-1.5 border-b border-[var(--border-subtle)]">
-        <div className="text-xs text-[var(--text-secondary)]">
-          {t('sshProcCount', { count: processes.length })}
+    <div ref={rootRef} className="flex h-full flex-col">
+      <div className="h-10 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+            {t('sshToolProcess')}
+          </div>
+          <div className="text-[10px] text-[var(--text-secondary)] truncate">
+            {t('sshProcCount', { count: processes.length })}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -165,6 +202,16 @@ function ProcessPanel({ nodeId, onClose }: ProcessPanelProps): React.JSX.Element
           >
             <ReloadOutlined />
           </button>
+          {onToggleFullscreen && (
+            <button
+              type="button"
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
+              title={fullscreen ? t('sshClientExitFullscreen') : t('sshClientFullscreen')}
+              onClick={onToggleFullscreen}
+            >
+              {fullscreen ? <CompressOutlined /> : <ExpandOutlined />}
+            </button>
+          )}
           <button
             type="button"
             className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
@@ -175,7 +222,7 @@ function ProcessPanel({ nodeId, onClose }: ProcessPanelProps): React.JSX.Element
           </button>
         </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-auto p-2">
+      <div ref={bodyRef} className="flex-1 min-h-0">
         {error ? (
           <div className="h-full flex flex-col items-center justify-center gap-2">
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={error} />
@@ -192,7 +239,9 @@ function ProcessPanel({ nodeId, onClose }: ProcessPanelProps): React.JSX.Element
               dataSource={processes}
               pagination={false}
               locale={{ emptyText: t('sshProcEmpty') }}
-              scroll={{ y: undefined }}
+              tableLayout="fixed"
+              scroll={{ y: tableScrollY }}
+              sticky
             />
           </Spin>
         )}

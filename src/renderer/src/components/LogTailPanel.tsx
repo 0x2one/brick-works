@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, Button, Empty, Input, Select } from 'antd'
-import { CloseOutlined, PauseOutlined, CaretRightOutlined, ClearOutlined } from '@ant-design/icons'
+import {
+  CloseOutlined,
+  PauseOutlined,
+  CaretRightOutlined,
+  ClearOutlined,
+  ExpandOutlined,
+  CompressOutlined
+} from '@ant-design/icons'
 
 const HISTORY_KEY = 'ssh-log-history'
 const MAX_HISTORY = 10
@@ -17,9 +24,16 @@ function decodeBase64(b64: string): string {
 interface LogTailPanelProps {
   nodeId: string
   onClose: () => void
+  fullscreen?: boolean
+  onToggleFullscreen?: () => void
 }
 
-function LogTailPanel({ nodeId, onClose }: LogTailPanelProps): React.JSX.Element {
+function LogTailPanel({
+  nodeId,
+  onClose,
+  fullscreen,
+  onToggleFullscreen
+}: LogTailPanelProps): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const [path, setPath] = useState('')
@@ -122,6 +136,36 @@ function LogTailPanel({ nodeId, onClose }: LogTailPanelProps): React.JSX.Element
 
   return (
     <div className="flex h-full flex-col">
+      <div className="h-10 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+            {t('sshToolLogs')}
+          </div>
+          <div className="text-[10px] text-[var(--text-secondary)] truncate">
+            {running ? t('sshLogRunning') : t('sshLogTailHint')}
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          {onToggleFullscreen && (
+            <button
+              type="button"
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
+              title={fullscreen ? t('sshClientExitFullscreen') : t('sshClientFullscreen')}
+              onClick={onToggleFullscreen}
+            >
+              {fullscreen ? <CompressOutlined /> : <ExpandOutlined />}
+            </button>
+          )}
+          <button
+            type="button"
+            className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
+            title={t('sshClientClose')}
+            onClick={onClose}
+          >
+            <CloseOutlined />
+          </button>
+        </div>
+      </div>
       <div className="shrink-0 space-y-1.5 px-3 py-2 border-b border-[var(--border-subtle)]">
         <div className="flex items-center gap-1.5">
           <Input
@@ -168,14 +212,6 @@ function LogTailPanel({ nodeId, onClose }: LogTailPanelProps): React.JSX.Element
             onClick={clear}
           >
             <ClearOutlined />
-          </button>
-          <button
-            type="button"
-            className="h-6 w-6 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
-            title={t('sshClientClose')}
-            onClick={onClose}
-          >
-            <CloseOutlined />
           </button>
         </div>
         {running && (
