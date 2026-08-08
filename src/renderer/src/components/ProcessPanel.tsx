@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Button, Empty, Modal, Select, Spin, Table, Tooltip } from 'antd'
+import { App, Button, Empty, Input, Modal, Select, Spin, Table, Tooltip } from 'antd'
 import {
   CloseOutlined,
   ReloadOutlined,
   ExpandOutlined,
-  CompressOutlined
+  CompressOutlined,
+  SearchOutlined
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 
@@ -49,6 +50,7 @@ function ProcessPanel({
   const [killTarget, setKillTarget] = useState<SshProcessInfo | null>(null)
   const [signal, setSignal] = useState('TERM')
   const [killing, setKilling] = useState(false)
+  const [query, setQuery] = useState('')
   const aliveRef = useRef(true)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -107,6 +109,17 @@ function ProcessPanel({
       setKilling(false)
     }
   }, [killTarget, signal, nodeId, message, load, t])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return processes
+    return processes.filter(
+      (p) =>
+        p.cmd.toLowerCase().includes(q) ||
+        p.user.toLowerCase().includes(q) ||
+        String(p.pid).includes(q)
+    )
+  }, [processes, query])
 
   const columns: ColumnsType<SshProcessInfo> = [
     {
@@ -184,16 +197,27 @@ function ProcessPanel({
 
   return (
     <div ref={rootRef} className="flex h-full flex-col">
-      <div className="h-10 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+      <div className="h-10 shrink-0 flex items-center gap-3 px-3 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
+        <div className="shrink-0 flex items-baseline gap-1.5 min-w-0">
+          <span className="text-sm font-medium text-[var(--text-primary)] truncate">
             {t('sshToolProcess')}
-          </div>
-          <div className="text-[10px] text-[var(--text-secondary)] truncate">
-            {t('sshProcCount', { count: processes.length })}
-          </div>
+          </span>
+          <span className="text-[10px] text-[var(--text-secondary)] shrink-0">
+            {t('sshProcCount', { count: filtered.length })}
+          </span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex-1 min-w-0 flex justify-end">
+          <Input
+            size="small"
+            allowClear
+            prefix={<SearchOutlined className="text-xs text-[var(--text-secondary)]" />}
+            placeholder={t('sshProcSearch')}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full max-w-[240px]"
+          />
+        </div>
+        <div className="shrink-0 flex items-center gap-1">
           <button
             type="button"
             className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
@@ -236,7 +260,7 @@ function ProcessPanel({
               size="small"
               rowKey="pid"
               columns={columns}
-              dataSource={processes}
+              dataSource={filtered}
               pagination={false}
               locale={{ emptyText: t('sshProcEmpty') }}
               tableLayout="fixed"
