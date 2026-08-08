@@ -47,8 +47,7 @@ import {
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { Editor } from '@monaco-editor/react'
-import '../components/MonacoSetup'
+import SshFileEditor from '../components/SshFileEditor'
 import { useTheme } from '../theme/ThemeProvider'
 import { SortableList } from '../components/SortableList'
 
@@ -1452,7 +1451,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={activeEditor.error} />
         </div>
       ) : (
-        <Editor
+        <SshFileEditor
           height="100%"
           language={extToLang(activeEditor.name)}
           value={activeEditor.content}
