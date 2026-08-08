@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, ColorPicker, Input, InputNumber, Modal, Popconfirm, Slider } from 'antd'
+import { App, ColorPicker, Input, InputNumber, Modal, Popconfirm, Select, Slider } from 'antd'
 import {
   FolderOpenOutlined,
   ZoomInOutlined,
@@ -12,13 +12,16 @@ import {
   HighlightOutlined,
   EditOutlined,
   DeleteOutlined,
-  PlusOutlined
+  PlusOutlined,
+  CloseOutlined
 } from '@ant-design/icons'
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+
+type ShapeType = 'rect' | 'ellipse' | 'polygon' | 'line' | 'point'
 
 interface Rect {
   x: number
@@ -27,11 +30,33 @@ interface Rect {
   h: number
 }
 
-interface Annotation extends Rect {
+interface Pt {
+  x: number
+  y: number
+}
+
+interface Annotation {
   id: string
   page: number
   color: string
   info: string
+  shape: ShapeType
+  /* rect / ellipse — normalized bounding box */
+  x?: number
+  y?: number
+  w?: number
+  h?: number
+  /* polygon — normalized vertices */
+  points?: Pt[]
+  /* line — normalized endpoints */
+  x1?: number
+  y1?: number
+  x2?: number
+  y2?: number
+  /* point — normalized center + radius (fraction of min dimension) */
+  cx?: number
+  cy?: number
+  r?: number
 }
 
 interface StoredFile {
@@ -45,12 +70,44 @@ interface StoredFile {
 
 type StoredMap = Record<string, StoredFile>
 
+interface Draft {
+  shape: ShapeType
+  color: string
+  info: string
+  /* rect / ellipse px */
+  x: number
+  y: number
+  w: number
+  h: number
+  /* line px */
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  /* point px */
+  cx: number
+  cy: number
+  r: number
+  /* polygon px */
+  points: Pt[]
+}
+
+type Drawing =
+  | { shape: 'rect'; rect: Rect; cursor: Pt }
+  | { shape: 'ellipse'; rect: Rect; cursor: Pt }
+  | { shape: 'polygon'; points: Pt[]; cursor: Pt }
+  | { shape: 'line'; points: [Pt, Pt] }
+  | { shape: 'point'; point: Pt; cursor: Pt }
+
 const STORAGE_KEY = 'brickworks:pdfImageAnnotations'
 const MAX_STORED_FILES = 20
 const MIN_ZOOM = 0.2
 const MAX_ZOOM = 4
 const MIN_DRAG = 0.01
 const SCROLLBAR_MARGIN = 12
+const DEFAULT_POINT_R = 8
+const DOUBLE_CLICK_MS = 350
+const DOUBLE_CLICK_PX = 8
 
 const COLOR_PRESET_COLORS = [
   '#f5222d',
@@ -67,18 +124,34 @@ const COLOR_PRESET_COLORS = [
   '#262626'
 ]
 
+const SHAPE_ORDER: ShapeType[] = ['rect', 'ellipse', 'polygon', 'line', 'point']
+
 const LABEL_CLS =
   'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
-
-const BTN_CLS =
-  'h-8 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none ' +
-  'bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)] ' +
-  'disabled:opacity-40 disabled:cursor-not-allowed'
 
 const ICON_BTN_CLS =
   'w-8 h-8 rounded-lg text-sm flex items-center justify-center transition-all duration-150 cursor-pointer border-none ' +
   'bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)] ' +
   'disabled:opacity-40 disabled:cursor-not-allowed'
+
+function normalizeAnno(a: Annotation): Annotation {
+  return {
+    ...a,
+    shape: a.shape ?? 'rect',
+    x: a.x ?? 0,
+    y: a.y ?? 0,
+    w: a.w ?? 0,
+    h: a.h ?? 0,
+    points: a.points ?? [],
+    x1: a.x1 ?? 0,
+    y1: a.y1 ?? 0,
+    x2: a.x2 ?? 0,
+    y2: a.y2 ?? 0,
+    cx: a.cx ?? 0,
+    cy: a.cy ?? 0,
+    r: a.r ?? 0
+  }
+}
 
 function loadStored(): StoredMap {
   try {
@@ -98,9 +171,7 @@ function PdfImageAnnotate(): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const urlRef = useRef<string | null>(null)
   const annoRefs = useRef<Record<string, HTMLDivElement | null>>({})
-  const dragRef = useRef<{ start: { x: number; y: number }; cur: { x: number; y: number } } | null>(
-    null
-  )
+  const dragRef = useRef<{ start: Pt; cur: Pt } | null>(null)
   const panRef = useRef<{
     pointerId: number
     startX: number
@@ -108,6 +179,9 @@ function PdfImageAnnotate(): React.JSX.Element {
     scrollLeft: number
     scrollTop: number
   } | null>(null)
+  const polygonLastClickRef = useRef<{ time: number; clientX: number; clientY: number } | null>(
+    null
+  )
 
   const [fileKey, setFileKey] = useState<string | null>(null)
   const [fileName, setFileName] = useState('')
@@ -122,19 +196,13 @@ function PdfImageAnnotate(): React.JSX.Element {
   const pendingFitRef = useRef(false)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [annotateMode, setAnnotateMode] = useState(false)
+  const [shape, setShape] = useState<ShapeType>('rect')
   const [color, setColor] = useState('#fa8c16')
-  const [drawing, setDrawing] = useState<{ rect: Rect; cursor: { x: number; y: number } } | null>(
-    null
-  )
+  const [drawing, setDrawing] = useState<Drawing | null>(null)
   const [modalState, setModalState] = useState<
     { mode: 'new' } | { mode: 'edit'; anno: Annotation } | null
   >(null)
-  const [draftColor, setDraftColor] = useState('#fa8c16')
-  const [draftInfo, setDraftInfo] = useState('')
-  const [draftX, setDraftX] = useState(0)
-  const [draftY, setDraftY] = useState(0)
-  const [draftW, setDraftW] = useState(0)
-  const [draftH, setDraftH] = useState(0)
+  const [draft, setDraft] = useState<Draft | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [panning, setPanning] = useState(false)
   const [altHeld, setAltHeld] = useState(false)
@@ -306,6 +374,7 @@ function PdfImageAnnotate(): React.JSX.Element {
       setPageInput('1')
       setAnnotations([])
       setAnnotateMode(false)
+      polygonLastClickRef.current = null
       setDrawing(null)
       setSelectedId(null)
       setZoom(1)
@@ -321,7 +390,7 @@ function PdfImageAnnotate(): React.JSX.Element {
       setFileName(file.name)
 
       const stored = loadStored()[key]
-      if (stored) setAnnotations(stored.annotations)
+      if (stored) setAnnotations(stored.annotations.map(normalizeAnno))
 
       if (isPdf) {
         try {
@@ -347,24 +416,6 @@ function PdfImageAnnotate(): React.JSX.Element {
     },
     [t, message]
   )
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Alt') setAltHeld(true)
-    }
-    const onKeyUp = (e: KeyboardEvent): void => {
-      if (e.key === 'Alt') setAltHeld(false)
-    }
-    const onBlur = (): void => setAltHeld(false)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
-    window.addEventListener('blur', onBlur)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener('blur', onBlur)
-    }
-  }, [])
 
   /* ── pan (Alt + left drag) ── */
   const handlePanPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -406,7 +457,7 @@ function PdfImageAnnotate(): React.JSX.Element {
   }, [])
 
   /* ── drawing ── */
-  const toNorm = useCallback((clientX: number, clientY: number): { x: number; y: number } => {
+  const toNorm = useCallback((clientX: number, clientY: number): Pt => {
     const el = stageRef.current
     if (!el) return { x: 0, y: 0 }
     const rect = el.getBoundingClientRect()
@@ -416,7 +467,7 @@ function PdfImageAnnotate(): React.JSX.Element {
     }
   }, [])
 
-  const rectFrom = useCallback((a: { x: number; y: number }, b: { x: number; y: number }): Rect => {
+  const rectFrom = useCallback((a: Pt, b: Pt): Rect => {
     return {
       x: Math.min(a.x, b.x),
       y: Math.min(a.y, b.y),
@@ -425,62 +476,291 @@ function PdfImageAnnotate(): React.JSX.Element {
     }
   }, [])
 
+  const resetDraft = useCallback(
+    (s: ShapeType): Draft => {
+      const nw = natural?.width ?? 100
+      const nh = natural?.height ?? 100
+      const base = {
+        shape: s,
+        color,
+        info: '',
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 0,
+        cx: 0,
+        cy: 0,
+        r: DEFAULT_POINT_R,
+        points: [] as Pt[]
+      }
+      switch (s) {
+        case 'rect':
+        case 'ellipse':
+          return {
+            ...base,
+            x: Math.round(nw * 0.1),
+            y: Math.round(nh * 0.1),
+            w: Math.round(nw * 0.2),
+            h: Math.round(nh * 0.1)
+          }
+        case 'line':
+          return {
+            ...base,
+            x1: Math.round(nw * 0.1),
+            y1: Math.round(nh * 0.1),
+            x2: Math.round(nw * 0.3),
+            y2: Math.round(nh * 0.3)
+          }
+        case 'point':
+          return { ...base, cx: Math.round(nw * 0.5), cy: Math.round(nh * 0.5) }
+        case 'polygon':
+          return {
+            ...base,
+            points: [
+              { x: Math.round(nw * 0.1), y: Math.round(nh * 0.1) },
+              { x: Math.round(nw * 0.3), y: Math.round(nh * 0.1) },
+              { x: Math.round(nw * 0.2), y: Math.round(nh * 0.3) }
+            ]
+          }
+      }
+    },
+    [color, natural]
+  )
+
+  const openNewModal = useCallback(
+    (s: ShapeType, overrides?: Partial<Draft>) => {
+      setDraft({ ...resetDraft(s), ...overrides })
+      setModalState({ mode: 'new' })
+    },
+    [resetDraft]
+  )
+
+  const annoToDraft = useCallback(
+    (a: Annotation): Draft => {
+      const nw = natural?.width ?? 1
+      const nh = natural?.height ?? 1
+      const base = {
+        shape: a.shape,
+        color: a.color,
+        info: a.info,
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+        x1: 0,
+        y1: 0,
+        x2: 0,
+        y2: 0,
+        cx: 0,
+        cy: 0,
+        r: DEFAULT_POINT_R,
+        points: [] as Pt[]
+      }
+      switch (a.shape) {
+        case 'rect':
+        case 'ellipse':
+          return {
+            ...base,
+            x: Math.round((a.x ?? 0) * nw),
+            y: Math.round((a.y ?? 0) * nh),
+            w: Math.round((a.w ?? 0) * nw),
+            h: Math.round((a.h ?? 0) * nh)
+          }
+        case 'line':
+          return {
+            ...base,
+            x1: Math.round((a.x1 ?? 0) * nw),
+            y1: Math.round((a.y1 ?? 0) * nh),
+            x2: Math.round((a.x2 ?? 0) * nw),
+            y2: Math.round((a.y2 ?? 0) * nh)
+          }
+        case 'point':
+          return {
+            ...base,
+            cx: Math.round((a.cx ?? 0) * nw),
+            cy: Math.round((a.cy ?? 0) * nh),
+            r: Math.round((a.r ?? 0) * Math.min(nw, nh))
+          }
+        case 'polygon':
+          return {
+            ...base,
+            points: (a.points ?? []).map((p) => ({
+              x: Math.round(p.x * nw),
+              y: Math.round(p.y * nh)
+            }))
+          }
+      }
+    },
+    [natural]
+  )
+
+  const openEdit = useCallback(
+    (a: Annotation) => {
+      setSelectedId(a.id)
+      setDraft(annoToDraft(a))
+      setModalState({ mode: 'edit', anno: a })
+    },
+    [annoToDraft]
+  )
+
+  const finishPolygon = useCallback(() => {
+    polygonLastClickRef.current = null
+    const cur = drawing
+    if (!cur || cur.shape !== 'polygon' || !natural) return
+    if (cur.points.length >= 3) {
+      setDrawing(null)
+      openNewModal('polygon', {
+        points: cur.points.map((p) => ({
+          x: Math.round(p.x * natural.width),
+          y: Math.round(p.y * natural.height)
+        }))
+      })
+    } else {
+      message.info(t('annoPolygonTooFew'))
+    }
+  }, [drawing, natural, openNewModal, t, message])
+
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (!annotateMode || !natural || e.altKey) return
       e.preventDefault()
       const p = toNorm(e.clientX, e.clientY)
+
+      if (shape === 'polygon') {
+        if (e.button === 2) {
+          if (drawing?.shape === 'polygon') {
+            polygonLastClickRef.current = null
+            const pts = drawing.points.slice(0, -1)
+            setDrawing(
+              pts.length ? { shape: 'polygon', points: pts, cursor: drawing.cursor } : null
+            )
+          }
+          return
+        }
+        if (e.button !== 0) return
+        const now = performance.now()
+        const last = polygonLastClickRef.current
+        const isFinish =
+          drawing?.shape === 'polygon' &&
+          last !== null &&
+          now - last.time < DOUBLE_CLICK_MS &&
+          Math.hypot(e.clientX - last.clientX, e.clientY - last.clientY) < DOUBLE_CLICK_PX
+        polygonLastClickRef.current = { time: now, clientX: e.clientX, clientY: e.clientY }
+        if (isFinish) {
+          finishPolygon()
+          return
+        }
+        const cur = drawing
+        const pts = cur?.shape === 'polygon' ? [...cur.points, p] : [p]
+        setDrawing({ shape: 'polygon', points: pts, cursor: p })
+        return
+      }
+
+      if (e.button !== 0) return
       dragRef.current = { start: p, cur: p }
       stageRef.current?.setPointerCapture(e.pointerId)
-      setDrawing({ rect: { x: p.x, y: p.y, w: 0, h: 0 }, cursor: p })
+      if (shape === 'rect' || shape === 'ellipse') {
+        setDrawing({ shape, rect: { x: p.x, y: p.y, w: 0, h: 0 }, cursor: p })
+      } else if (shape === 'line') {
+        setDrawing({ shape: 'line', points: [p, p] })
+      } else {
+        setDrawing({ shape: 'point', point: p, cursor: p })
+      }
     },
-    [annotateMode, natural, toNorm]
+    [annotateMode, natural, toNorm, shape, drawing, finishPolygon]
   )
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (!dragRef.current) return
+      if (!annotateMode || !natural) return
       const p = toNorm(e.clientX, e.clientY)
+
+      if (shape === 'polygon') {
+        if (drawing?.shape === 'polygon') setDrawing({ ...drawing, cursor: p })
+        return
+      }
+
+      if (!dragRef.current) return
       dragRef.current.cur = p
-      setDrawing({ rect: rectFrom(dragRef.current.start, p), cursor: p })
+      if (shape === 'rect' || shape === 'ellipse') {
+        setDrawing({ shape, rect: rectFrom(dragRef.current.start, p), cursor: p })
+      } else if (shape === 'line') {
+        setDrawing({ shape: 'line', points: [dragRef.current.start, p] })
+      } else {
+        setDrawing({ shape: 'point', point: dragRef.current.start, cursor: p })
+      }
     },
-    [toNorm, rectFrom]
+    [annotateMode, natural, toNorm, rectFrom, shape, drawing]
   )
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
       const drag = dragRef.current
       dragRef.current = null
-      if (!drag || !annotateMode || !natural) {
-        setDrawing(null)
-        return
-      }
+      if (!drag || !annotateMode || !natural) return
       const p = toNorm(e.clientX, e.clientY)
       setDrawing(null)
+      const nw = natural.width
+      const nh = natural.height
+
+      if (shape === 'point') {
+        if (Math.hypot(p.x - drag.start.x, p.y - drag.start.y) > MIN_DRAG) {
+          message.info(t('annoDrawTooSmall'))
+          return
+        }
+        openNewModal('point', {
+          cx: Math.round(drag.start.x * nw),
+          cy: Math.round(drag.start.y * nh),
+          r: DEFAULT_POINT_R
+        })
+        return
+      }
+
+      if (shape === 'line') {
+        if (Math.hypot(p.x - drag.start.x, p.y - drag.start.y) < MIN_DRAG) {
+          message.info(t('annoLineTooShort'))
+          return
+        }
+        openNewModal('line', {
+          x1: Math.round(drag.start.x * nw),
+          y1: Math.round(drag.start.y * nh),
+          x2: Math.round(p.x * nw),
+          y2: Math.round(p.y * nh)
+        })
+        return
+      }
+
       const rect = rectFrom(drag.start, p)
       if (rect.w < MIN_DRAG || rect.h < MIN_DRAG) {
         message.info(t('annoDrawTooSmall'))
         return
       }
-      setDraftColor(color)
-      setDraftInfo('')
-      setDraftX(Math.round(rect.x * natural.width))
-      setDraftY(Math.round(rect.y * natural.height))
-      setDraftW(Math.round(rect.w * natural.width))
-      setDraftH(Math.round(rect.h * natural.height))
-      setModalState({ mode: 'new' })
+      openNewModal(shape, {
+        x: Math.round(rect.x * nw),
+        y: Math.round(rect.y * nh),
+        w: Math.round(rect.w * nw),
+        h: Math.round(rect.h * nh)
+      })
     },
-    [annotateMode, natural, toNorm, rectFrom, color, t, message]
+    [annotateMode, natural, toNorm, rectFrom, openNewModal, shape, t, message]
   )
 
-  /* ── annotations ── */
-  const openEdit = useCallback((anno: Annotation) => {
-    setSelectedId(anno.id)
-    setDraftColor(anno.color)
-    setDraftInfo(anno.info)
-    setModalState({ mode: 'edit', anno })
+  const toggleAnnotateMode = useCallback(() => {
+    setAnnotateMode((v) => {
+      if (v) {
+        polygonLastClickRef.current = null
+        dragRef.current = null
+        setDrawing(null)
+      }
+      return !v
+    })
   }, [])
 
+  /* ── annotations ── */
   const removeAnnotation = useCallback(
     (id: string) => {
       setAnnotations((prev) => prev.filter((a) => a.id !== id))
@@ -494,36 +774,62 @@ function PdfImageAnnotate(): React.JSX.Element {
   }, [])
 
   const handleModalOk = useCallback(() => {
-    if (!modalState || !natural) return
-    if (modalState.mode === 'new') {
-      const x = draftX
-      const y = draftY
-      const w = draftW
-      const h = draftH
+    if (!modalState || !natural || !draft) return
+    const d = draft
+    const nw = natural.width
+    const nh = natural.height
+    const inBounds = (x: number, y: number): boolean => x >= 0 && y >= 0 && x <= nw && y <= nh
+
+    let geom: Partial<Annotation> | null = null
+    if (d.shape === 'rect' || d.shape === 'ellipse') {
+      const { x, y, w, h } = d
       if (
-        !Number.isFinite(x) ||
-        !Number.isFinite(y) ||
-        !Number.isFinite(w) ||
-        !Number.isFinite(h) ||
+        ![x, y, w, h].every(Number.isFinite) ||
         w <= 0 ||
         h <= 0 ||
-        x < 0 ||
-        y < 0 ||
-        x + w > natural.width ||
-        y + h > natural.height
+        !inBounds(x, y) ||
+        !inBounds(x + w, y + h)
       ) {
         message.error(t('annoInvalidCoords'))
         return
       }
+      geom = { x: x / nw, y: y / nh, w: w / nw, h: h / nh }
+    } else if (d.shape === 'line') {
+      const { x1, y1, x2, y2 } = d
+      if (![x1, y1, x2, y2].every(Number.isFinite) || !inBounds(x1, y1) || !inBounds(x2, y2)) {
+        message.error(t('annoInvalidCoords'))
+        return
+      }
+      geom = { x1: x1 / nw, y1: y1 / nh, x2: x2 / nw, y2: y2 / nh }
+    } else if (d.shape === 'point') {
+      const { cx, cy, r } = d
+      if (![cx, cy, r].every(Number.isFinite) || r <= 0 || !inBounds(cx, cy)) {
+        message.error(t('annoInvalidCoords'))
+        return
+      }
+      geom = { cx: cx / nw, cy: cy / nh, r: r / Math.min(nw, nh) }
+    } else {
+      if (d.points.length < 3) {
+        message.error(t('annoPolygonTooFew'))
+        return
+      }
+      for (const p of d.points) {
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !inBounds(p.x, p.y)) {
+          message.error(t('annoInvalidCoords'))
+          return
+        }
+      }
+      geom = { points: d.points.map((p) => ({ x: p.x / nw, y: p.y / nh })) }
+    }
+
+    if (modalState.mode === 'new') {
       const anno: Annotation = {
         id: crypto.randomUUID(),
         page: currentPage,
-        color: draftColor,
-        info: draftInfo.trim(),
-        x: x / natural.width,
-        y: y / natural.height,
-        w: w / natural.width,
-        h: h / natural.height
+        color: d.color,
+        info: d.info.trim(),
+        shape: d.shape,
+        ...geom
       }
       setAnnotations((prev) => [...prev, anno])
       setSelectedId(anno.id)
@@ -531,36 +837,58 @@ function PdfImageAnnotate(): React.JSX.Element {
       const target = modalState.anno
       setAnnotations((prev) =>
         prev.map((a) =>
-          a.id === target.id ? { ...a, color: draftColor, info: draftInfo.trim() } : a
+          a.id === target.id
+            ? { ...a, ...geom, shape: d.shape, color: d.color, info: d.info.trim() }
+            : a
         )
       )
       setSelectedId(null)
     }
     setModalState(null)
-  }, [
-    modalState,
-    draftColor,
-    draftInfo,
-    draftX,
-    draftY,
-    draftW,
-    draftH,
-    currentPage,
-    natural,
-    t,
-    message
-  ])
+  }, [modalState, draft, currentPage, natural, t, message])
 
   const openManualAdd = useCallback(() => {
     if (!natural) return
-    setDraftColor(color)
-    setDraftInfo('')
-    setDraftX(Math.round(natural.width * 0.1))
-    setDraftY(Math.round(natural.height * 0.1))
-    setDraftW(Math.round(natural.width * 0.2))
-    setDraftH(Math.round(natural.height * 0.1))
-    setModalState({ mode: 'new' })
-  }, [natural, color])
+    openNewModal(shape)
+  }, [natural, openNewModal, shape])
+
+  /* keyboard: polygon editing (undo / cancel / finish) */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Alt') setAltHeld(true)
+      if (e.key === 'Escape') {
+        polygonLastClickRef.current = null
+        dragRef.current = null
+        setDrawing(null)
+        return
+      }
+      if (drawing?.shape === 'polygon') {
+        if (e.key === 'Backspace' || e.key === 'Delete') {
+          polygonLastClickRef.current = null
+          const pts = drawing.points.slice(0, -1)
+          setDrawing(pts.length ? { shape: 'polygon', points: pts, cursor: drawing.cursor } : null)
+          e.preventDefault()
+        } else if (e.key === 'Enter') {
+          finishPolygon()
+        }
+      }
+    }
+    const onKeyUp = (e: KeyboardEvent): void => {
+      if (e.key === 'Alt') setAltHeld(false)
+    }
+    const onBlur = (): void => {
+      setAltHeld(false)
+      setSelectedId(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [drawing, finishPolygon])
 
   /* ── zoom / page ── */
   const zoomRef = useRef(zoom)
@@ -710,14 +1038,153 @@ function PdfImageAnnotate(): React.JSX.Element {
     [t]
   )
 
+  const shapeOptions = useMemo(
+    () =>
+      SHAPE_ORDER.map((s) => ({
+        value: s,
+        label: t(`annoShape${s.charAt(0).toUpperCase()}${s.slice(1)}`)
+      })),
+    [t]
+  )
+
+  const shapeHintKey = useMemo(() => {
+    const map: Record<ShapeType, string> = {
+      rect: 'annoRectHint',
+      ellipse: 'annoEllipseHint',
+      polygon: 'annoPolygonHint',
+      line: 'annoLineHint',
+      point: 'annoPointHint'
+    }
+    return map[shape]
+  }, [shape])
+
+  const shapeLabel = useCallback(
+    (s: ShapeType) => t(`annoShape${s.charAt(0).toUpperCase()}${s.slice(1)}`),
+    [t]
+  )
+
+  const annoBBox = useCallback(
+    (a: Annotation): { x: number; y: number; w: number; h: number } => {
+      const W = display.width
+      const H = display.height
+      const minD = Math.min(W, H)
+      switch (a.shape) {
+        case 'ellipse':
+        case 'rect':
+          return { x: a.x! * W, y: a.y! * H, w: a.w! * W, h: a.h! * H }
+        case 'polygon': {
+          const pts = a.points ?? []
+          const xs = pts.map((p) => p.x * W)
+          const ys = pts.map((p) => p.y * H)
+          const x = Math.min(...xs)
+          const y = Math.min(...ys)
+          return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y }
+        }
+        case 'line': {
+          const x = Math.min(a.x1!, a.x2!) * W
+          const y = Math.min(a.y1!, a.y2!) * H
+          return { x, y, w: Math.abs(a.x2! - a.x1!) * W, h: Math.abs(a.y2! - a.y1!) * H }
+        }
+        case 'point': {
+          const r = a.r! * minD
+          const x = a.cx! * W - r
+          const y = a.cy! * H - r
+          return { x, y, w: r * 2, h: r * 2 }
+        }
+      }
+    },
+    [display]
+  )
+
+  const annoSummary = useCallback(
+    (a: Annotation): string => {
+      const nw = natural?.width ?? 1
+      const nh = natural?.height ?? 1
+      const minD = Math.min(nw, nh)
+      switch (a.shape) {
+        case 'rect':
+        case 'ellipse':
+          return `(${Math.round(a.x! * nw)}, ${Math.round(a.y! * nh)}) · ${Math.round(
+            a.w! * nw
+          )} × ${Math.round(a.h! * nh)}px`
+        case 'line':
+          return `(${Math.round(a.x1! * nw)}, ${Math.round(a.y1! * nh)}) → (${Math.round(
+            a.x2! * nw
+          )}, ${Math.round(a.y2! * nh)})`
+        case 'point':
+          return `(${Math.round(a.cx! * nw)}, ${Math.round(a.cy! * nh)}) · r=${Math.round(
+            a.r! * minD
+          )}px`
+        case 'polygon':
+          return `${a.points?.length ?? 0} ${t('annoVertices')}`
+      }
+    },
+    [natural, t]
+  )
+
+  /* in-progress drawing geometry (px) */
+  const drawingGeom = useMemo(() => {
+    if (!drawing || !natural) return null
+    const d: Drawing = drawing
+    const nw = natural.width
+    const nh = natural.height
+    if (d.shape === 'rect' || d.shape === 'ellipse') {
+      const g = d.rect
+      return {
+        text: `(${Math.round(g.x * nw)}, ${Math.round(g.y * nh)}) · ${Math.round(
+          g.w * nw
+        )} × ${Math.round(g.h * nh)}px`,
+        x: g.x * display.width,
+        y: g.y * display.height
+      }
+    }
+    if (d.shape === 'line') {
+      const [a, b] = d.points
+      return {
+        text: `(${Math.round(a.x * nw)}, ${Math.round(a.y * nh)}) → (${Math.round(
+          b.x * nw
+        )}, ${Math.round(b.y * nh)})`,
+        x: ((a.x + b.x) / 2) * display.width,
+        y: ((a.y + b.y) / 2) * display.height
+      }
+    }
+    if (d.shape === 'point') {
+      const p = d.point
+      return {
+        text: `(${Math.round(p.x * nw)}, ${Math.round(p.y * nh)})`,
+        x: p.x * display.width,
+        y: p.y * display.height
+      }
+    }
+    const pts = [...d.points, d.cursor]
+    const minX = Math.min(...pts.map((p) => p.x * display.width))
+    const minY = Math.min(...pts.map((p) => p.y * display.height))
+    return {
+      text: t('annoPolygonProgress', { count: d.points.length }),
+      x: minX,
+      y: minY
+    }
+  }, [drawing, natural, display, t])
+
+  const setDraftPoint = useCallback((i: number, key: 'x' | 'y', v: number | null) => {
+    setDraft((d) => {
+      if (!d) return d
+      const points = d.points.map((p, idx) => (idx === i ? { ...p, [key]: Number(v) || 0 } : p))
+      return { ...d, points }
+    })
+  }, [])
+
   return (
     <div className="flex flex-col p-6 flex-1 min-h-0">
       <div className="shrink-0 pb-3">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => fileRef.current?.click()} className={BTN_CLS}>
+          <button
+            onClick={() => fileRef.current?.click()}
+            title={t('annoOpenFile')}
+            className={ICON_BTN_CLS}
+          >
             <FolderOpenOutlined />
-            {t('annoOpenFile')}
           </button>
           <input
             ref={fileRef}
@@ -797,26 +1264,36 @@ function PdfImageAnnotate(): React.JSX.Element {
 
               <div className="w-px h-5 bg-[var(--border-subtle)]" />
 
+              <Select
+                value={shape}
+                onChange={(v) => {
+                  setShape(v as ShapeType)
+                  polygonLastClickRef.current = null
+                  dragRef.current = null
+                  setDrawing(null)
+                }}
+                options={shapeOptions}
+                disabled={!annotateMode}
+                style={{ width: 88 }}
+              />
+
               <button
-                onClick={() => setAnnotateMode((v) => !v)}
+                onClick={toggleAnnotateMode}
                 title={t('annoAnnotateHint')}
                 className={
                   annotateMode
-                    ? 'h-8 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none bg-[var(--accent)] text-white'
-                    : BTN_CLS
+                    ? 'w-8 h-8 rounded-lg text-sm flex items-center justify-center transition-all duration-150 cursor-pointer border-none bg-[var(--accent)] text-white'
+                    : ICON_BTN_CLS
                 }
               >
                 <HighlightOutlined />
-                {t('annoAnnotateMode')}
               </button>
 
-              <button onClick={openManualAdd} title={t('annoAddCoords')} className={BTN_CLS}>
+              <button onClick={openManualAdd} title={t('annoAddCoords')} className={ICON_BTN_CLS}>
                 <PlusOutlined />
-                {t('annoAddCoords')}
               </button>
 
               <ColorPicker
-                size="small"
                 value={color}
                 presets={colorPresets}
                 onChange={(c) => setColor(c.toHexString())}
@@ -831,9 +1308,8 @@ function PdfImageAnnotate(): React.JSX.Element {
                 onConfirm={() => setAnnotations([])}
                 okButtonProps={{ danger: true }}
               >
-                <button className={BTN_CLS}>
+                <button title={t('annoClear')} className={ICON_BTN_CLS}>
                   <DeleteOutlined />
-                  {t('annoClear')}
                 </button>
               </Popconfirm>
             </>
@@ -847,6 +1323,11 @@ function PdfImageAnnotate(): React.JSX.Element {
               <span>{t('annoPage', { current: currentPage, total: numPages })}</span>
             )}
             <span className="hidden md:inline">{t('annoCoordsOrigin')}</span>
+            {annotateMode && (
+              <span className="hidden md:inline font-medium text-[var(--accent)]">
+                {t(shapeHintKey)}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -885,6 +1366,10 @@ function PdfImageAnnotate(): React.JSX.Element {
                 onPointerDown={annotateMode ? handlePointerDown : undefined}
                 onPointerMove={annotateMode ? handlePointerMove : undefined}
                 onPointerUp={annotateMode ? handlePointerUp : undefined}
+                onClick={() => setSelectedId(null)}
+                onContextMenu={(e) => {
+                  if (annotateMode) e.preventDefault()
+                }}
               >
                 {docType === 'pdf' ? (
                   <canvas ref={canvasRef} className="block" />
@@ -903,11 +1388,9 @@ function PdfImageAnnotate(): React.JSX.Element {
 
                 {/* Annotations overlay */}
                 {pageAnnotations.map((a) => {
-                  const x = a.x * display.width
-                  const y = a.y * display.height
-                  const w = a.w * display.width
-                  const h = a.h * display.height
+                  const box = annoBBox(a)
                   const selected = a.id === selectedId
+                  const isBox = a.shape === 'rect' || a.shape === 'ellipse'
                   return (
                     <div
                       key={a.id}
@@ -916,22 +1399,96 @@ function PdfImageAnnotate(): React.JSX.Element {
                       }}
                       className="absolute group"
                       style={{
-                        left: x,
-                        top: y,
-                        width: w,
-                        height: h,
+                        left: box.x,
+                        top: box.y,
+                        width: box.w,
+                        height: box.h,
                         pointerEvents: annotateMode ? 'none' : 'auto'
                       }}
                     >
                       <div
-                        onClick={() => openEdit(a)}
-                        className="absolute inset-0 rounded cursor-pointer"
-                        style={{
-                          border: `2px solid ${a.color}`,
-                          background: `${a.color}2e`,
-                          boxShadow: selected ? '0 0 0 2px var(--accent)' : 'none'
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openEdit(a)
                         }}
+                        className="absolute inset-0 cursor-pointer"
+                        style={
+                          isBox
+                            ? {
+                                border: `2px solid ${a.color}`,
+                                background: `${a.color}2e`,
+                                boxShadow: selected ? '0 0 0 2px var(--accent)' : 'none',
+                                borderRadius: a.shape === 'ellipse' ? '50%' : 4
+                              }
+                            : { boxShadow: selected ? '0 0 0 2px var(--accent)' : 'none' }
+                        }
                       />
+                      {a.shape === 'polygon' && a.points && a.points.length > 0 && (
+                        <svg
+                          className="absolute inset-0 pointer-events-none"
+                          width={box.w}
+                          height={box.h}
+                          overflow="visible"
+                        >
+                          <polygon
+                            points={(a.points ?? [])
+                              .map(
+                                (p) =>
+                                  `${(p.x * display.width - box.x).toFixed(1)},${(
+                                    p.y * display.height -
+                                    box.y
+                                  ).toFixed(1)}`
+                              )
+                              .join(' ')}
+                            fill={`${a.color}2e`}
+                            stroke={a.color}
+                            strokeWidth={1.5}
+                          />
+                          {a.points.map((p, i) => (
+                            <circle
+                              key={i}
+                              cx={p.x * display.width - box.x}
+                              cy={p.y * display.height - box.y}
+                              r={3}
+                              fill={a.color}
+                            />
+                          ))}
+                        </svg>
+                      )}
+                      {a.shape === 'line' && (
+                        <svg
+                          className="absolute inset-0 pointer-events-none"
+                          width={box.w}
+                          height={box.h}
+                          overflow="visible"
+                        >
+                          <line
+                            x1={a.x1! * display.width - box.x}
+                            y1={a.y1! * display.height - box.y}
+                            x2={a.x2! * display.width - box.x}
+                            y2={a.y2! * display.height - box.y}
+                            stroke={a.color}
+                            strokeWidth={2}
+                          />
+                        </svg>
+                      )}
+                      {a.shape === 'point' && (
+                        <svg
+                          className="absolute inset-0 pointer-events-none"
+                          width={box.w}
+                          height={box.h}
+                          overflow="visible"
+                        >
+                          <circle
+                            cx={box.w / 2}
+                            cy={box.h / 2}
+                            r={box.w / 2}
+                            fill={`${a.color}2e`}
+                            stroke={a.color}
+                            strokeWidth={2}
+                          />
+                        </svg>
+                      )}
                       {a.info && (
                         <div
                           className="absolute -top-5 left-0 max-w-full truncate rounded px-1.5 py-0.5 text-[10px] leading-none text-white pointer-events-none"
@@ -944,6 +1501,7 @@ function PdfImageAnnotate(): React.JSX.Element {
                         <div
                           className="absolute top-1 right-1 flex items-center gap-1"
                           onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <button
                             onClick={() => openEdit(a)}
@@ -963,35 +1521,90 @@ function PdfImageAnnotate(): React.JSX.Element {
                   )
                 })}
 
-                {/* Rubber band + coordinate hint */}
-                {drawing && natural && (
+                {/* In-progress drawing preview */}
+                {drawing && natural && display.width > 0 && (
                   <>
-                    <div
-                      className="absolute pointer-events-none rounded-sm"
-                      style={{
-                        left: drawing.rect.x * display.width,
-                        top: drawing.rect.y * display.height,
-                        width: drawing.rect.w * display.width,
-                        height: drawing.rect.h * display.height,
-                        border: `1.5px dashed ${color}`,
-                        background: `${color}26`
-                      }}
-                    />
-                    <div
-                      className="absolute z-10 pointer-events-none rounded bg-[#262626] text-white px-1.5 py-0.5 text-[10px] font-mono whitespace-nowrap shadow-sm"
-                      style={{
-                        left: Math.min(
-                          drawing.rect.x * display.width + 4,
-                          Math.max(display.width - 220, 4)
-                        ),
-                        top: Math.max(drawing.rect.y * display.height - 22, 2)
-                      }}
-                    >
-                      ({Math.round(drawing.rect.x * natural.width)},{' '}
-                      {Math.round(drawing.rect.y * natural.height)}) ·{' '}
-                      {Math.round(drawing.rect.w * natural.width)} ×{' '}
-                      {Math.round(drawing.rect.h * natural.height)}px
-                    </div>
+                    {drawing.shape === 'rect' || drawing.shape === 'ellipse' ? (
+                      <div
+                        className="absolute pointer-events-none rounded-sm"
+                        style={{
+                          left: drawing.rect.x * display.width,
+                          top: drawing.rect.y * display.height,
+                          width: drawing.rect.w * display.width,
+                          height: drawing.rect.h * display.height,
+                          border: `1.5px dashed ${color}`,
+                          background: `${color}26`,
+                          borderRadius: drawing.shape === 'ellipse' ? '50%' : undefined
+                        }}
+                      />
+                    ) : (
+                      <svg
+                        className="absolute inset-0 pointer-events-none"
+                        style={{ width: display.width, height: display.height }}
+                        overflow="visible"
+                      >
+                        {drawing.shape === 'line' && (
+                          <line
+                            x1={drawing.points[0].x * display.width}
+                            y1={drawing.points[0].y * display.height}
+                            x2={drawing.points[1].x * display.width}
+                            y2={drawing.points[1].y * display.height}
+                            stroke={color}
+                            strokeWidth={1.5}
+                            strokeDasharray="4 2"
+                          />
+                        )}
+                        {drawing.shape === 'point' && (
+                          <circle
+                            cx={drawing.point.x * display.width}
+                            cy={drawing.point.y * display.height}
+                            r={DEFAULT_POINT_R * zoom}
+                            fill={`${color}26`}
+                            stroke={color}
+                            strokeWidth={1.5}
+                            strokeDasharray="4 2"
+                          />
+                        )}
+                        {drawing.shape === 'polygon' && (
+                          <>
+                            <polygon
+                              points={[...drawing.points, drawing.cursor]
+                                .map(
+                                  (p) =>
+                                    `${(p.x * display.width).toFixed(1)},${(
+                                      p.y * display.height
+                                    ).toFixed(1)}`
+                                )
+                                .join(' ')}
+                              fill={`${color}26`}
+                              stroke={color}
+                              strokeWidth={1.5}
+                              strokeDasharray="4 2"
+                            />
+                            {drawing.points.map((p, i) => (
+                              <circle
+                                key={i}
+                                cx={p.x * display.width}
+                                cy={p.y * display.height}
+                                r={4}
+                                fill={color}
+                              />
+                            ))}
+                          </>
+                        )}
+                      </svg>
+                    )}
+                    {drawingGeom && (
+                      <div
+                        className="absolute z-10 pointer-events-none rounded bg-[#262626] text-white px-1.5 py-0.5 text-[10px] font-mono whitespace-nowrap shadow-sm"
+                        style={{
+                          left: Math.min(drawingGeom.x + 4, Math.max(display.width - 220, 4)),
+                          top: Math.max(drawingGeom.y - 22, 2)
+                        }}
+                      >
+                        {drawingGeom.text}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -1036,6 +1649,9 @@ function PdfImageAnnotate(): React.JSX.Element {
                       <span className="flex-1 min-w-0 truncate text-xs font-medium text-[var(--text-primary)]">
                         {i + 1}. {a.info || t('annoNoInfo')}
                       </span>
+                      <span className="shrink-0 text-[10px] text-[var(--text-secondary)]">
+                        {shapeLabel(a.shape)}
+                      </span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -1066,8 +1682,7 @@ function PdfImageAnnotate(): React.JSX.Element {
                       </Popconfirm>
                     </div>
                     <div className="mt-1.5 font-mono text-[10px] text-[var(--text-secondary)]">
-                      ({Math.round(a.x * natural.width)}, {Math.round(a.y * natural.height)}) ·{' '}
-                      {Math.round(a.w * natural.width)} × {Math.round(a.h * natural.height)}px
+                      {annoSummary(a)}
                     </div>
                   </div>
                 ))
@@ -1099,88 +1714,255 @@ function PdfImageAnnotate(): React.JSX.Element {
         onOk={handleModalOk}
         onCancel={() => setModalState(null)}
         destroyOnHidden
-        width={420}
+        width={460}
       >
-        <div className="flex flex-col gap-4 pt-3">
-          <div>
-            <label className={LABEL_CLS}>{t('annoColor')}</label>
-            <ColorPicker
-              value={draftColor}
-              presets={colorPresets}
-              showText
-              onChange={(c) => setDraftColor(c.toHexString())}
-            />
-          </div>
-          <div>
-            <label className={LABEL_CLS}>{t('annoInfo')}</label>
-            <Input.TextArea
-              value={draftInfo}
-              onChange={(e) => setDraftInfo(e.target.value)}
-              placeholder={t('annoInfoPlaceholder')}
-              rows={3}
-            />
-          </div>
-          {modalState?.mode === 'new' && natural && (
-            <div>
-              <label className={LABEL_CLS}>{t('annoCoordinate')}</label>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
-                    X
-                  </span>
-                  <InputNumber
-                    min={0}
-                    max={natural.width}
-                    precision={0}
-                    value={draftX}
-                    onChange={(v) => setDraftX(Number(v) || 0)}
-                    style={{ width: '100%' }}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
-                    Y
-                  </span>
-                  <InputNumber
-                    min={0}
-                    max={natural.height}
-                    precision={0}
-                    value={draftY}
-                    onChange={(v) => setDraftY(Number(v) || 0)}
-                    style={{ width: '100%' }}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
-                    W
-                  </span>
-                  <InputNumber
-                    min={1}
-                    max={natural.width}
-                    precision={0}
-                    value={draftW}
-                    onChange={(v) => setDraftW(Number(v) || 0)}
-                    style={{ width: '100%' }}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
-                    H
-                  </span>
-                  <InputNumber
-                    min={1}
-                    max={natural.height}
-                    precision={0}
-                    value={draftH}
-                    onChange={(v) => setDraftH(Number(v) || 0)}
-                    style={{ width: '100%' }}
-                  />
-                </div>
+        {draft && (
+          <div className="flex flex-col gap-4 pt-3">
+            {modalState?.mode === 'new' && (
+              <div>
+                <label className={LABEL_CLS}>{t('annoShape')}</label>
+                <Select
+                  value={draft.shape}
+                  onChange={(v) => setDraft((d) => (d ? { ...d, shape: v as ShapeType } : d))}
+                  options={shapeOptions}
+                  style={{ width: '100%' }}
+                />
               </div>
-              <p className="mt-1 text-[11px] text-[var(--text-secondary)]">{t('annoCoordsPx')}</p>
+            )}
+            <div>
+              <label className={LABEL_CLS}>{t('annoColor')}</label>
+              <ColorPicker
+                value={draft.color}
+                presets={colorPresets}
+                showText
+                onChange={(c) => setDraft((d) => (d ? { ...d, color: c.toHexString() } : d))}
+              />
             </div>
-          )}
-        </div>
+            <div>
+              <label className={LABEL_CLS}>{t('annoInfo')}</label>
+              <Input.TextArea
+                value={draft.info}
+                onChange={(e) => setDraft((d) => (d ? { ...d, info: e.target.value } : d))}
+                placeholder={t('annoInfoPlaceholder')}
+                rows={3}
+              />
+            </div>
+            {modalState?.mode === 'new' && natural && (
+              <>
+                {(draft.shape === 'rect' || draft.shape === 'ellipse') && (
+                  <div>
+                    <label className={LABEL_CLS}>{t('annoCoordinate')}</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                          X
+                        </span>
+                        <InputNumber
+                          min={0}
+                          max={natural.width}
+                          precision={0}
+                          value={draft.x}
+                          onChange={(v) => setDraft((d) => (d ? { ...d, x: Number(v) || 0 } : d))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                          Y
+                        </span>
+                        <InputNumber
+                          min={0}
+                          max={natural.height}
+                          precision={0}
+                          value={draft.y}
+                          onChange={(v) => setDraft((d) => (d ? { ...d, y: Number(v) || 0 } : d))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                          W
+                        </span>
+                        <InputNumber
+                          min={1}
+                          max={natural.width}
+                          precision={0}
+                          value={draft.w}
+                          onChange={(v) => setDraft((d) => (d ? { ...d, w: Number(v) || 0 } : d))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                          H
+                        </span>
+                        <InputNumber
+                          min={1}
+                          max={natural.height}
+                          precision={0}
+                          value={draft.h}
+                          onChange={(v) => setDraft((d) => (d ? { ...d, h: Number(v) || 0 } : d))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {draft.shape === 'line' && (
+                  <div>
+                    <label className={LABEL_CLS}>{t('annoCoordinate')}</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(
+                        [
+                          ['x1', 'X1'],
+                          ['y1', 'Y1'],
+                          ['x2', 'X2'],
+                          ['y2', 'Y2']
+                        ] as const
+                      ).map(([key, label]) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                            {label}
+                          </span>
+                          <InputNumber
+                            min={0}
+                            max={key.startsWith('y') ? natural.height : natural.width}
+                            precision={0}
+                            value={draft[key]}
+                            onChange={(v) =>
+                              setDraft((d) => (d ? { ...d, [key]: Number(v) || 0 } : d))
+                            }
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {draft.shape === 'point' && (
+                  <div>
+                    <label className={LABEL_CLS}>{t('annoCoordinate')}</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                          X
+                        </span>
+                        <InputNumber
+                          min={0}
+                          max={natural.width}
+                          precision={0}
+                          value={draft.cx}
+                          onChange={(v) => setDraft((d) => (d ? { ...d, cx: Number(v) || 0 } : d))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                          Y
+                        </span>
+                        <InputNumber
+                          min={0}
+                          max={natural.height}
+                          precision={0}
+                          value={draft.cy}
+                          onChange={(v) => setDraft((d) => (d ? { ...d, cy: Number(v) || 0 } : d))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
+                          R
+                        </span>
+                        <InputNumber
+                          min={1}
+                          max={Math.round(Math.min(natural.width, natural.height) / 2)}
+                          precision={0}
+                          value={draft.r}
+                          onChange={(v) => setDraft((d) => (d ? { ...d, r: Number(v) || 0 } : d))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      <span className="text-[11px] text-[var(--text-secondary)] leading-8">
+                        {t('annoRadius')}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {draft.shape === 'polygon' && (
+                  <div>
+                    <label className={LABEL_CLS}>
+                      {t('annoVertices')} ({draft.points.length})
+                    </label>
+                    <div className="flex flex-col gap-1.5 max-h-40 overflow-auto">
+                      {draft.points.map((p, i) => (
+                        <div key={i} className="flex items-center gap-1.5">
+                          <span className="w-4 shrink-0 text-[10px] text-[var(--text-secondary)]">
+                            {i + 1}
+                          </span>
+                          <InputNumber
+                            min={0}
+                            max={natural.width}
+                            precision={0}
+                            size="small"
+                            value={p.x}
+                            onChange={(v) => setDraftPoint(i, 'x', v)}
+                            style={{ width: '100%' }}
+                          />
+                          <InputNumber
+                            min={0}
+                            max={natural.height}
+                            precision={0}
+                            size="small"
+                            value={p.y}
+                            onChange={(v) => setDraftPoint(i, 'y', v)}
+                            style={{ width: '100%' }}
+                          />
+                          <button
+                            onClick={() =>
+                              setDraft((d) =>
+                                d ? { ...d, points: d.points.filter((_, idx) => idx !== i) } : d
+                              )
+                            }
+                            title={t('annoRemoveVertex')}
+                            className="shrink-0 flex h-6 w-6 items-center justify-center rounded text-[10px] text-[var(--text-secondary)] hover:text-red-500 hover:bg-[var(--border-subtle)] cursor-pointer"
+                          >
+                            <CloseOutlined />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() =>
+                        setDraft((d) =>
+                          d
+                            ? {
+                                ...d,
+                                points: [
+                                  ...d.points,
+                                  {
+                                    x: Math.round(natural.width * 0.5),
+                                    y: Math.round(natural.height * 0.5)
+                                  }
+                                ]
+                              }
+                            : d
+                        )
+                      }
+                      className="mt-1.5 text-xs font-semibold text-[var(--accent)] hover:opacity-80 cursor-pointer"
+                    >
+                      + {t('annoAddVertex')}
+                    </button>
+                  </div>
+                )}
+
+                <p className="text-[11px] text-[var(--text-secondary)]">{t('annoCoordsPx')}</p>
+              </>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   )
