@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, ColorPicker, Input, InputNumber, Modal, Popconfirm, Select, Slider } from 'antd'
+import {
+  App,
+  ColorPicker,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Segmented,
+  Select,
+  Slider
+} from 'antd'
 import {
   FolderOpenOutlined,
   ZoomInOutlined,
@@ -203,6 +213,8 @@ function PdfImageAnnotate(): React.JSX.Element {
     { mode: 'new' } | { mode: 'edit'; anno: Annotation } | null
   >(null)
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [boxInput, setBoxInput] = useState('')
+  const [boxFormat, setBoxFormat] = useState<'xywh' | 'corners'>('xywh')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [panning, setPanning] = useState(false)
   const [altHeld, setAltHeld] = useState(false)
@@ -534,6 +546,7 @@ function PdfImageAnnotate(): React.JSX.Element {
   const openNewModal = useCallback(
     (s: ShapeType, overrides?: Partial<Draft>) => {
       setDraft({ ...resetDraft(s), ...overrides })
+      setBoxInput('')
       setModalState({ mode: 'new' })
     },
     [resetDraft]
@@ -602,6 +615,7 @@ function PdfImageAnnotate(): React.JSX.Element {
     (a: Annotation) => {
       setSelectedId(a.id)
       setDraft(annoToDraft(a))
+      setBoxInput('')
       setModalState({ mode: 'edit', anno: a })
     },
     [annoToDraft]
@@ -852,6 +866,54 @@ function PdfImageAnnotate(): React.JSX.Element {
     openNewModal(shape)
   }, [natural, openNewModal, shape])
 
+  const applyBoxInput = useCallback(() => {
+    if (!draft || !natural) return
+    const m = boxInput
+      .trim()
+      .match(/^\s*\[?\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\]?\s*$/)
+    if (!m) {
+      message.error(t('annoInvalidCoords'))
+      return
+    }
+    const nums = m.slice(1).map(Number)
+    if (!nums.every(Number.isFinite)) {
+      message.error(t('annoInvalidCoords'))
+      return
+    }
+    let x: number
+    let y: number
+    let w: number
+    let h: number
+    if (boxFormat === 'corners') {
+      const [x1, y1, x2, y2] = nums
+      x = Math.min(x1, x2)
+      y = Math.min(y1, y2)
+      w = Math.abs(x2 - x1)
+      h = Math.abs(y2 - y1)
+    } else {
+      const [cx, cy, cw, ch] = nums
+      x = cx
+      y = cy
+      w = cw
+      h = ch
+    }
+    if (w <= 0 || h <= 0) {
+      message.error(t('annoInvalidCoords'))
+      return
+    }
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            x: Math.round(Math.min(natural.width, Math.max(0, x))),
+            y: Math.round(Math.min(natural.height, Math.max(0, y))),
+            w: Math.round(Math.min(natural.width, Math.max(1, w))),
+            h: Math.round(Math.min(natural.height, Math.max(1, h)))
+          }
+        : d
+    )
+  }, [draft, boxInput, boxFormat, natural, t, message])
+
   /* keyboard: polygon editing (undo / cancel / finish) */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -1044,6 +1106,14 @@ function PdfImageAnnotate(): React.JSX.Element {
         value: s,
         label: t(`annoShape${s.charAt(0).toUpperCase()}${s.slice(1)}`)
       })),
+    [t]
+  )
+
+  const boxFormatOptions = useMemo(
+    () => [
+      { value: 'xywh', label: t('annoBoxFormatSize') },
+      { value: 'corners', label: t('annoBoxFormatCorners') }
+    ],
     [t]
   )
 
@@ -1721,11 +1791,11 @@ function PdfImageAnnotate(): React.JSX.Element {
             {modalState?.mode === 'new' && (
               <div>
                 <label className={LABEL_CLS}>{t('annoShape')}</label>
-                <Select
+                <Segmented
+                  block
                   value={draft.shape}
                   onChange={(v) => setDraft((d) => (d ? { ...d, shape: v as ShapeType } : d))}
                   options={shapeOptions}
-                  style={{ width: '100%' }}
                 />
               </div>
             )}
@@ -1751,6 +1821,30 @@ function PdfImageAnnotate(): React.JSX.Element {
               <>
                 {(draft.shape === 'rect' || draft.shape === 'ellipse') && (
                   <div>
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="shrink-0 text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] whitespace-nowrap">
+                        {t('annoBoxLabel')}
+                      </span>
+                      <Segmented
+                        value={boxFormat}
+                        onChange={(v) => setBoxFormat(v as 'xywh' | 'corners')}
+                        options={boxFormatOptions}
+                      />
+                      <Input
+                        value={boxInput}
+                        onChange={(e) => setBoxInput(e.target.value)}
+                        onPressEnter={applyBoxInput}
+                        placeholder={t('annoBoxPlaceholder')}
+                        className="flex-1"
+                      />
+                      <button
+                        onClick={applyBoxInput}
+                        title={t('annoBoxApply')}
+                        className={ICON_BTN_CLS}
+                      >
+                        <EditOutlined />
+                      </button>
+                    </div>
                     <label className={LABEL_CLS}>{t('annoCoordinate')}</label>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="flex items-center gap-2">
