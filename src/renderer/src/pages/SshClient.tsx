@@ -1785,6 +1785,22 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
               </SortableList>
             )}
           </div>
+
+          {sidebarCollapsed && (
+            <div className="shrink-0 flex items-center justify-center py-1.5 border-t border-[var(--border-subtle)]">
+              <button
+                type="button"
+                className={BTN_ICON}
+                title={t('sshAddNode')}
+                onClick={() => {
+                  setEditing(null)
+                  setEditorOpen(true)
+                }}
+              >
+                <PlusOutlined />
+              </button>
+            </div>
+          )}
         </aside>
       )}
 
