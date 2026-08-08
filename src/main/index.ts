@@ -891,6 +891,16 @@ ipcMain.handle('ssh:stopShell', (_event, sessionId: string) =>
   sshClientManager.stopShell(sessionId)
 )
 
+ipcMain.handle('ssh:sysInfo', async (_event, nodeId: string) => {
+  if (!nodeId) throw new Error('NODE_NOT_FOUND')
+  return sshClientManager.sysInfo(nodeId)
+})
+
+ipcMain.handle('ssh:disconnectSysInfo', (_event, nodeId: string) => {
+  sshClientManager.disconnectSysInfo(nodeId)
+  return true
+})
+
 ipcMain.handle('ssh:sftpList', (_event, nodeId: string, remotePath: string) => {
   if (!nodeId) throw new Error('NODE_NOT_FOUND')
   return sshClientManager.sftpList(nodeId, remotePath || '/')

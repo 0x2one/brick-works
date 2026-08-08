@@ -42,12 +42,14 @@ import {
   CodeOutlined,
   HolderOutlined,
   SaveOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  DashboardOutlined
 } from '@ant-design/icons'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import SshFileEditor from '../components/SshFileEditor'
+import SshSysInfoPanel from '../components/SshSysInfoPanel'
 import { useTheme } from '../theme/ThemeProvider'
 import { SortableList } from '../components/SortableList'
 
@@ -88,7 +90,7 @@ const SSH_ERROR_CODES = [
   'SHELL_FAILED'
 ] as const
 
-type MaximizeMode = null | 'console' | 'files' | 'editor'
+type MaximizeMode = null | 'console' | 'files' | 'editor' | 'info'
 
 interface SessionTab {
   id: string
@@ -97,6 +99,7 @@ interface SessionTab {
   subtitle: string
   shellSessionId: string | null
   filesOpen: boolean
+  infoOpen: boolean
   remotePath: string
   connecting: boolean
 }
@@ -504,6 +507,9 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
 
   const [entriesByTab, setEntriesByTab] = useState<Record<string, SshSftpEntry[]>>({})
   const [filesLoading, setFilesLoading] = useState(false)
+  const [infoByTab, setInfoByTab] = useState<Record<string, SshSysInfo | null>>({})
+  const [infoLoading, setInfoLoading] = useState(false)
+  const [infoError, setInfoError] = useState<string | null>(null)
   const [downloadingPath, setDownloadingPath] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [createOpen, setCreateOpen] = useState<'file' | 'dir' | null>(null)
@@ -627,6 +633,12 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         )
         if (!othersOpen) await window.api.ssh.sftpDisconnect(tab.nodeId)
       }
+      if (tab.infoOpen) {
+        const othersOpen = tabsRef.current.some(
+          (item) => item.id !== tabId && item.nodeId === tab.nodeId && item.infoOpen
+        )
+        if (!othersOpen) await window.api.ssh.disconnectSysInfo(tab.nodeId)
+      }
       setTabs((prev) => {
         const next = prev.filter((item) => item.id !== tabId)
         setActiveTabId((cur) => {
@@ -636,6 +648,11 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         return next
       })
       setEntriesByTab((prev) => {
+        const next = { ...prev }
+        delete next[tabId]
+        return next
+      })
+      setInfoByTab((prev) => {
         const next = { ...prev }
         delete next[tabId]
         return next
@@ -764,6 +781,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       }
       const nodeIds = new Set(tabsSnapshot.current.map((tab) => tab.nodeId))
       for (const nodeId of nodeIds) void window.api.ssh.sftpDisconnect(nodeId)
+      for (const nodeId of nodeIds) void window.api.ssh.disconnectSysInfo(nodeId)
     }
   }, [])
 
@@ -917,6 +935,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       subtitle: `${node.username}@${node.host}:${node.port}`,
       shellSessionId: null,
       filesOpen: false,
+      infoOpen: false,
       remotePath: '/',
       connecting: true
     }
@@ -952,7 +971,9 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const openFiles = useCallback(() => {
     if (!activeTab) return
     setTabs((prev) =>
-      prev.map((tab) => (tab.id === activeTab.id ? { ...tab, filesOpen: true } : tab))
+      prev.map((tab) =>
+        tab.id === activeTab.id ? { ...tab, filesOpen: true, infoOpen: false } : tab
+      )
     )
     setMaximized((m) => (m === 'console' ? null : m))
     void loadDir(activeTab.id, activeTab.nodeId, activeTab.remotePath || '/')
@@ -969,6 +990,68 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     )
     if (!othersOpen) await window.api.ssh.sftpDisconnect(nodeId)
   }, [activeTab, maximized])
+
+  const refreshSysInfo = useCallback(async (): Promise<void> => {
+    const tab = activeTab
+    if (!tab || !tab.infoOpen) return
+    setInfoLoading(true)
+    setInfoError(null)
+    try {
+      const res = await window.api.ssh.sysInfo(tab.nodeId)
+      if (res.ok) {
+        setInfoByTab((prev) => ({ ...prev, [tab.id]: res.info }))
+      } else {
+        setInfoByTab((prev) => ({ ...prev, [tab.id]: null }))
+        setInfoError(res.error || '')
+      }
+    } catch (err) {
+      setInfoByTab((prev) => ({ ...prev, [tab.id]: null }))
+      setInfoError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setInfoLoading(false)
+    }
+  }, [activeTab])
+
+  const openInfo = useCallback(async (): Promise<void> => {
+    if (!activeTab) return
+    const tabId = activeTab.id
+    const nodeId = activeTab.nodeId
+    if (activeTab.filesOpen) {
+      const othersOpen = tabsRef.current.some(
+        (item) => item.id !== tabId && item.nodeId === nodeId && item.filesOpen
+      )
+      if (!othersOpen) await window.api.ssh.sftpDisconnect(nodeId)
+    }
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === tabId ? { ...tab, infoOpen: true, filesOpen: false } : tab
+      )
+    )
+    setMaximized((m) => (m === 'files' ? null : m))
+    void refreshSysInfo()
+  }, [activeTab, refreshSysInfo])
+
+  const closeInfo = useCallback(async (): Promise<void> => {
+    if (!activeTab) return
+    const tabId = activeTab.id
+    const nodeId = activeTab.nodeId
+    setTabs((prev) => prev.map((tab) => (tab.id === tabId ? { ...tab, infoOpen: false } : tab)))
+    if (maximized === 'info') setMaximized(null)
+    const othersOpen = tabsRef.current.some(
+      (tab) => tab.id !== tabId && tab.nodeId === nodeId && tab.infoOpen
+    )
+    if (!othersOpen) await window.api.ssh.disconnectSysInfo(nodeId)
+  }, [activeTab, maximized])
+
+  useEffect(() => {
+    if (!active || !activeTab?.infoOpen) return
+    const first = window.setTimeout(() => void refreshSysInfo(), 0)
+    const id = window.setInterval(() => void refreshSysInfo(), 4000)
+    return () => {
+      window.clearTimeout(first)
+      window.clearInterval(id)
+    }
+  }, [active, activeTab?.id, activeTab?.infoOpen, refreshSysInfo])
 
   const editorHeightRef = useRef(editorHeight)
   useEffect(() => {
@@ -1067,7 +1150,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         if (!existing.loading) focusEditor(tabId, entry.path)
         return
       }
-      if (maximized === 'files') setMaximized('console')
+      if (maximized === 'files' || maximized === 'info') setMaximized('console')
       const init: SshFileEditorState = {
         tabId,
         nodeId,
@@ -1332,10 +1415,12 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   ]
 
   const filesOpen = !!activeTab?.filesOpen
+  const infoOpen = !!activeTab?.infoOpen
   const showSidebar = maximized === null || maximized === 'editor'
-  const showConsole = maximized !== 'files'
+  const showConsole = maximized !== 'files' && maximized !== 'info'
   const showConsoleTitle = showConsole && maximized !== 'editor'
-  const showFiles = filesOpen && maximized !== 'console'
+  const showFiles = filesOpen && maximized !== 'console' && maximized !== 'info'
+  const showInfo = infoOpen && maximized !== 'console' && maximized !== 'files'
   const entries = activeTab ? (entriesByTab[activeTab.id] ?? []) : []
   const crumbs = pathSegments(activeTab?.remotePath || '/')
   const tabEditors = activeTab ? (editorsByTab[activeTab.id] ?? []) : []
@@ -1488,7 +1573,8 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   }, [active, activeTabId, hasActiveEditor, fitActiveTerm])
 
   useEffect(() => {
-    if (!active || !activeTabId || maximized === 'editor' || maximized === 'files') return
+    if (!active || !activeTabId || maximized === 'editor' || maximized === 'files' || maximized === 'info')
+      return
     const id = window.requestAnimationFrame(fitActiveTerm)
     return () => window.cancelAnimationFrame(id)
   }, [active, activeTabId, maximized, fitActiveTerm])
@@ -1790,6 +1876,15 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   </button>
                   <button
                     type="button"
+                    className={infoOpen ? BTN_TEXT_ACTIVE : BTN_TEXT}
+                    onClick={() => (infoOpen ? void closeInfo() : void openInfo())}
+                    title={t('sshClientInfo')}
+                  >
+                    <DashboardOutlined />
+                    {t('sshClientInfo')}
+                  </button>
+                  <button
+                    type="button"
                     className={BTN_ICON}
                     title={
                       maximized === 'console'
@@ -1856,6 +1951,50 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                     className={BTN_ICON}
                     title={t('sshClientClose')}
                     onClick={() => void closeFiles()}
+                  >
+                    <CloseOutlined />
+                  </button>
+                </div>
+              )}
+              {showInfo && (
+                <div
+                  className={`${TITLE_BAR_CLS} ${maximized === 'info' ? 'flex-1' : 'w-[300px] shrink-0'}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+                      {t('sshClientInfo')}
+                    </div>
+                    <div className="text-[10px] font-mono text-[var(--text-secondary)] truncate">
+                      {activeTab.title}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={BTN_TEXT}
+                    disabled={infoLoading}
+                    onClick={() => void refreshSysInfo()}
+                    title={t('sshClientInfoRefresh')}
+                  >
+                    {infoLoading ? <LoadingOutlined /> : <ReloadOutlined />}
+                    {t('sshClientRefresh')}
+                  </button>
+                  <button
+                    type="button"
+                    className={BTN_ICON}
+                    title={
+                      maximized === 'info'
+                        ? t('sshClientExitFullscreen')
+                        : t('sshClientFullscreen')
+                    }
+                    onClick={() => setMaximized((m) => (m === 'info' ? null : 'info'))}
+                  >
+                    {maximized === 'info' ? <CompressOutlined /> : <ExpandOutlined />}
+                  </button>
+                  <button
+                    type="button"
+                    className={BTN_ICON}
+                    title={t('sshClientClose')}
+                    onClick={() => void closeInfo()}
                   >
                     <CloseOutlined />
                   </button>
@@ -2044,6 +2183,22 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                         ]}
                       />
                     </Spin>
+                  </div>
+                </div>
+              )}
+              {showInfo && (
+                <div
+                  className={`min-h-0 flex flex-col bg-[var(--content-bg)] ${
+                    maximized === 'info' ? 'flex-1' : 'w-[300px] shrink-0'
+                  }`}
+                >
+                  <div className="flex-1 min-h-0 overflow-auto">
+                    <SshSysInfoPanel
+                      info={activeTab ? (infoByTab[activeTab.id] ?? null) : null}
+                      loading={infoLoading}
+                      error={infoError}
+                      onRefresh={() => void refreshSysInfo()}
+                    />
                   </div>
                 </div>
               )}

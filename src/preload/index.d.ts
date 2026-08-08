@@ -74,6 +74,8 @@ interface SshApi {
   ) => Promise<{ ok: boolean; error?: string }>
   sftpReadFile: (nodeId: string, remotePath: string) => Promise<SshSftpReadResult>
   sftpDisconnect: (nodeId: string) => Promise<boolean>
+  sysInfo: (nodeId: string) => Promise<SshSysInfoResult>
+  disconnectSysInfo: (nodeId: string) => Promise<boolean>
   onShellData: (callback: (data: SshShellData) => void) => () => void
   onShellExit: (callback: (data: SshShellExit) => void) => () => void
 }

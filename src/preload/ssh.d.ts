@@ -126,3 +126,26 @@ interface SshSftpReadResult {
   maxBytes?: number
   error?: string
 }
+
+interface SshSysInfoDisk {
+  filesystem: string
+  mount: string
+  size: number
+  used: number
+  avail: number
+  usePercent: number
+}
+
+interface SshSysInfo {
+  platform: 'linux' | 'darwin' | 'other'
+  hostname: string
+  os: { name: string; kernel: string; arch: string }
+  cpu: { model: string; cores: number; usage: number | null }
+  mem: { total: number; used: number }
+  swap: { total: number; used: number }
+  uptime: number
+  loadavg: number[]
+  disks: SshSysInfoDisk[]
+}
+
+type SshSysInfoResult = { ok: true; info: SshSysInfo } | { ok: false; error: string }

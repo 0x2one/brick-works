@@ -48,6 +48,29 @@ export interface SshSftpReadResult {
 
 export const SSH_SFTP_READ_MAX_BYTES = 10 * 1024 * 1024
 
+export interface SshSysInfoDisk {
+  filesystem: string
+  mount: string
+  size: number
+  used: number
+  avail: number
+  usePercent: number
+}
+
+export interface SshSysInfo {
+  platform: 'linux' | 'darwin' | 'other'
+  hostname: string
+  os: { name: string; kernel: string; arch: string }
+  cpu: { model: string; cores: number; usage: number | null }
+  mem: { total: number; used: number }
+  swap: { total: number; used: number }
+  uptime: number
+  loadavg: number[]
+  disks: SshSysInfoDisk[]
+}
+
+export type SshSysInfoResult = { ok: true; info: SshSysInfo } | { ok: false; error: string }
+
 function normalizeSshError(message: string): string {
   if (/host key|host denied|verification failed/i.test(message)) return 'HOST_KEY_MISMATCH'
   if (
@@ -110,6 +133,287 @@ interface SftpSession {
   sftp: SFTPWrapper
 }
 
+/** Collects system stats over `sh -s` (script fed via stdin) into a line-based `KEY|VAL` protocol. */
+const SYSINFO_SCRIPT = `#!/bin/sh
+uname_s=$(uname -s)
+osname=$uname_s
+cores=0
+model=""
+usage=""
+memtotal=0
+memavail=""
+memfree=""
+swaptotal=0
+swapfree=""
+up=0
+la1=0
+la2=0
+la3=0
+case "$uname_s" in
+  Linux)
+    if [ -r /etc/os-release ]; then
+      osname=$(awk -F= '/^PRETTY_NAME=/{print $2}' /etc/os-release | tr -d '"')
+    fi
+    [ -n "$osname" ] || osname="$uname_s"
+    cores=$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)
+    model=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | sed 's/^[^:]*:[[:space:]]*//')
+    [ -n "$model" ] || model=$(grep -m1 '^Hardware' /proc/cpuinfo 2>/dev/null | sed 's/^[^:]*:[[:space:]]*//')
+    c1=$(grep '^cpu ' /proc/stat 2>/dev/null | sed 's/^cpu[[:space:]]*//')
+    sleep 0.4
+    c2=$(grep '^cpu ' /proc/stat 2>/dev/null | sed 's/^cpu[[:space:]]*//')
+    set -- $c1
+    u1=$1; n1=$2; s1=$3; i1=$4; w1=$5; ir1=$6; si1=$7; st1=$8
+    set -- $c2
+    u2=$1; n2=$2; s2=$3; i2=$4; w2=$5; ir2=$6; si2=$7; st2=$8
+    idle1=$((i1 + w1)); idle2=$((i2 + w2))
+    tot1=$((u1 + n1 + s1 + i1 + w1 + ir1 + si1 + st1))
+    tot2=$((u2 + n2 + s2 + i2 + w2 + ir2 + si2 + st2))
+    dt=$((tot2 - tot1)); di=$((idle2 - idle1))
+    if [ "$dt" -gt 0 ]; then usage=$(((100 * (dt - di)) / dt)); else usage=0; fi
+    memtotal_kb=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null)
+    memavail_kb=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo 2>/dev/null)
+    [ -n "$memavail_kb" ] || memavail_kb=$(awk '/^MemFree:/{print $2}' /proc/meminfo 2>/dev/null)
+    swaptotal_kb=$(awk '/^SwapTotal:/{print $2}' /proc/meminfo 2>/dev/null)
+    swapfree_kb=$(awk '/^SwapFree:/{print $2}' /proc/meminfo 2>/dev/null)
+    [ -n "$memtotal_kb" ] || memtotal_kb=0
+    [ -n "$memavail_kb" ] || memavail_kb=0
+    [ -n "$swaptotal_kb" ] || swaptotal_kb=0
+    [ -n "$swapfree_kb" ] || swapfree_kb=0
+    memtotal=$((memtotal_kb * 1024))
+    memavail=$((memavail_kb * 1024))
+    swaptotal=$((swaptotal_kb * 1024))
+    swapfree=$((swapfree_kb * 1024))
+    up=$(awk '{print int($1)}' /proc/uptime 2>/dev/null)
+    read la1 la2 la3 _ < /proc/loadavg 2>/dev/null
+    ;;
+  Darwin)
+    osname=$(sw_vers -productName 2>/dev/null)
+    osver=$(sw_vers -productVersion 2>/dev/null)
+    [ -n "$osver" ] && osname="$osname $osver"
+    [ -n "$osname" ] || osname="macOS"
+    cores=$(sysctl -n hw.ncpu 2>/dev/null)
+    model=$(sysctl -n machdep.cpu.brand_string 2>/dev/null)
+    tline=$(top -l 2 -n 0 2>/dev/null | tail -n 1)
+    idle=$(echo "$tline" | sed -n 's/.*CPU usage:[[:space:]]*\\([0-9][0-9.]*\\)% user, \\([0-9][0-9.]*\\)% sys, \\([0-9][0-9.]*\\)% idle.*/\\3/p')
+    if [ -n "$idle" ]; then usage=$(awk -v i="$idle" 'BEGIN{printf "%.1f", 100-i}'); fi
+    memtotal=$(sysctl -n hw.memsize 2>/dev/null)
+    vs=$(vm_stat 2>/dev/null)
+    pagesize=$(echo "$vs" | awk '/page size of/{print $8}')
+    [ -n "$pagesize" ] || pagesize=4096
+    fp=$(echo "$vs" | awk -F: '/Pages free/{gsub(/[^0-9]/,"",$2); print $2}')
+    ia=$(echo "$vs" | awk -F: '/Pages inactive/{gsub(/[^0-9]/,"",$2); print $2}')
+    sp=$(echo "$vs" | awk -F: '/Pages speculative/{gsub(/[^0-9]/,"",$2); print $2}')
+    [ -n "$fp" ] || fp=0
+    [ -n "$ia" ] || ia=0
+    [ -n "$sp" ] || sp=0
+    memfree=$(((fp + ia + sp) * pagesize))
+    sw=$(sysctl -n vm.swapusage 2>/dev/null)
+    swaptotal=$(echo "$sw" | awk -F'[ =]+' '{for(i=1;i<=NF;i++){if($i=="total"){v=$(i+2); u=$(i+3); break}} if(u=="G"){printf "%d", v*1024*1024*1024} else if(u=="K"){printf "%d", v*1024} else {printf "%d", v*1024*1024}}')
+    swapfree=$(echo "$sw" | awk -F'[ =]+' '{for(i=1;i<=NF;i++){if($i=="free"){v=$(i+2); u=$(i+3); break}} if(u=="G"){printf "%d", v*1024*1024*1024} else if(u=="K"){printf "%d", v*1024} else {printf "%d", v*1024*1024}}')
+    now=$(date +%s)
+    boot=$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/.*sec = \\([0-9]*\\).*/\\1/p')
+    if [ -n "$boot" ]; then up=$((now - boot)); fi
+    la=$(sysctl -n vm.loadavg 2>/dev/null | tr -d '{}')
+    set -- $la
+    la1=$1; la2=$2; la3=$3
+    ;;
+  *)
+    echo "UNSUPPORTED|1"
+    exit 0
+    ;;
+esac
+echo "PLATFORM|$uname_s"
+echo "OS|$osname"
+echo "HOST|$(hostname 2>/dev/null)"
+echo "KERNEL|$(uname -r)"
+echo "ARCH|$(uname -m)"
+echo "CORES|$cores"
+echo "MODEL|$model"
+echo "CPU_USAGE|$usage"
+echo "MEM_TOTAL|$memtotal"
+if [ -n "$memfree" ]; then echo "MEM_FREE|$memfree"; fi
+if [ -n "$memavail" ]; then echo "MEM_AVAIL|$memavail"; fi
+echo "SWAP_TOTAL|$swaptotal"
+if [ -n "$swapfree" ]; then echo "SWAP_FREE|$swapfree"; fi
+echo "UPTIME|$up"
+echo "LOADAVG|$la1|$la2|$la3"
+if command -v timeout >/dev/null 2>&1; then
+  dfout=$(timeout 3 df -P -k 2>/dev/null)
+else
+  dfout=$(df -P -k 2>/dev/null)
+fi
+echo "$dfout" | {
+  read hdr
+  while read -r fs sz us av pct mnt; do
+    [ -n "$fs" ] || continue
+    case "$fs" in
+      tmpfs|devtmpfs|sysfs|proc|devpts|cgroup*|mqueue|shm|hugetlbfs|debugfs|fusectl|pstore|configfs|ramfs|binfmt_misc|nsfs|bpf|tracefs|securityfs|autofs|overlay|aufs|none)
+        continue ;;
+    esac
+    [ -n "$mnt" ] || mnt="$fs"
+    pct=$(echo "$pct" | tr -d '%')
+    printf 'DISK|%s|%s|%s|%s|%s|%s\n' "$fs" "$mnt" "$sz" "$us" "$av" "$pct"
+  done
+}
+`
+
+const SYSINFO_TIMEOUT_MS = 20000
+
+function execShScript(client: Client, script: string, timeoutMs = SYSINFO_TIMEOUT_MS): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let channel: ClientChannel | null = null
+    const chunks: Buffer[] = []
+    const errChunks: Buffer[] = []
+    const timer = setTimeout(() => {
+      try {
+        channel?.close()
+      } catch {
+        // ignore
+      }
+      reject(new Error('SYSINFO_TIMEOUT'))
+    }, timeoutMs)
+    client.exec('sh -s', (err, ch) => {
+      if (err || !ch) {
+        clearTimeout(timer)
+        reject(new Error(normalizeSshError(err?.message || 'SYSINFO_EXEC_FAILED')))
+        return
+      }
+      channel = ch
+      ch.on('data', (chunk: Buffer | string) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+      })
+      ch.stderr?.on('data', (chunk: Buffer | string) => {
+        errChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+      })
+      ch.on('close', () => {
+        clearTimeout(timer)
+        const out = Buffer.concat(chunks).toString('utf8')
+        const err = Buffer.concat(errChunks).toString('utf8').trim()
+        if (!out && err) {
+          reject(new Error(`SYSINFO_CMD_FAILED: ${err.slice(0, 300)}`))
+          return
+        }
+        resolve(out)
+      })
+      ch.on('error', () => {})
+      ch.end(script)
+    })
+  })
+}
+
+function parseSysInfoOutput(raw: string): SshSysInfo {
+  const info: SshSysInfo = {
+    platform: 'other',
+    hostname: '',
+    os: { name: '', kernel: '', arch: '' },
+    cpu: { model: '', cores: 0, usage: null },
+    mem: { total: 0, used: 0 },
+    swap: { total: 0, used: 0 },
+    uptime: 0,
+    loadavg: [0, 0, 0],
+    disks: []
+  }
+  let memTotal = 0
+  let memAvail: number | undefined
+  let memFree: number | undefined
+  let swapTotal = 0
+  let swapFree: number | undefined
+  let sawPlatform = false
+  const lines = raw.split(/\r?\n/)
+  for (const line of lines) {
+    if (!line) continue
+    const sep = line.indexOf('|')
+    if (sep <= 0) continue
+    const key = line.slice(0, sep)
+    const val = line.slice(sep + 1)
+    switch (key) {
+      case 'PLATFORM': {
+        sawPlatform = true
+        const p = val.toLowerCase()
+        info.platform = p === 'linux' ? 'linux' : p === 'darwin' ? 'darwin' : 'other'
+        break
+      }
+      case 'OS':
+        info.os.name = val
+        break
+      case 'HOST':
+        info.hostname = val
+        break
+      case 'KERNEL':
+        info.os.kernel = val
+        break
+      case 'ARCH':
+        info.os.arch = val
+        break
+      case 'CORES':
+        info.cpu.cores = Number(val) || 0
+        break
+      case 'MODEL':
+        info.cpu.model = val
+        break
+      case 'CPU_USAGE': {
+        const n = Number(val)
+        info.cpu.usage = val && Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null
+        break
+      }
+      case 'MEM_TOTAL':
+        memTotal = Number(val) || 0
+        break
+      case 'MEM_AVAIL':
+        memAvail = Number(val) || 0
+        break
+      case 'MEM_FREE':
+        memFree = Number(val) || 0
+        break
+      case 'SWAP_TOTAL':
+        swapTotal = Number(val) || 0
+        break
+      case 'SWAP_FREE':
+        swapFree = Number(val) || 0
+        break
+      case 'UPTIME':
+        info.uptime = Number(val) || 0
+        break
+      case 'LOADAVG': {
+        const parts = val.split('|').map((p) => Number(p) || 0)
+        info.loadavg = [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0]
+        break
+      }
+      case 'DISK': {
+        const parts = val.split('|')
+        if (parts.length >= 6) {
+          info.disks.push({
+            filesystem: parts[0],
+            mount: parts[1],
+            size: (Number(parts[2]) || 0) * 1024,
+            used: (Number(parts[3]) || 0) * 1024,
+            avail: (Number(parts[4]) || 0) * 1024,
+            usePercent: Number(parts[5]) || 0
+          })
+        }
+        break
+      }
+      case 'UNSUPPORTED':
+        throw new Error('SYSINFO_UNSUPPORTED')
+    }
+  }
+  if (!sawPlatform) {
+    const snippet = raw.trim().slice(0, 300)
+    throw new Error(snippet ? `SYSINFO_UNPARSED: ${snippet}` : 'SYSINFO_EMPTY')
+  }
+  const avail = memAvail ?? (memFree !== undefined ? memTotal - memFree : 0)
+  info.mem = { total: memTotal, used: Math.max(0, memTotal - avail) }
+  info.swap = { total: swapTotal, used: Math.max(0, swapTotal - (swapFree ?? 0)) }
+  info.disks.sort((a, b) => b.used - a.used)
+  return info
+}
+
+interface SysinfoSession {
+  nodeId: string
+  client: Client
+  jumpClients: Client[]
+}
+
 export function createSshClientManager(options: SshClientManagerOptions): {
   startShell: (opts: SshShellStartOpts) => Promise<{ sessionId: string }>
   writeShell: (sessionId: string, dataBase64: string) => Promise<boolean>
@@ -142,8 +446,10 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     remotePath: string,
     maxBytes?: number
   ) => Promise<SshSftpReadResult>
+  sysInfo: (nodeId: string) => Promise<SshSysInfoResult>
   disconnectNode: (nodeId: string) => void
   disconnectSftp: (nodeId: string) => void
+  disconnectSysInfo: (nodeId: string) => void
   stop: () => void
   onShellData: (cb: (data: SshShellData) => void) => () => void
   onShellExit: (cb: (data: SshShellExit) => void) => () => void
@@ -151,6 +457,8 @@ export function createSshClientManager(options: SshClientManagerOptions): {
   const shells = new Map<string, ShellSession>()
   const sftps = new Map<string, SftpSession>()
   const sftpInflight = new Map<string, Promise<SftpSession>>()
+  const sysinfoSessions = new Map<string, SysinfoSession>()
+  const sysinfoInflight = new Map<string, Promise<SysinfoSession>>()
   const shellDataListeners = new Set<(data: SshShellData) => void>()
   const shellExitListeners = new Set<(data: SshShellExit) => void>()
 
@@ -236,6 +544,61 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     } catch (err) {
       sftpInflight.delete(nodeId)
       throw err
+    }
+  }
+
+  const sysinfoClosePending = new Set<string>()
+
+  function sysinfoClientAlive(client: Client): boolean {
+    const sock = (client as unknown as { _sock?: { writable?: boolean } })._sock
+    return Boolean(sock && sock.writable)
+  }
+
+  async function ensureSysinfo(nodeId: string): Promise<SysinfoSession> {
+    const existing = sysinfoSessions.get(nodeId)
+    if (existing) {
+      if (sysinfoClientAlive(existing.client)) return existing
+      sysinfoSessions.delete(nodeId)
+      endClientChain(existing.client, existing.jumpClients)
+    }
+    const inflight = sysinfoInflight.get(nodeId)
+    if (inflight) return inflight
+
+    const promise = (async (): Promise<SysinfoSession> => {
+      const { client, jumpClients } = await openClient(nodeId)
+      if (sysinfoClosePending.has(nodeId)) {
+        // A disconnect was requested while this connection was being established.
+        sysinfoClosePending.delete(nodeId)
+        endClientChain(client, jumpClients)
+        throw new Error('NODE_NOT_CONNECTED')
+      }
+      const session: SysinfoSession = { nodeId, client, jumpClients }
+      sysinfoSessions.set(nodeId, session)
+      client.on('close', () => {
+        if (sysinfoSessions.get(nodeId) === session) sysinfoSessions.delete(nodeId)
+      })
+      client.on('error', () => {
+        if (sysinfoSessions.get(nodeId) === session) sysinfoSessions.delete(nodeId)
+      })
+      return session
+    })()
+
+    sysinfoInflight.set(nodeId, promise)
+    try {
+      return await promise
+    } finally {
+      sysinfoInflight.delete(nodeId)
+    }
+  }
+
+  function disconnectSysinfo(nodeId: string): void {
+    const session = sysinfoSessions.get(nodeId)
+    if (session) {
+      sysinfoSessions.delete(nodeId)
+      endClientChain(session.client, session.jumpClients)
+    } else if (sysinfoInflight.has(nodeId)) {
+      // A connection is being established right now; cancel it once it lands.
+      sysinfoClosePending.add(nodeId)
     }
   }
 
@@ -570,8 +933,24 @@ export function createSshClientManager(options: SshClientManagerOptions): {
       }
     },
 
+    async sysInfo(nodeId) {
+      try {
+        const session = await ensureSysinfo(nodeId)
+        const raw = await execShScript(session.client, SYSINFO_SCRIPT)
+        const info = parseSysInfoOutput(raw)
+        return { ok: true, info }
+      } catch (err) {
+        console.error('[ssh:sysInfo]', nodeId, err instanceof Error ? err.message : err)
+        return { ok: false, error: (err as Error).message }
+      }
+    },
+
     disconnectSftp(nodeId) {
       closeSftp(nodeId)
+    },
+
+    disconnectSysInfo(nodeId) {
+      disconnectSysinfo(nodeId)
     },
 
     disconnectNode(nodeId) {
@@ -579,11 +958,13 @@ export function createSshClientManager(options: SshClientManagerOptions): {
         if (session.nodeId === nodeId) cleanupShell(id, 'node-removed')
       }
       closeSftp(nodeId)
+      disconnectSysinfo(nodeId)
     },
 
     stop() {
       for (const id of [...shells.keys()]) cleanupShell(id, 'stopped', true)
       for (const nodeId of [...sftps.keys()]) closeSftp(nodeId)
+      for (const nodeId of [...sysinfoSessions.keys()]) disconnectSysinfo(nodeId)
     },
 
     onShellData(cb) {

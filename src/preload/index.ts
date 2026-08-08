@@ -125,6 +125,8 @@ const api = {
     sftpReadFile: (nodeId: string, remotePath: string) =>
       ipcRenderer.invoke('ssh:sftpReadFile', nodeId, remotePath),
     sftpDisconnect: (nodeId: string) => ipcRenderer.invoke('ssh:sftpDisconnect', nodeId),
+    sysInfo: (nodeId: string) => ipcRenderer.invoke('ssh:sysInfo', nodeId),
+    disconnectSysInfo: (nodeId: string) => ipcRenderer.invoke('ssh:disconnectSysInfo', nodeId),
     onShellData: (callback: (data: SshShellData) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, data: SshShellData): void =>
         callback(data)
