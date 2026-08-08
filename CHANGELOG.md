@@ -1,5 +1,21 @@
 # Changelog
 
+## BrickWorks v1.0.2
+
+Feature and polish release.
+
+### ✨ Features
+- SSH Client: built-in Monaco file editor with SFTP file reading, editor maximize & sidebar visibility controls
+- SSH Client: system information panel, command snippets, and log tailing with fullscreen toggle and dynamic resizing
+- SSH Client: process/services/ports panels with search, symlink support, new-node quick add
+- PDF preview tool, annotation shape & dimension quick input improvements
+
+### 🐛 Fixes
+- Fixed editor maximization logic in the SSH client
+- Refined SSH client button styles for consistent UI
+
+---
+
 ## BrickWorks v1.0.1
 
 Bugfix and polish release.
