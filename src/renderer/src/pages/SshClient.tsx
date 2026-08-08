@@ -126,6 +126,7 @@ interface SessionTab {
   shellSessionId: string | null
   filesOpen: boolean
   infoOpen: boolean
+  toolOpen: ToolPanelKey | null
   remotePath: string
   connecting: boolean
   /** restored session — do not auto-connect the terminal until the user presses Enter */
@@ -577,7 +578,6 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const [searchText, setSearchText] = useState('')
   const [searchMatch, setSearchMatch] = useState<{ index: number; count: number } | null>(null)
   const searchInputRef = useRef<InputRef>(null)
-  const [toolPanel, setToolPanel] = useState<ToolPanelKey | null>(null)
   const [copyEnabled, setCopyEnabled] = useState(false)
 
   const termHostsRef = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -684,6 +684,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
             shellSessionId: null,
             filesOpen: false,
             infoOpen: false,
+            toolOpen: null,
             noAutoConnect: true,
             remotePath: '/',
             connecting: false
@@ -774,7 +775,6 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         return next
       })
       if (maximized) setMaximized(null)
-      setToolPanel(null)
     },
     [stopTabShell, maximized]
   )
@@ -1207,6 +1207,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       shellSessionId: null,
       filesOpen: false,
       infoOpen: false,
+      toolOpen: null,
       remotePath: '/',
       connecting: true
     }
@@ -1243,10 +1244,11 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     if (!activeTab) return
     setTabs((prev) =>
       prev.map((tab) =>
-        tab.id === activeTab.id ? { ...tab, filesOpen: true, infoOpen: false } : tab
+        tab.id === activeTab.id
+          ? { ...tab, filesOpen: true, infoOpen: false, toolOpen: null }
+          : tab
       )
     )
-    setToolPanel(null)
     setMaximized((m) => (m === 'console' ? null : m))
     void loadDir(activeTab.id, activeTab.nodeId, activeTab.remotePath || '/')
   }, [activeTab, loadDir])
@@ -1296,10 +1298,9 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     }
     setTabs((prev) =>
       prev.map((tab) =>
-        tab.id === tabId ? { ...tab, infoOpen: true, filesOpen: false } : tab
+        tab.id === tabId ? { ...tab, infoOpen: true, filesOpen: false, toolOpen: null } : tab
       )
     )
-    setToolPanel(null)
     setMaximized((m) => (m === 'files' ? null : m))
     void refreshSysInfo()
   }, [activeTab, refreshSysInfo])
@@ -1320,19 +1321,23 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     (key: ToolPanelKey): void => {
       setTabs((prev) =>
         prev.map((tab) =>
-          tab.id === activeTab?.id ? { ...tab, filesOpen: false, infoOpen: false } : tab
+          tab.id === activeTab?.id
+            ? { ...tab, filesOpen: false, infoOpen: false, toolOpen: key }
+            : tab
         )
       )
-      setToolPanel(key)
       setMaximized((m) => (m === 'files' || m === 'info' ? null : m))
     },
     [activeTab?.id]
   )
 
   const closeTool = useCallback((): void => {
-    setToolPanel(null)
+    if (!activeTab) return
+    setTabs((prev) =>
+      prev.map((tab) => (tab.id === activeTab.id ? { ...tab, toolOpen: null } : tab))
+    )
     if (maximized === 'tool') setMaximized(null)
-  }, [maximized])
+  }, [activeTab, maximized])
 
   useEffect(() => {
     if (!active || !activeTab?.infoOpen) return
@@ -1849,23 +1854,24 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
 
   const filesOpen = !!activeTab?.filesOpen
   const infoOpen = !!activeTab?.infoOpen
+  const activeTool = activeTab?.toolOpen ?? null
   const showSidebar = maximized === null || maximized === 'editor'
   const showConsole = maximized !== 'files' && maximized !== 'info' && maximized !== 'tool'
   const showConsoleTitle = showConsole && maximized !== 'editor'
   const showFiles = filesOpen && maximized !== 'console' && maximized !== 'info' && maximized !== 'tool'
   const showInfo = infoOpen && maximized !== 'console' && maximized !== 'files' && maximized !== 'tool'
-  const isCommands = toolPanel === 'commands'
+  const isCommands = activeTool === 'commands'
   const showCommands =
     isCommands && maximized !== 'console' && maximized !== 'files' && maximized !== 'info'
   const showTools =
-    toolPanel !== null &&
+    activeTool !== null &&
     !isCommands &&
     maximized !== 'console' &&
     maximized !== 'files' &&
     maximized !== 'info'
 
   const toolTitle = useMemo(() => {
-    switch (toolPanel) {
+    switch (activeTool) {
       case 'commands':
         return t('sshToolCommands')
       case 'process':
@@ -1879,13 +1885,13 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       default:
         return ''
     }
-  }, [toolPanel, t])
+  }, [activeTool, t])
 
   const renderToolPanel = useCallback(
     (tab: SessionTab): React.JSX.Element | null => {
       const toggleFullscreen = (): void =>
         setMaximized((m) => (m === 'tool' ? null : 'tool'))
-      switch (toolPanel) {
+      switch (activeTool) {
         case 'commands':
           return <CommandPanel shellSessionId={tab.shellSessionId} />
         case 'process':
@@ -1928,7 +1934,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
           return null
       }
     },
-    [toolPanel, closeTool, maximized]
+    [activeTool, closeTool, maximized]
   )
   const entries = activeTab ? (entriesByTab[activeTab.id] ?? []) : []
   const crumbs = pathSegments(activeTab?.remotePath || '/')
@@ -2093,7 +2099,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       return
     const id = window.requestAnimationFrame(fitActiveTerm)
     return () => window.cancelAnimationFrame(id)
-  }, [active, activeTabId, maximized, toolPanel, toolHeight, fitActiveTerm])
+  }, [active, activeTabId, maximized, activeTool, toolHeight, fitActiveTerm])
 
   return (
     <div
@@ -2440,7 +2446,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   >
                     <button
                       type="button"
-                      className={toolPanel ? BTN_ICON_ACTIVE : BTN_ICON}
+                      className={activeTool ? BTN_ICON_ACTIVE : BTN_ICON}
                       title={t('sshTools')}
                     >
                       <ToolOutlined />
