@@ -1041,6 +1041,11 @@ ipcMain.handle('ssh:listServices', async (_event, nodeId: string) => {
   return sshClientManager.listServices(nodeId)
 })
 
+ipcMain.handle('ssh:listPorts', async (_event, nodeId: string) => {
+  if (!nodeId) throw new Error('NODE_NOT_FOUND')
+  return sshClientManager.listPorts(nodeId)
+})
+
 ipcMain.handle(
   'ssh:serviceAction',
   async (

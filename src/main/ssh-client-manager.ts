@@ -127,6 +127,91 @@ export interface SshServiceInfo {
   description: string
 }
 
+export interface SshPortInfo {
+  protocol: string
+  address: string
+  port: number
+  state: string
+  pid: number | null
+  process: string
+}
+
+export function parseSsOutput(raw: string): SshPortInfo[] {
+  const ports: SshPortInfo[] = []
+  const lines = raw.split(/\r?\n/)
+  for (const line of lines) {
+    if (!line.trim()) continue
+    if (/^Netid\s/.test(line) || /^State\s/.test(line) || /^Proto\s/.test(line)) continue
+    // ss -tulnp columns: Netid State Recv-Q Send-Q Local Address:Port Peer Address:Port Process
+    const match = line.match(
+      /^\s*(\S+)\s+(\S+)\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(.*)$/
+    )
+    if (!match) continue
+    const [, protocol, state, local, rest] = match
+    const port = parsePortFromAddr(local)
+    if (port === null) continue
+    const pid = parsePidFromProcess(rest)
+    ports.push({
+      protocol,
+      address: stripPortFromAddr(local),
+      port,
+      state: state || '',
+      pid,
+      process: parseProcessFromText(rest)
+    })
+  }
+  return ports
+}
+
+export function parseNetstatOutput(raw: string): SshPortInfo[] {
+  const ports: SshPortInfo[] = []
+  const lines = raw.split(/\r?\n/)
+  for (const line of lines) {
+    if (!line.trim()) continue
+    if (/^Proto\s/.test(line) || /^Active/.test(line)) continue
+    // netstat -tulnp columns: Proto Recv-Q Send-Q Local Address Foreign Address State PID/Program name
+    const match = line.match(/^\s*(\S+)\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(\S+)\s+(.*)$/)
+    if (!match) continue
+    const [, protocol, local, state, rest] = match
+    const port = parsePortFromAddr(local)
+    if (port === null) continue
+    const pidMatch = rest.match(/^\s*(\d+)\/(\S+)/)
+    ports.push({
+      protocol,
+      address: stripPortFromAddr(local),
+      port,
+      state: state || '',
+      pid: pidMatch ? Number(pidMatch[1]) : null,
+      process: pidMatch ? pidMatch[2] : rest.trim()
+    })
+  }
+  return ports
+}
+
+function parsePortFromAddr(addr: string): number | null {
+  if (!addr) return null
+  // IPv6: [::]:8080 or *:8080 ; IPv4: 0.0.0.0:8080 ; host:port
+  const m = addr.match(/^(?:\[[^\]]*\]|[^:]*):(\d+)$/)
+  return m ? Number(m[1]) : null
+}
+
+function stripPortFromAddr(addr: string): string {
+  if (!addr) return ''
+  const m = addr.match(/^(\[[^\]]*\]|[^:]*):\d+$/)
+  return m ? m[1] : addr
+}
+
+function parsePidFromProcess(text: string): number | null {
+  const m = text.match(/pid=(\d+)/)
+  return m ? Number(m[1]) : null
+}
+
+function parseProcessFromText(text: string): string {
+  const m = text.match(/"([^"]+)"|users:\(\(([^,]+)/)
+  if (!m) return text.trim()
+  return (m[1] || m[2] || '').trim()
+}
+
 export function parseSystemctlOutput(raw: string): SshServiceInfo[] {
   const services: SshServiceInfo[] = []
   const lines = raw.split(/\r?\n/)
@@ -575,6 +660,7 @@ export function createSshClientManager(options: SshClientManagerOptions): {
   listProcesses: (nodeId: string) => Promise<SshProcessInfo[]>
   killProcess: (nodeId: string, pid: number, signal?: string) => Promise<{ ok: boolean }>
   listServices: (nodeId: string) => Promise<SshServiceInfo[]>
+  listPorts: (nodeId: string) => Promise<SshPortInfo[]>
   serviceAction: (
     nodeId: string,
     unit: string,
@@ -1158,6 +1244,28 @@ export function createSshClientManager(options: SshClientManagerOptions): {
         return { ok: true, output: (res.stdout + res.stderr).trim() }
       } catch (err) {
         console.error('[ssh:serviceAction]', nodeId, unit, action, err instanceof Error ? err.message : err)
+        throw err
+      }
+    },
+
+    async listPorts(nodeId) {
+      try {
+        const session = await ensureExecSession(nodeId)
+        const res = await execRemote(session.client, 'ss -tulnp 2>/dev/null')
+        let ports: SshPortInfo[] = []
+        if (res.code === 0 && res.stdout.trim()) {
+          ports = parseSsOutput(res.stdout)
+        } else {
+          const net = await execRemote(session.client, 'netstat -tulnp 2>/dev/null')
+          if (net.code === 0 && net.stdout.trim()) {
+            ports = parseNetstatOutput(net.stdout)
+          }
+        }
+        if (!ports.length) throw new Error(res.stderr.trim() || 'SS_FAILED')
+        ports.sort((a, b) => a.port - b.port || (a.protocol < b.protocol ? -1 : 1))
+        return ports
+      } catch (err) {
+        console.error('[ssh:listPorts]', nodeId, err instanceof Error ? err.message : err)
         throw err
       }
     },

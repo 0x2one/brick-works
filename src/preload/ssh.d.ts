@@ -183,6 +183,15 @@ interface SshServiceInfo {
   description: string
 }
 
+interface SshPortInfo {
+  protocol: string
+  address: string
+  port: number
+  state: string
+  pid: number | null
+  process: string
+}
+
 type SshServiceAction = 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable'
 
 interface SshExecData {

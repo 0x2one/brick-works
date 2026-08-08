@@ -53,6 +53,7 @@ import {
   ZoomOutOutlined,
   SnippetsOutlined,
   ToolOutlined,
+  NodeIndexOutlined,
   StarOutlined,
   StarFilled,
   BookOutlined,
@@ -68,6 +69,7 @@ import CommandPanel from '../components/CommandPanel'
 import ProcessPanel from '../components/ProcessPanel'
 import ServicesPanel from '../components/ServicesPanel'
 import LogTailPanel from '../components/LogTailPanel'
+import PortsPanel from '../components/PortsPanel'
 import { useTheme } from '../theme/ThemeProvider'
 import { SortableList } from '../components/SortableList'
 
@@ -114,7 +116,7 @@ const SSH_ERROR_CODES = [
 
 type MaximizeMode = null | 'console' | 'files' | 'editor' | 'info' | 'tool'
 
-type ToolPanelKey = 'commands' | 'process' | 'services' | 'logs'
+type ToolPanelKey = 'commands' | 'process' | 'services' | 'logs' | 'ports'
 
 interface SessionTab {
   id: string
@@ -1872,6 +1874,8 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         return t('sshToolServices')
       case 'logs':
         return t('sshToolLogs')
+      case 'ports':
+        return t('sshToolPorts')
       default:
         return ''
     }
@@ -1905,6 +1909,15 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         case 'logs':
           return (
             <LogTailPanel
+              nodeId={tab.nodeId}
+              onClose={closeTool}
+              fullscreen={maximized === 'tool'}
+              onToggleFullscreen={toggleFullscreen}
+            />
+          )
+        case 'ports':
+          return (
+            <PortsPanel
               nodeId={tab.nodeId}
               onClose={closeTool}
               fullscreen={maximized === 'tool'}
@@ -2419,7 +2432,8 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                         { key: 'commands', icon: <SnippetsOutlined />, label: t('sshToolCommands') },
                         { key: 'process', icon: <ApiOutlined />, label: t('sshToolProcess') },
                         { key: 'services', icon: <CloudServerOutlined />, label: t('sshToolServices') },
-                        { key: 'logs', icon: <FileTextOutlined />, label: t('sshToolLogs') }
+                        { key: 'logs', icon: <FileTextOutlined />, label: t('sshToolLogs') },
+                        { key: 'ports', icon: <NodeIndexOutlined />, label: t('sshToolPorts') }
                       ],
                       onClick: ({ key }) => openTool(key as ToolPanelKey)
                     }}

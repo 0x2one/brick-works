@@ -85,6 +85,7 @@ interface SshApi {
   listProcesses: (nodeId: string) => Promise<SshProcessInfo[]>
   killProcess: (nodeId: string, pid: number, signal?: string) => Promise<{ ok: boolean }>
   listServices: (nodeId: string) => Promise<SshServiceInfo[]>
+  listPorts: (nodeId: string) => Promise<SshPortInfo[]>
   serviceAction: (nodeId: string, unit: string, action: SshServiceAction) => Promise<{ ok: boolean; output: string }>
   startLogTail: (nodeId: string, path: string) => Promise<{ sessionId: string }>
   stopLogTail: (sessionId: string) => Promise<boolean>

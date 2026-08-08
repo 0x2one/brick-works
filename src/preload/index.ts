@@ -156,6 +156,7 @@ const api = {
     killProcess: (nodeId: string, pid: number, signal?: string) =>
       ipcRenderer.invoke('ssh:killProcess', nodeId, pid, signal),
     listServices: (nodeId: string) => ipcRenderer.invoke('ssh:listServices', nodeId),
+    listPorts: (nodeId: string) => ipcRenderer.invoke('ssh:listPorts', nodeId),
     serviceAction: (
       nodeId: string,
       unit: string,
