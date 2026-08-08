@@ -122,6 +122,8 @@ const api = {
       ipcRenderer.invoke('ssh:sftpMkdir', nodeId, remotePath),
     sftpWriteFile: (nodeId: string, remotePath: string, content?: string) =>
       ipcRenderer.invoke('ssh:sftpWriteFile', nodeId, remotePath, content),
+    sftpReadFile: (nodeId: string, remotePath: string) =>
+      ipcRenderer.invoke('ssh:sftpReadFile', nodeId, remotePath),
     sftpDisconnect: (nodeId: string) => ipcRenderer.invoke('ssh:sftpDisconnect', nodeId),
     onShellData: (callback: (data: SshShellData) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, data: SshShellData): void =>

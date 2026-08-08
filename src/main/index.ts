@@ -960,6 +960,11 @@ ipcMain.handle(
   }
 )
 
+ipcMain.handle('ssh:sftpReadFile', async (_event, nodeId: string, remotePath: string) => {
+  if (!nodeId || !remotePath) throw new Error('INVALID')
+  return sshClientManager.sftpReadFile(nodeId, remotePath)
+})
+
 /* ── K8s management ── */
 
 const k8sStore = createK8sStore()

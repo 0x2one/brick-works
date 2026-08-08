@@ -40,11 +40,15 @@ import {
   FileAddOutlined,
   FolderAddOutlined,
   CodeOutlined,
-  HolderOutlined
+  HolderOutlined,
+  SaveOutlined,
+  FileTextOutlined
 } from '@ant-design/icons'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { Editor } from '@monaco-editor/react'
+import '../components/MonacoSetup'
 import { useTheme } from '../theme/ThemeProvider'
 import { SortableList } from '../components/SortableList'
 
@@ -80,6 +84,8 @@ const SSH_ERROR_CODES = [
   'SFTP_UPLOAD_FAILED',
   'SFTP_MKDIR_FAILED',
   'SFTP_WRITE_FAILED',
+  'SFTP_READ_FAILED',
+  'FILE_TOO_LARGE',
   'SHELL_FAILED'
 ] as const
 
@@ -100,6 +106,20 @@ interface TermRuntime {
   term: Terminal
   fit: FitAddon
   shellSessionId: string | null
+}
+
+interface SshFileEditorState {
+  tabId: string
+  nodeId: string
+  path: string
+  name: string
+  content: string
+  original: string
+  binary: boolean
+  size: number
+  loading: boolean
+  saving: boolean
+  error?: string
 }
 
 interface EditorValues {
@@ -142,6 +162,8 @@ function mapSshError(
   if (code === 'SFTP_DOWNLOAD_FAILED') return t('sshClientDownloadFail')
   if (code === 'SFTP_UPLOAD_FAILED') return t('sshClientUploadFail')
   if (code === 'SFTP_MKDIR_FAILED' || code === 'SFTP_WRITE_FAILED') return t('sshClientCreateFail')
+  if (code === 'SFTP_READ_FAILED') return t('sshClientEditReadFail')
+  if (code === 'FILE_TOO_LARGE') return t('sshClientEditTooLarge')
   if (code === 'SHELL_FAILED') return t('sshClientShellFail')
   return t('sshConnectFail', { msg: code })
 }
@@ -175,6 +197,60 @@ function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+const EXT_TO_LANG: Record<string, string> = {
+  js: 'javascript',
+  jsx: 'javascript',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  ts: 'typescript',
+  tsx: 'typescript',
+  mts: 'typescript',
+  cts: 'typescript',
+  json: 'json',
+  html: 'html',
+  htm: 'html',
+  css: 'css',
+  scss: 'scss',
+  less: 'less',
+  md: 'markdown',
+  markdown: 'markdown',
+  yml: 'yaml',
+  yaml: 'yaml',
+  xml: 'xml',
+  svg: 'xml',
+  sh: 'shell',
+  bash: 'shell',
+  zsh: 'shell',
+  py: 'python',
+  java: 'java',
+  c: 'c',
+  h: 'c',
+  cpp: 'cpp',
+  cc: 'cpp',
+  cxx: 'cpp',
+  hpp: 'cpp',
+  go: 'go',
+  rs: 'rust',
+  php: 'php',
+  rb: 'ruby',
+  sql: 'sql',
+  dockerfile: 'dockerfile',
+  ini: 'ini',
+  toml: 'toml',
+  conf: 'ini',
+  txt: 'plaintext',
+  log: 'plaintext'
+}
+
+function extToLang(name: string): string {
+  const idx = name.lastIndexOf('.')
+  if (idx <= 0) {
+    const lower = name.toLowerCase()
+    return lower === 'dockerfile' || lower === 'makefile' ? lower : 'plaintext'
+  }
+  return EXT_TO_LANG[name.slice(idx + 1).toLowerCase()] ?? 'plaintext'
 }
 
 function pathSegments(path: string): Array<{ name: string; path: string }> {
@@ -435,6 +511,10 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const [createName, setCreateName] = useState('')
   const [copyTipVisible, setCopyTipVisible] = useState(false)
 
+  const [editorsByTab, setEditorsByTab] = useState<Record<string, SshFileEditorState[]>>({})
+  const [activeEditorPathByTab, setActiveEditorPathByTab] = useState<Record<string, string>>({})
+  const [editorHeight, setEditorHeight] = useState(320)
+
   const termHostsRef = useRef<Map<string, HTMLDivElement>>(new Map())
   const termsRef = useRef<Map<string, TermRuntime>>(new Map())
   const tabsRef = useRef<SessionTab[]>([])
@@ -442,6 +522,9 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const connectShellRef = useRef<(tabId: string, reconnect?: boolean) => Promise<void>>(
     async () => {}
   )
+  const editorsRef = useRef<Record<string, SshFileEditorState[]>>({})
+  const activeEditorPathRef = useRef<Record<string, string>>({})
+  const consoleHostRef = useRef<HTMLDivElement | null>(null)
   const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const copyTipHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notifyCopiedRef = useRef<() => void>(() => {})
@@ -470,6 +553,14 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   useEffect(() => {
     tabsRef.current = tabs
   }, [tabs])
+
+  useEffect(() => {
+    editorsRef.current = editorsByTab
+  }, [editorsByTab])
+
+  useEffect(() => {
+    activeEditorPathRef.current = activeEditorPathByTab
+  }, [activeEditorPathByTab])
 
   const loadNodes = useCallback(() => {
     window.api.ssh
@@ -546,6 +637,16 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         return next
       })
       setEntriesByTab((prev) => {
+        const next = { ...prev }
+        delete next[tabId]
+        return next
+      })
+      setEditorsByTab((prev) => {
+        const next = { ...prev }
+        delete next[tabId]
+        return next
+      })
+      setActiveEditorPathByTab((prev) => {
         const next = { ...prev }
         delete next[tabId]
         return next
@@ -829,12 +930,17 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     (tabId: string) => {
       const tab = tabsRef.current.find((item) => item.id === tabId)
       if (!tab) return
-      if (tab.shellSessionId || tab.connecting) {
+      const list = editorsRef.current[tabId] ?? []
+      const dirty = list.some((e) => e.content !== e.original)
+      if (tab.shellSessionId || tab.connecting || dirty) {
         modal.confirm({
-          title: t('sshClientCloseTab'),
-          content: t('sshClientCloseTabConfirm', { name: tab.title }),
-          okText: t('sshClientClose'),
+          title: dirty ? t('sshClientEditUnsaved') : t('sshClientCloseTab'),
+          content: dirty
+            ? t('sshClientEditDiscardAllConfirm', { name: tab.title })
+            : t('sshClientCloseTabConfirm', { name: tab.title }),
+          okText: dirty ? t('sshClientEditDiscard') : t('sshClientClose'),
           cancelText: t('sshCancel'),
+          okButtonProps: dirty ? { danger: true } : undefined,
           onOk: () => closeTab(tabId)
         })
         return
@@ -864,6 +970,241 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     )
     if (!othersOpen) await window.api.ssh.sftpDisconnect(nodeId)
   }, [activeTab, maximized])
+
+  const editorHeightRef = useRef(editorHeight)
+  useEffect(() => {
+    editorHeightRef.current = editorHeight
+  }, [editorHeight])
+
+  const fitActiveTerm = useCallback(() => {
+    if (!activeTabId) return
+    const rt = termsRef.current.get(activeTabId)
+    if (!rt) return
+    rt.fit.fit()
+    if (rt.shellSessionId) {
+      void window.api.ssh.resizeShell(rt.shellSessionId, rt.term.cols, rt.term.rows)
+    }
+  }, [activeTabId])
+
+  const patchEditor = useCallback(
+    (tabId: string, path: string, patch: Partial<SshFileEditorState>): void => {
+      setEditorsByTab((prev) => {
+        const list = prev[tabId]
+        if (!list) return prev
+        return {
+          ...prev,
+          [tabId]: list.map((e) => (e.path === path ? { ...e, ...patch } : e))
+        }
+      })
+    },
+    []
+  )
+
+  const updateEditorContent = useCallback(
+    (tabId: string, path: string, content: string): void => {
+      setEditorsByTab((prev) => {
+        const list = prev[tabId]
+        if (!list) return prev
+        return { ...prev, [tabId]: list.map((e) => (e.path === path ? { ...e, content } : e)) }
+      })
+    },
+    []
+  )
+
+  const focusEditor = useCallback((tabId: string, path: string): void => {
+    setActiveEditorPathByTab((prev) => ({ ...prev, [tabId]: path }))
+  }, [])
+
+  const confirmCloseEditor = useCallback(
+    (tabId: string, path: string): Promise<boolean> =>
+      new Promise((resolve) => {
+        const ed = (editorsRef.current[tabId] ?? []).find((e) => e.path === path)
+        if (!ed || ed.content === ed.original) {
+          resolve(true)
+          return
+        }
+        modal.confirm({
+          title: t('sshClientEditUnsaved'),
+          content: t('sshClientEditDiscardConfirm', { name: ed.name }),
+          okText: t('sshClientEditDiscard'),
+          cancelText: t('sshCancel'),
+          okButtonProps: { danger: true },
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false)
+        })
+      }),
+    [modal, t]
+  )
+
+  const confirmDiscardAllEditors = useCallback(
+    (tabId: string): Promise<boolean> =>
+      new Promise((resolve) => {
+        const list = editorsRef.current[tabId] ?? []
+        if (!list.some((e) => e.content !== e.original)) {
+          resolve(true)
+          return
+        }
+        modal.confirm({
+          title: t('sshClientEditUnsaved'),
+          content: t('sshClientEditDiscardAllConfirm'),
+          okText: t('sshClientEditDiscard'),
+          cancelText: t('sshCancel'),
+          okButtonProps: { danger: true },
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false)
+        })
+      }),
+    [modal, t]
+  )
+
+  const openFileEditor = useCallback(
+    async (entry: SshSftpEntry): Promise<void> => {
+      if (!activeTab || entry.type !== 'file') return
+      const tabId = activeTab.id
+      const nodeId = activeTab.nodeId
+      const list = editorsRef.current[tabId] ?? []
+      const existing = list.find((e) => e.path === entry.path)
+      if (existing) {
+        if (!existing.loading) focusEditor(tabId, entry.path)
+        return
+      }
+      if (maximized === 'files') setMaximized('console')
+      const init: SshFileEditorState = {
+        tabId,
+        nodeId,
+        path: entry.path,
+        name: entry.name,
+        content: '',
+        original: '',
+        binary: false,
+        size: entry.size,
+        loading: true,
+        saving: false
+      }
+      editorsRef.current = { ...editorsRef.current, [tabId]: [...list, init] }
+      setEditorsByTab((prev) => ({ ...prev, [tabId]: [...(prev[tabId] ?? []), init] }))
+      focusEditor(tabId, entry.path)
+      try {
+        const res = await window.api.ssh.sftpReadFile(nodeId, entry.path)
+        if (!(editorsRef.current[tabId] ?? []).some((e) => e.path === entry.path)) return
+        if (res.ok && res.binary) {
+          patchEditor(tabId, entry.path, { binary: true, loading: false })
+        } else if (res.ok) {
+          patchEditor(tabId, entry.path, {
+            binary: false,
+            loading: false,
+            content: res.content ?? '',
+            original: res.content ?? ''
+          })
+        } else if (res.error === 'FILE_TOO_LARGE') {
+          patchEditor(tabId, entry.path, {
+            loading: false,
+            error: t('sshClientEditTooLargeSize', {
+              size: formatSize(res.size ?? 0),
+              max: formatSize(res.maxBytes ?? 0)
+            })
+          })
+        } else {
+          patchEditor(tabId, entry.path, { loading: false, error: mapSshError(res.error ?? '', t) })
+        }
+      } catch (err) {
+        if (!(editorsRef.current[tabId] ?? []).some((e) => e.path === entry.path)) return
+        patchEditor(tabId, entry.path, { loading: false, error: mapSshError(err, t) })
+      }
+    },
+    [activeTab, focusEditor, maximized, patchEditor, t]
+  )
+
+  const saveFileEditor = useCallback(
+    async (tabId: string, path: string): Promise<void> => {
+      const ed = (editorsRef.current[tabId] ?? []).find((e) => e.path === path)
+      if (!ed || ed.binary || ed.loading || ed.saving || ed.content === ed.original) return
+      patchEditor(tabId, path, { saving: true })
+      try {
+        const res = await window.api.ssh.sftpWriteFile(ed.nodeId, ed.path, ed.content)
+        if (!res.ok) {
+          patchEditor(tabId, path, { saving: false })
+          message.error(mapSshError(res.error ?? '', t))
+          return
+        }
+        patchEditor(tabId, path, { saving: false, original: ed.content })
+        message.success(t('sshClientEditSaved'))
+        const tab = tabsRef.current.find((item) => item.id === tabId)
+        if (tab) void loadDir(tabId, tab.nodeId, tab.remotePath || '/')
+      } catch (err) {
+        patchEditor(tabId, path, { saving: false })
+        message.error(mapSshError(err, t))
+      }
+    },
+    [loadDir, message, patchEditor, t]
+  )
+
+  const closeFileEditor = useCallback(
+    async (tabId: string, path: string): Promise<void> => {
+      if (!(await confirmCloseEditor(tabId, path))) return
+      const list = editorsRef.current[tabId] ?? []
+      const idx = list.findIndex((e) => e.path === path)
+      setEditorsByTab((prev) => {
+        const cur = (prev[tabId] ?? []).filter((e) => e.path !== path)
+        const next = { ...prev }
+        if (cur.length) next[tabId] = cur
+        else delete next[tabId]
+        return next
+      })
+      setActiveEditorPathByTab((prev) => {
+        if (prev[tabId] !== path) return prev
+        const remaining = list.filter((e) => e.path !== path)
+        const neighbor = remaining[idx] ?? remaining[idx - 1] ?? remaining[0]
+        const next = { ...prev }
+        if (neighbor) next[tabId] = neighbor.path
+        else delete next[tabId]
+        return next
+      })
+    },
+    [confirmCloseEditor]
+  )
+
+  const closeEditorPanel = useCallback(
+    async (tabId: string): Promise<void> => {
+      if (!(await confirmDiscardAllEditors(tabId))) return
+      setEditorsByTab((prev) => {
+        const next = { ...prev }
+        delete next[tabId]
+        return next
+      })
+      setActiveEditorPathByTab((prev) => {
+        const next = { ...prev }
+        delete next[tabId]
+        return next
+      })
+    },
+    [confirmDiscardAllEditors]
+  )
+
+  const handleEditorDividerPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>): void => {
+      const container = consoleHostRef.current
+      if (!container) return
+      e.preventDefault()
+      const startY = e.clientY
+      const startH = editorHeightRef.current
+      const containerH = container.clientHeight
+      const onMove = (ev: PointerEvent): void => {
+        const next = startH - (ev.clientY - startY)
+        const min = 120
+        const max = Math.max(min + 60, containerH - 120)
+        setEditorHeight(Math.min(max, Math.max(min, next)))
+      }
+      const onUp = (): void => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        fitActiveTerm()
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [fitActiveTerm]
+  )
 
   const handleTest = useCallback(
     async (node: SshNodeView) => {
@@ -995,6 +1336,22 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const showFiles = filesOpen && maximized !== 'console'
   const entries = activeTab ? (entriesByTab[activeTab.id] ?? []) : []
   const crumbs = pathSegments(activeTab?.remotePath || '/')
+  const tabEditors = activeTab ? (editorsByTab[activeTab.id] ?? []) : []
+  const activeEditor = activeTab
+    ? (tabEditors.find((e) => e.path === activeEditorPathByTab[activeTab.id]) ??
+      tabEditors[0] ??
+      null)
+    : null
+  const activeEditorDirty = activeEditor
+    ? activeEditor.content !== activeEditor.original
+    : false
+  const hasActiveEditor = tabEditors.length > 0
+
+  useEffect(() => {
+    if (!active || !activeTabId) return
+    const id = window.requestAnimationFrame(fitActiveTerm)
+    return () => window.cancelAnimationFrame(id)
+  }, [active, activeTabId, hasActiveEditor, fitActiveTerm])
 
   return (
     <div
@@ -1359,25 +1716,170 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
             <div className="flex-1 min-h-0 flex overflow-hidden">
               {showConsole && (
                 <div
-                  className={`min-w-0 min-h-0 relative bg-[var(--bg-warm)] ${
+                  ref={consoleHostRef}
+                  className={`min-w-0 min-h-0 flex flex-col bg-[var(--bg-warm)] ${
                     showFiles ? 'flex-1 border-r border-[var(--border-subtle)]' : 'flex-1'
                   }`}
                 >
-                  {tabs.map((tab) => (
-                    <div
-                      key={tab.id}
-                      className="absolute inset-0 p-1"
-                      style={{ display: tab.id === activeTabId ? 'block' : 'none' }}
-                    >
+                  <div className="relative flex-1 min-h-0">
+                    {tabs.map((tab) => (
                       <div
-                        ref={(el) => {
-                          if (el) termHostsRef.current.set(tab.id, el)
-                          else termHostsRef.current.delete(tab.id)
-                        }}
-                        className="h-full w-full min-h-0 overflow-hidden bg-[var(--bg-warm)]"
-                      />
-                    </div>
-                  ))}
+                        key={tab.id}
+                        className="absolute inset-0 p-1"
+                        style={{ display: tab.id === activeTabId ? 'block' : 'none' }}
+                      >
+                        <div
+                          ref={(el) => {
+                            if (el) termHostsRef.current.set(tab.id, el)
+                            else termHostsRef.current.delete(tab.id)
+                          }}
+                          className="h-full w-full min-h-0 overflow-hidden bg-[var(--bg-warm)]"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {activeEditor && (
+                    <>
+                      <div
+                        className="shrink-0 h-2 flex items-center justify-center cursor-row-resize text-[var(--text-secondary)] hover:bg-[var(--accent)]/15 active:bg-[var(--accent)]/25"
+                        title={t('sshClientEditResize')}
+                        onPointerDown={handleEditorDividerPointerDown}
+                      >
+                        <HolderOutlined className="text-[10px]" />
+                      </div>
+                      <div
+                        className="shrink-0 flex flex-col min-h-0 bg-[var(--surface)] border-t border-[var(--border-subtle)]"
+                        style={{ height: editorHeight }}
+                      >
+                        <div className="h-9 shrink-0 flex items-center gap-1 px-2 border-b border-[var(--border-subtle)] bg-[var(--bg-warm)]">
+                          <FileTextOutlined className="shrink-0 text-[var(--text-secondary)] mr-0.5" />
+                          <div className="flex-1 min-w-0 flex items-center gap-1 overflow-x-auto">
+                            {tabEditors.map((ed) => {
+                              const isActive = activeEditor?.path === ed.path
+                              const edDirty = ed.content !== ed.original
+                              return (
+                                <div
+                                  key={ed.path}
+                                  title={ed.path}
+                                  className={`shrink-0 h-7 pl-2.5 pr-1.5 rounded-lg text-xs flex items-center gap-1.5 border cursor-pointer transition-colors ${
+                                    isActive
+                                      ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                                      : 'bg-[var(--surface)] text-[var(--text-primary)] border-[var(--border-subtle)] hover:border-[var(--text-secondary)]'
+                                  }`}
+                                  onClick={() => focusEditor(activeTab.id, ed.path)}
+                                >
+                                  {ed.loading ? (
+                                    <LoadingOutlined className="text-[10px]" />
+                                  ) : (
+                                    <FileTextOutlined className="text-[10px]" />
+                                  )}
+                                  <span className="max-w-[140px] truncate">{ed.name}</span>
+                                  {edDirty && (
+                                    <span
+                                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                                      style={{
+                                        background: isActive
+                                          ? 'rgba(255,255,255,0.85)'
+                                          : 'var(--accent)'
+                                      }}
+                                    />
+                                  )}
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    className={`h-4 w-4 rounded flex items-center justify-center ${
+                                      isActive ? 'hover:bg-white/20' : 'hover:bg-[var(--border-subtle)]'
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      void closeFileEditor(activeTab.id, ed.path)
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.stopPropagation()
+                                        void closeFileEditor(activeTab.id, ed.path)
+                                      }
+                                    }}
+                                  >
+                                    <CloseOutlined className="text-[9px]" />
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                          <button
+                            type="button"
+                            className={BTN_TEXT}
+                            disabled={activeEditor.saving || !activeEditorDirty}
+                            title={t('sshClientEditSaveHint')}
+                            onClick={() => void saveFileEditor(activeEditor.tabId, activeEditor.path)}
+                          >
+                            {activeEditor.saving ? <LoadingOutlined /> : <SaveOutlined />}
+                            {t('sshClientEditSave')}
+                          </button>
+                          <button
+                            type="button"
+                            className={BTN_ICON}
+                            title={t('sshClientClose')}
+                            onClick={() => void closeEditorPanel(activeEditor.tabId)}
+                          >
+                            <CloseOutlined />
+                          </button>
+                        </div>
+                        <div className="flex-1 min-h-0">
+                          {activeEditor.loading ? (
+                            <div className="h-full flex items-center justify-center">
+                              <Spin />
+                            </div>
+                          ) : activeEditor.binary ? (
+                            <div className="h-full flex items-center justify-center px-6">
+                              <Empty
+                                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                description={t('sshClientEditBinary')}
+                              />
+                            </div>
+                          ) : activeEditor.error ? (
+                            <div className="h-full flex items-center justify-center px-6">
+                              <Empty
+                                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                description={activeEditor.error}
+                              />
+                            </div>
+                          ) : (
+                            <Editor
+                              height="100%"
+                              language={extToLang(activeEditor.name)}
+                              value={activeEditor.content}
+                              theme={themeResolved === 'dark' ? 'vs-dark' : 'light'}
+                              loading={<Spin />}
+                              options={{
+                                fontSize: 13,
+                                minimap: { enabled: false },
+                                wordWrap: 'off',
+                                scrollBeyondLastLine: false,
+                                automaticLayout: true,
+                                tabSize: 2,
+                                renderWhitespace: 'none'
+                              }}
+                              onChange={(value) => {
+                                if (!activeEditor) return
+                                updateEditorContent(activeEditor.tabId, activeEditor.path, value ?? '')
+                              }}
+                              onMount={(editor, monaco) => {
+                                editor.addCommand(
+                                  monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+                                  () => {
+                                    if (!activeEditor) return
+                                    void saveFileEditor(activeEditor.tabId, activeEditor.path)
+                                  }
+                                )
+                              }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -1427,6 +1929,8 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                           onDoubleClick: () => {
                             if (record.type === 'directory') {
                               void loadDir(activeTab.id, activeTab.nodeId, record.path)
+                            } else {
+                              void openFileEditor(record)
                             }
                           }
                         })}
@@ -1442,6 +1946,8 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                                 onClick={() => {
                                   if (row.type === 'directory') {
                                     void loadDir(activeTab.id, activeTab.nodeId, row.path)
+                                  } else {
+                                    void openFileEditor(row)
                                   }
                                 }}
                               >
@@ -1462,6 +1968,21 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                             width: 72,
                             render: (size: number, row: SshSftpEntry) =>
                               row.type === 'directory' ? '-' : formatSize(size)
+                          },
+                          {
+                            title: '',
+                            width: 40,
+                            render: (_: unknown, row: SshSftpEntry) => (
+                              <button
+                                type="button"
+                                className={BTN_ICON}
+                                disabled={row.type !== 'file'}
+                                title={t('sshClientEdit')}
+                                onClick={() => void openFileEditor(row)}
+                              >
+                                <FileTextOutlined />
+                              </button>
+                            )
                           },
                           {
                             title: '',

@@ -34,6 +34,18 @@ export interface SshSftpEntry {
   mode?: number
 }
 
+export interface SshSftpReadResult {
+  ok: boolean
+  content?: string
+  binary?: boolean
+  truncated?: boolean
+  size?: number
+  maxBytes?: number
+  error?: string
+}
+
+export const SSH_SFTP_READ_MAX_BYTES = 10 * 1024 * 1024
+
 function normalizeSshError(message: string): string {
   if (/host key|host denied|verification failed/i.test(message)) return 'HOST_KEY_MISMATCH'
   if (
@@ -123,6 +135,11 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     remotePath: string,
     content?: string
   ) => Promise<{ ok: boolean; error?: string }>
+  sftpReadFile: (
+    nodeId: string,
+    remotePath: string,
+    maxBytes?: number
+  ) => Promise<SshSftpReadResult>
   disconnectNode: (nodeId: string) => void
   disconnectSftp: (nodeId: string) => void
   stop: () => void
@@ -289,6 +306,23 @@ export function createSshClientManager(options: SshClientManagerOptions): {
         else resolve()
       })
     })
+  }
+
+  function readRemoteFile(sftp: SFTPWrapper, remotePath: string): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      sftp.readFile(remotePath, (err, data) => {
+        if (err) reject(new Error(err.message || 'SFTP_READ_FAILED'))
+        else resolve(Buffer.isBuffer(data) ? data : Buffer.from(data))
+      })
+    })
+  }
+
+  function looksBinary(buf: Buffer): boolean {
+    const limit = Math.min(buf.length, 8192)
+    for (let i = 0; i < limit; i++) {
+      if (buf[i] === 0) return true
+    }
+    return false
   }
 
   function closeSftp(nodeId: string): void {
@@ -472,6 +506,29 @@ export function createSshClientManager(options: SshClientManagerOptions): {
         const session = await ensureSftp(nodeId)
         await writeRemoteFile(session.sftp, remotePath, content)
         return { ok: true }
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    },
+
+    async sftpReadFile(nodeId, remotePath, maxBytes = SSH_SFTP_READ_MAX_BYTES) {
+      try {
+        const session = await ensureSftp(nodeId)
+        const stats = await statPath(session.sftp, remotePath)
+        if (stats.type !== 'file') {
+          return { ok: false, error: 'SFTP_READ_FAILED' }
+        }
+        if (stats.size > maxBytes) {
+          return { ok: false, error: 'FILE_TOO_LARGE', size: stats.size, maxBytes }
+        }
+        const buf = await readRemoteFile(session.sftp, remotePath)
+        if (buf.length > maxBytes) {
+          return { ok: false, error: 'FILE_TOO_LARGE', size: buf.length, maxBytes }
+        }
+        if (looksBinary(buf)) {
+          return { ok: true, binary: true, size: buf.length }
+        }
+        return { ok: true, content: buf.toString('utf8'), size: buf.length }
       } catch (err) {
         return { ok: false, error: (err as Error).message }
       }

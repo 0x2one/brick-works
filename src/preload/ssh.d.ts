@@ -114,3 +114,13 @@ interface SshSftpEntry {
   group?: number
   mode?: number
 }
+
+interface SshSftpReadResult {
+  ok: boolean
+  content?: string
+  binary?: boolean
+  truncated?: boolean
+  size?: number
+  maxBytes?: number
+  error?: string
+}
