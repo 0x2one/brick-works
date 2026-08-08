@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Button, Empty, Input, Select } from 'antd'
+import { App, Empty, Input, Select } from 'antd'
 import {
   CloseOutlined,
   PauseOutlined,
   CaretRightOutlined,
   ClearOutlined,
   ExpandOutlined,
-  CompressOutlined
+  CompressOutlined,
+  StopOutlined
 } from '@ant-design/icons'
 
 const HISTORY_KEY = 'ssh-log-history'
@@ -55,6 +56,7 @@ function LogTailPanel({
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const sessionIdRef = useRef<string | null>(null)
   const aliveRef = useRef(true)
+  const rootRef = useRef<HTMLDivElement | null>(null)
 
   const appendData = useCallback((text: string): void => {
     bufferRef.current += text
@@ -135,9 +137,9 @@ function LogTailPanel({
   }, [])
 
   return (
-    <div className="flex h-full flex-col">
+    <div ref={rootRef} className="flex h-full flex-col">
       <div className="h-10 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
-        <div className="flex-1 min-w-0">
+        <div className="shrink-0 max-w-44 min-w-0">
           <div className="text-sm font-medium text-[var(--text-primary)] truncate">
             {t('sshToolLogs')}
           </div>
@@ -145,7 +147,54 @@ function LogTailPanel({
             {running ? t('sshLogRunning') : t('sshLogTailHint')}
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
+          <Input
+            size="small"
+            placeholder={t('sshLogPathPlaceholder')}
+            value={path}
+            onChange={(e) => setPath(e.target.value)}
+            onPressEnter={() => void start()}
+            className="min-w-0 flex-1 max-w-[320px]"
+          />
+          <Select
+            size="small"
+            placeholder={t('sshLogHistory')}
+            className="min-w-0 flex-1 max-w-[220px]"
+            options={history.map((h) => ({ value: h, label: h }))}
+            onChange={(v: string) => setPath(v)}
+            showSearch
+            allowClear
+            popupMatchSelectWidth={false}
+            getPopupContainer={() => rootRef.current ?? document.body}
+            dropdownStyle={{ minWidth: 300, maxWidth: 'min(50vw, 480px)' }}
+          />
+        </div>
+        <div className="shrink-0 flex items-center gap-1">
+          <button
+            type="button"
+            className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] disabled:opacity-40"
+            title={running ? t('sshLogStop') : t('sshLogStart')}
+            onClick={() => (running ? void stop() : void start())}
+          >
+            {running ? <StopOutlined /> : <CaretRightOutlined />}
+          </button>
+          <button
+            type="button"
+            className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
+            title={paused ? t('sshLogResume') : t('sshLogPause')}
+            disabled={!running}
+            onClick={togglePause}
+          >
+            {paused ? <CaretRightOutlined /> : <PauseOutlined />}
+          </button>
+          <button
+            type="button"
+            className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
+            title={t('sshLogClear')}
+            onClick={clear}
+          >
+            <ClearOutlined />
+          </button>
           {onToggleFullscreen && (
             <button
               type="button"
@@ -166,70 +215,23 @@ function LogTailPanel({
           </button>
         </div>
       </div>
-      <div className="shrink-0 space-y-1.5 px-3 py-2 border-b border-[var(--border-subtle)]">
-        <div className="flex items-center gap-1.5">
-          <Input
-            size="small"
-            placeholder={t('sshLogPathPlaceholder')}
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            onPressEnter={() => void start()}
-            className="flex-1"
-          />
-          {running ? (
-            <Button size="small" danger onClick={() => void stop()}>
-              {t('sshLogStop')}
-            </Button>
-          ) : (
-            <Button size="small" type="primary" onClick={() => void start()}>
-              {t('sshLogStart')}
-            </Button>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Select
-            size="small"
-            placeholder={t('sshLogHistory')}
-            className="min-w-0 flex-1"
-            options={history.map((h) => ({ value: h, label: h }))}
-            onChange={(v: string) => setPath(v)}
-            showSearch
-            allowClear
-          />
-          <button
-            type="button"
-            className="h-6 w-6 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
-            title={paused ? t('sshLogResume') : t('sshLogPause')}
-            disabled={!running}
-            onClick={togglePause}
-          >
-            {paused ? <CaretRightOutlined /> : <PauseOutlined />}
-          </button>
-          <button
-            type="button"
-            className="h-6 w-6 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
-            title={t('sshLogClear')}
-            onClick={clear}
-          >
-            <ClearOutlined />
-          </button>
-        </div>
+      <div className="shrink-0 px-3 py-1.5 border-b border-[var(--border-subtle)] flex items-center gap-3 min-h-6">
         {running && (
-          <div className="flex items-center gap-1.5 text-[10px] text-[var(--accent)]">
+          <span className="inline-flex items-center gap-1.5 text-[10px] text-[var(--accent)]">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
             {t('sshLogRunning')}
             {paused && <span className="text-[var(--text-secondary)]">· {t('sshLogPause')}</span>}
-          </div>
+          </span>
         )}
         {exitReason && (
-          <div className="text-[10px] text-[var(--text-secondary)]">
+          <span className="text-[10px] text-[var(--text-secondary)]">
             {t('sshLogExited', { reason: exitReason })}
-          </div>
+          </span>
         )}
         {error && (
-          <div className="text-[10px] text-red-500" title={error}>
+          <span className="text-[10px] text-red-500" title={error}>
             {t('sshLogStartFail', { msg: error })}
-          </div>
+          </span>
         )}
       </div>
       <div
