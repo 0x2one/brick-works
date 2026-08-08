@@ -22,6 +22,16 @@ export interface SshShellExit {
   reason?: string
 }
 
+export interface SshExecData {
+  sessionId: string
+  data: string
+}
+
+export interface SshTailExit {
+  sessionId: string
+  reason?: string
+}
+
 export interface SshSftpEntry {
   name: string
   path: string
@@ -70,6 +80,67 @@ export interface SshSysInfo {
 }
 
 export type SshSysInfoResult = { ok: true; info: SshSysInfo } | { ok: false; error: string }
+
+export interface SshProcessInfo {
+  pid: number
+  ppid: number
+  user: string
+  cpu: number
+  mem: number
+  rss: number
+  stat: string
+  etimes: number
+  cmd: string
+}
+
+export function parsePsOutput(raw: string): SshProcessInfo[] {
+  const processes: SshProcessInfo[] = []
+  const lines = raw.split(/\r?\n/)
+  for (const line of lines) {
+    if (!line) continue
+    if (/^PID\s/.test(line)) continue
+    const match = line.match(
+      /^\s*(\d+)\s+(\d+)\s+(\S+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(.*)$/
+    )
+    if (!match) continue
+    const [, pid, ppid, user, cpu, mem, rss, stat, etimes, cmd] = match
+    processes.push({
+      pid: Number(pid),
+      ppid: Number(ppid),
+      user,
+      cpu: Number(cpu),
+      mem: Number(mem),
+      rss: Number(rss),
+      stat,
+      etimes: Number(etimes),
+      cmd: cmd.trim()
+    })
+  }
+  return processes
+}
+
+export interface SshServiceInfo {
+  unit: string
+  loaded: string
+  active: string
+  sub: string
+  description: string
+}
+
+export function parseSystemctlOutput(raw: string): SshServiceInfo[] {
+  const services: SshServiceInfo[] = []
+  const lines = raw.split(/\r?\n/)
+  for (const line of lines) {
+    if (!line) continue
+    if (/^\s*UNIT\s/.test(line) || /LOADED\s+ACTIVE/.test(line)) continue
+    const match = line.match(/^([^\s]+)\s+([^\s]+)\s+([^\s]+)\s+([^\s]+)\s+(.*)$/)
+    if (!match) continue
+    const [, unit, loaded, active, sub, description] = match
+    if (!unit.endsWith('.service')) continue
+    services.push({ unit, loaded, active, sub, description: description.trim() })
+  }
+  return services
+}
 
 function normalizeSshError(message: string): string {
   if (/host key|host denied|verification failed/i.test(message)) return 'HOST_KEY_MISMATCH'
@@ -301,6 +372,53 @@ function execShScript(client: Client, script: string, timeoutMs = SYSINFO_TIMEOU
   })
 }
 
+const EXEC_TIMEOUT_MS = 30000
+
+interface ExecRemoteResult {
+  code: number
+  stdout: string
+  stderr: string
+}
+
+function execRemote(
+  client: Client,
+  command: string,
+  timeoutMs = EXEC_TIMEOUT_MS
+): Promise<ExecRemoteResult> {
+  return new Promise((resolve, reject) => {
+    let channel: ClientChannel | null = null
+    const out: Buffer[] = []
+    const err: Buffer[] = []
+    const timer = setTimeout(() => {
+      try {
+        channel?.close()
+      } catch {
+        // ignore
+      }
+      reject(new Error('EXEC_TIMEOUT'))
+    }, timeoutMs)
+    client.exec(command, (e, ch) => {
+      if (e || !ch) {
+        clearTimeout(timer)
+        reject(new Error(normalizeSshError(e?.message || 'EXEC_FAILED')))
+        return
+      }
+      channel = ch
+      ch.on('data', (d) => out.push(Buffer.isBuffer(d) ? d : Buffer.from(d)))
+      ch.stderr?.on('data', (d) => err.push(Buffer.isBuffer(d) ? d : Buffer.from(d)))
+      ch.on('close', (code) => {
+        clearTimeout(timer)
+        resolve({
+          code: typeof code === 'number' ? code : -1,
+          stdout: Buffer.concat(out).toString('utf8'),
+          stderr: Buffer.concat(err).toString('utf8')
+        })
+      })
+      ch.on('error', () => {})
+    })
+  })
+}
+
 function parseSysInfoOutput(raw: string): SshSysInfo {
   const info: SshSysInfo = {
     platform: 'other',
@@ -408,10 +526,17 @@ function parseSysInfoOutput(raw: string): SshSysInfo {
   return info
 }
 
-interface SysinfoSession {
+interface ExecSession {
   nodeId: string
   client: Client
   jumpClients: Client[]
+}
+
+interface TailSession {
+  sessionId: string
+  nodeId: string
+  client: Client
+  channel: ClientChannel | null
 }
 
 export function createSshClientManager(options: SshClientManagerOptions): {
@@ -447,6 +572,18 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     maxBytes?: number
   ) => Promise<SshSftpReadResult>
   sysInfo: (nodeId: string) => Promise<SshSysInfoResult>
+  listProcesses: (nodeId: string) => Promise<SshProcessInfo[]>
+  killProcess: (nodeId: string, pid: number, signal?: string) => Promise<{ ok: boolean }>
+  listServices: (nodeId: string) => Promise<SshServiceInfo[]>
+  serviceAction: (
+    nodeId: string,
+    unit: string,
+    action: 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable'
+  ) => Promise<{ ok: boolean; output: string }>
+  startLogTail: (nodeId: string, path: string) => Promise<{ sessionId: string }>
+  stopLogTail: (sessionId: string) => boolean
+  onExecData: (cb: (payload: SshExecData) => void) => () => void
+  onTailExit: (cb: (payload: SshTailExit) => void) => () => void
   disconnectNode: (nodeId: string) => void
   disconnectSftp: (nodeId: string) => void
   disconnectSysInfo: (nodeId: string) => void
@@ -457,10 +594,21 @@ export function createSshClientManager(options: SshClientManagerOptions): {
   const shells = new Map<string, ShellSession>()
   const sftps = new Map<string, SftpSession>()
   const sftpInflight = new Map<string, Promise<SftpSession>>()
-  const sysinfoSessions = new Map<string, SysinfoSession>()
-  const sysinfoInflight = new Map<string, Promise<SysinfoSession>>()
+  const execSessions = new Map<string, ExecSession>()
+  const execInflight = new Map<string, Promise<ExecSession>>()
   const shellDataListeners = new Set<(data: SshShellData) => void>()
   const shellExitListeners = new Set<(data: SshShellExit) => void>()
+  const tailSessions = new Map<string, TailSession>()
+  const execDataListeners = new Set<(payload: SshExecData) => void>()
+  const tailExitListeners = new Set<(payload: SshTailExit) => void>()
+
+  function emitExecData(payload: SshExecData): void {
+    for (const cb of execDataListeners) cb(payload)
+  }
+
+  function emitTailExit(payload: SshTailExit): void {
+    for (const cb of tailExitListeners) cb(payload)
+  }
 
   function emitShellData(data: SshShellData): void {
     for (const cb of shellDataListeners) cb(data)
@@ -547,58 +695,58 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     }
   }
 
-  const sysinfoClosePending = new Set<string>()
+  const execClosePending = new Set<string>()
 
-  function sysinfoClientAlive(client: Client): boolean {
+  function execClientAlive(client: Client): boolean {
     const sock = (client as unknown as { _sock?: { writable?: boolean } })._sock
     return Boolean(sock && sock.writable)
   }
 
-  async function ensureSysinfo(nodeId: string): Promise<SysinfoSession> {
-    const existing = sysinfoSessions.get(nodeId)
+  async function ensureExecSession(nodeId: string): Promise<ExecSession> {
+    const existing = execSessions.get(nodeId)
     if (existing) {
-      if (sysinfoClientAlive(existing.client)) return existing
-      sysinfoSessions.delete(nodeId)
+      if (execClientAlive(existing.client)) return existing
+      execSessions.delete(nodeId)
       endClientChain(existing.client, existing.jumpClients)
     }
-    const inflight = sysinfoInflight.get(nodeId)
+    const inflight = execInflight.get(nodeId)
     if (inflight) return inflight
 
-    const promise = (async (): Promise<SysinfoSession> => {
+    const promise = (async (): Promise<ExecSession> => {
       const { client, jumpClients } = await openClient(nodeId)
-      if (sysinfoClosePending.has(nodeId)) {
+      if (execClosePending.has(nodeId)) {
         // A disconnect was requested while this connection was being established.
-        sysinfoClosePending.delete(nodeId)
+        execClosePending.delete(nodeId)
         endClientChain(client, jumpClients)
         throw new Error('NODE_NOT_CONNECTED')
       }
-      const session: SysinfoSession = { nodeId, client, jumpClients }
-      sysinfoSessions.set(nodeId, session)
+      const session: ExecSession = { nodeId, client, jumpClients }
+      execSessions.set(nodeId, session)
       client.on('close', () => {
-        if (sysinfoSessions.get(nodeId) === session) sysinfoSessions.delete(nodeId)
+        if (execSessions.get(nodeId) === session) execSessions.delete(nodeId)
       })
       client.on('error', () => {
-        if (sysinfoSessions.get(nodeId) === session) sysinfoSessions.delete(nodeId)
+        if (execSessions.get(nodeId) === session) execSessions.delete(nodeId)
       })
       return session
     })()
 
-    sysinfoInflight.set(nodeId, promise)
+    execInflight.set(nodeId, promise)
     try {
       return await promise
     } finally {
-      sysinfoInflight.delete(nodeId)
+      execInflight.delete(nodeId)
     }
   }
 
-  function disconnectSysinfo(nodeId: string): void {
-    const session = sysinfoSessions.get(nodeId)
+  function disconnectExecSession(nodeId: string): void {
+    const session = execSessions.get(nodeId)
     if (session) {
-      sysinfoSessions.delete(nodeId)
+      execSessions.delete(nodeId)
       endClientChain(session.client, session.jumpClients)
-    } else if (sysinfoInflight.has(nodeId)) {
+    } else if (execInflight.has(nodeId)) {
       // A connection is being established right now; cancel it once it lands.
-      sysinfoClosePending.add(nodeId)
+      execClosePending.add(nodeId)
     }
   }
 
@@ -935,7 +1083,7 @@ export function createSshClientManager(options: SshClientManagerOptions): {
 
     async sysInfo(nodeId) {
       try {
-        const session = await ensureSysinfo(nodeId)
+        const session = await ensureExecSession(nodeId)
         const raw = await execShScript(session.client, SYSINFO_SCRIPT)
         const info = parseSysInfoOutput(raw)
         return { ok: true, info }
@@ -945,12 +1093,140 @@ export function createSshClientManager(options: SshClientManagerOptions): {
       }
     },
 
+    async listProcesses(nodeId) {
+      try {
+        const session = await ensureExecSession(nodeId)
+        const res = await execRemote(
+          session.client,
+          'ps -eo pid,ppid,user,%cpu,%mem,rss,stat,etimes,cmd --sort=-%cpu 2>/dev/null | head -200'
+        )
+        if (res.code !== 0 && !res.stdout.trim()) {
+          throw new Error(res.stderr.trim() || 'PS_FAILED')
+        }
+        return parsePsOutput(res.stdout)
+      } catch (err) {
+        console.error('[ssh:listProcesses]', nodeId, err instanceof Error ? err.message : err)
+        throw err
+      }
+    },
+
+    async killProcess(nodeId, pid, signal = 'TERM') {
+      try {
+        if (!Number.isInteger(pid) || pid < 1) throw new Error('INVALID_PID')
+        const sig = /^[A-Z0-9]+$/.test(String(signal)) ? String(signal) : 'TERM'
+        const session = await ensureExecSession(nodeId)
+        const res = await execRemote(session.client, `kill -${sig} ${pid}`)
+        if (res.code !== 0) throw new Error(res.stderr.trim() || 'KILL_FAILED')
+        return { ok: true }
+      } catch (err) {
+        console.error('[ssh:killProcess]', nodeId, pid, err instanceof Error ? err.message : err)
+        throw err
+      }
+    },
+
+    async listServices(nodeId) {
+      try {
+        const session = await ensureExecSession(nodeId)
+        const res = await execRemote(
+          session.client,
+          'systemctl list-units --type=service --all --no-pager --no-legend 2>/dev/null | head -300'
+        )
+        if (res.code !== 0 && !res.stdout.trim()) {
+          throw new Error(res.stderr.trim() || 'SYSTEMCTL_FAILED')
+        }
+        return parseSystemctlOutput(res.stdout)
+      } catch (err) {
+        console.error('[ssh:listServices]', nodeId, err instanceof Error ? err.message : err)
+        throw err
+      }
+    },
+
+    async serviceAction(nodeId, unit, action) {
+      try {
+        if (!/^[a-zA-Z0-9_.@-]+\.service$/.test(unit)) throw new Error('INVALID_UNIT')
+        if (!['start', 'stop', 'restart', 'reload', 'enable', 'disable'].includes(action)) {
+          throw new Error('INVALID_ACTION')
+        }
+        const session = await ensureExecSession(nodeId)
+        const res = await execRemote(
+          session.client,
+          `systemctl ${action} ${unit} 2>&1 </dev/null`
+        )
+        if (res.code !== 0 && !res.stdout.trim()) {
+          throw new Error(res.stderr.trim() || 'SERVICE_ACTION_FAILED')
+        }
+        return { ok: true, output: (res.stdout + res.stderr).trim() }
+      } catch (err) {
+        console.error('[ssh:serviceAction]', nodeId, unit, action, err instanceof Error ? err.message : err)
+        throw err
+      }
+    },
+
+    async startLogTail(nodeId, path) {
+      if (typeof path !== 'string' || !path.trim()) throw new Error('INVALID_PATH')
+      if (path.includes('\0') || /[\n\r']/.test(path)) throw new Error('INVALID_PATH')
+      const sessionId = randomUUID()
+      const session = await ensureExecSession(nodeId)
+      return new Promise<{ sessionId: string }>((resolve, reject) => {
+        session.client.exec(`tail -n 200 -f -- '${path}'`, (err, ch) => {
+          if (err || !ch) {
+            reject(new Error(normalizeSshError(err?.message || 'TAIL_FAILED')))
+            return
+          }
+          const tail: TailSession = { sessionId, nodeId, client: session.client, channel: ch }
+          tailSessions.set(sessionId, tail)
+          ch.on('data', (chunk: Buffer | string) => {
+            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+            emitExecData({ sessionId, data: buf.toString('base64') })
+          })
+          ch.stderr?.on('data', (chunk: Buffer | string) => {
+            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+            emitExecData({ sessionId, data: buf.toString('base64') })
+          })
+          ch.on('close', (code) => {
+            tailSessions.delete(sessionId)
+            emitTailExit({
+              sessionId,
+              reason: typeof code === 'number' && code !== 0 ? `exit-${code}` : undefined
+            })
+          })
+          ch.on('error', () => {
+            tailSessions.delete(sessionId)
+            emitTailExit({ sessionId, reason: 'error' })
+          })
+          resolve({ sessionId })
+        })
+      })
+    },
+
+    stopLogTail(sessionId) {
+      const tail = tailSessions.get(sessionId)
+      if (!tail) return false
+      tailSessions.delete(sessionId)
+      try {
+        tail.channel?.close()
+      } catch {
+        // ignore
+      }
+      return true
+    },
+
+    onExecData(cb) {
+      execDataListeners.add(cb)
+      return () => execDataListeners.delete(cb)
+    },
+
+    onTailExit(cb) {
+      tailExitListeners.add(cb)
+      return () => tailExitListeners.delete(cb)
+    },
+
     disconnectSftp(nodeId) {
       closeSftp(nodeId)
     },
 
     disconnectSysInfo(nodeId) {
-      disconnectSysinfo(nodeId)
+      disconnectExecSession(nodeId)
     },
 
     disconnectNode(nodeId) {
@@ -958,13 +1234,33 @@ export function createSshClientManager(options: SshClientManagerOptions): {
         if (session.nodeId === nodeId) cleanupShell(id, 'node-removed')
       }
       closeSftp(nodeId)
-      disconnectSysinfo(nodeId)
+      disconnectExecSession(nodeId)
+      for (const [id, tail] of tailSessions) {
+        if (tail.nodeId === nodeId) {
+          tailSessions.delete(id)
+          try {
+            tail.channel?.close()
+          } catch {
+            // ignore
+          }
+          emitTailExit({ sessionId: id, reason: 'node-removed' })
+        }
+      }
     },
 
     stop() {
       for (const id of [...shells.keys()]) cleanupShell(id, 'stopped', true)
       for (const nodeId of [...sftps.keys()]) closeSftp(nodeId)
-      for (const nodeId of [...sysinfoSessions.keys()]) disconnectSysinfo(nodeId)
+      for (const nodeId of [...execSessions.keys()]) disconnectExecSession(nodeId)
+      for (const [id, tail] of tailSessions) {
+        tailSessions.delete(id)
+        try {
+          tail.channel?.close()
+        } catch {
+          // ignore
+        }
+        emitTailExit({ sessionId: id, reason: 'stopped' })
+      }
     },
 
     onShellData(cb) {

@@ -8,7 +8,8 @@ import {
   net,
   Tray,
   Menu,
-  globalShortcut
+  globalShortcut,
+  clipboard
 } from 'electron'
 import { promises as dns } from 'dns'
 import { join, basename } from 'path'
@@ -324,6 +325,31 @@ function syncTrayWithSettings(): void {
   }
 }
 
+/**
+ * Replace the default application menu (which registers a "Find" role that
+ * swallows Ctrl/Cmd+F before it reaches the renderer) with a minimal one that
+ * keeps the standard edit shortcuts but leaves Ctrl/Cmd+F to the web contents.
+ */
+function setupAppMenu(): void {
+  const isMac = process.platform === 'darwin'
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac ? ([{ role: 'appMenu' }, { role: 'windowMenu' }] as const) : []),
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' }
+      ]
+    }
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
 function createWindow(): void {
   const winOptions: Electron.BrowserWindowConstructorOptions = {
     width: 1280,
@@ -346,6 +372,19 @@ function createWindow(): void {
     winOptions.frame = false
   }
   mainWindow = new BrowserWindow(winOptions)
+
+  // Guarantee terminal shortcuts (Ctrl/Cmd+F, Ctrl/Cmd+/-/0) reach the renderer:
+  // the default app menu's find/zoom roles and page-level handlers can swallow them.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+    const mod = input.control || input.meta
+    if (!mod || input.alt) return
+    const key = input.key.toLowerCase()
+    if (key === 'f' || key === '=' || key === '+' || key === '-' || key === '_' || key === '0') {
+      event.preventDefault()
+      mainWindow?.webContents.send('app:shortcut', key)
+    }
+  })
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
@@ -473,6 +512,12 @@ ipcMain.handle('fetch:svg', async (_event, url: string): Promise<string | null> 
 
 ipcMain.handle('window:isMaximized', () => {
   return mainWindow?.isMaximized() ?? false
+})
+
+ipcMain.handle('clipboard:readText', () => clipboard.readText())
+
+ipcMain.handle('clipboard:writeText', (_event, text: string) => {
+  clipboard.writeText(typeof text === 'string' ? text : '')
 })
 
 ipcMain.handle('app:info', () => ({
@@ -658,6 +703,12 @@ sshClientManager.onShellData((data) => {
 sshClientManager.onShellExit((data) => {
   sendToRenderer('ssh:shell-exit', data)
 })
+sshClientManager.onExecData((data) => {
+  sendToRenderer('ssh:log-data', data)
+})
+sshClientManager.onTailExit((data) => {
+  sendToRenderer('ssh:log-exit', data)
+})
 
 function validateNodeInput(input: SshNodeInput): string | null {
   if (!input || typeof input !== 'object') return 'INVALID'
@@ -683,6 +734,80 @@ function validateNodeInput(input: SshNodeInput): string | null {
 }
 
 ipcMain.handle('ssh:listNodes', () => sshStore.list())
+
+interface SshConfigCandidate {
+  name: string
+  host: string
+  port: number
+  username: string
+  authType: 'password' | 'privateKey'
+  privateKeyPath?: string
+}
+
+function expandHomePath(p: string): string {
+  if (p === '~') return app.getPath('home')
+  if (p.startsWith('~/')) return join(app.getPath('home'), p.slice(2))
+  return p
+}
+
+function parseSshConfig(content: string): SshConfigCandidate[] {
+  const candidates: SshConfigCandidate[] = []
+  let current: Record<string, string> | null = null
+  const flush = (cfg: Record<string, string>): void => {
+    const patterns = (cfg.host || '').split(/[\s,]+/).filter(Boolean)
+    const pattern = patterns[0] ?? ''
+    if (!pattern || /[*?]/.test(pattern)) return
+    const host = cfg.hostName || pattern
+    const port = parseInt(cfg.port || '22', 10)
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return
+    const identityRaw = cfg.identityFile || ''
+    const identity = identityRaw && !identityRaw.includes('%') ? expandHomePath(identityRaw) : undefined
+    candidates.push({
+      name: pattern,
+      host,
+      port,
+      username: cfg.user || '',
+      authType: identity ? 'privateKey' : 'password',
+      privateKeyPath: identity
+    })
+  }
+  const lines = content.split(/\r?\n/)
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) continue
+    const eq = line.indexOf('=')
+    const parts = eq >= 0 ? [line.slice(0, eq).trim(), line.slice(eq + 1).trim()] : line.split(/\s+/, 2)
+    const key = (parts[0] ?? '').toLowerCase()
+    const value = parts[1] ?? ''
+    if (key === 'host') {
+      if (current) flush(current)
+      current = { host: value }
+      continue
+    }
+    if (!current) continue
+    if (key === 'hostname') current.hostName = value
+    else if (key === 'user') current.user = value
+    else if (key === 'port') current.port = value
+    else if (key === 'identityfile') current.identityFile = value
+  }
+  if (current) flush(current)
+  return candidates
+}
+
+ipcMain.handle('ssh:importSshConfig', async () => {
+  const configPath = join(app.getPath('home'), '.ssh', 'config')
+  try {
+    const raw = await fsp.readFile(configPath, 'utf-8')
+    allowLocalPath(configPath)
+    const candidates = parseSshConfig(raw)
+    for (const c of candidates) {
+      if (c.privateKeyPath) allowLocalPath(c.privateKeyPath)
+    }
+    return { ok: true as const, path: configPath, candidates }
+  } catch {
+    return { ok: false as const, error: 'CONFIG_NOT_FOUND' }
+  }
+})
 
 ipcMain.handle('ssh:saveNode', (_event, input: SshNodeInput) => {
   const err = validateNodeInput(input)
@@ -901,6 +1026,44 @@ ipcMain.handle('ssh:disconnectSysInfo', (_event, nodeId: string) => {
   return true
 })
 
+ipcMain.handle('ssh:listProcesses', async (_event, nodeId: string) => {
+  if (!nodeId) throw new Error('NODE_NOT_FOUND')
+  return sshClientManager.listProcesses(nodeId)
+})
+
+ipcMain.handle('ssh:killProcess', async (_event, nodeId: string, pid: number, signal?: string) => {
+  if (!nodeId) throw new Error('NODE_NOT_FOUND')
+  return sshClientManager.killProcess(nodeId, pid, signal)
+})
+
+ipcMain.handle('ssh:listServices', async (_event, nodeId: string) => {
+  if (!nodeId) throw new Error('NODE_NOT_FOUND')
+  return sshClientManager.listServices(nodeId)
+})
+
+ipcMain.handle(
+  'ssh:serviceAction',
+  async (
+    _event,
+    nodeId: string,
+    unit: string,
+    action: 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable'
+  ) => {
+    if (!nodeId) throw new Error('NODE_NOT_FOUND')
+    return sshClientManager.serviceAction(nodeId, unit, action)
+  }
+)
+
+ipcMain.handle('ssh:startLogTail', async (_event, nodeId: string, path: string) => {
+  if (!nodeId) throw new Error('NODE_NOT_FOUND')
+  return sshClientManager.startLogTail(nodeId, path)
+})
+
+ipcMain.handle('ssh:stopLogTail', (_event, sessionId: string) => {
+  if (!sessionId) throw new Error('INVALID')
+  return sshClientManager.stopLogTail(sessionId)
+})
+
 ipcMain.handle('ssh:sftpList', (_event, nodeId: string, remotePath: string) => {
   if (!nodeId) throw new Error('NODE_NOT_FOUND')
   return sshClientManager.sftpList(nodeId, remotePath || '/')
@@ -956,6 +1119,18 @@ ipcMain.handle('ssh:sftpUpload', async (_event, nodeId: string, remoteDir: strin
   const res = await sshClientManager.sftpUploadFiles(nodeId, remoteDir || '/', result.filePaths)
   return res.ok ? { ok: true, count: res.count } : { ok: false, error: res.error, count: res.count }
 })
+
+ipcMain.handle(
+  'ssh:sftpUploadPaths',
+  async (_event, nodeId: string, remoteDir: string, localPaths: string[]) => {
+    if (!nodeId) throw new Error('NODE_NOT_FOUND')
+    if (!Array.isArray(localPaths) || localPaths.length === 0) {
+      throw new Error('INVALID')
+    }
+    const res = await sshClientManager.sftpUploadFiles(nodeId, remoteDir || '/', localPaths)
+    return res.ok ? { ok: true, count: res.count } : { ok: false, error: res.error, count: res.count }
+  }
+)
 
 ipcMain.handle('ssh:sftpMkdir', async (_event, nodeId: string, remotePath: string) => {
   if (!nodeId || !remotePath) throw new Error('INVALID')
@@ -1255,6 +1430,7 @@ if (!gotTheLock) {
     const savedShortcut = appSettingsStore.get().showShortcut
     if (savedShortcut) tryRegisterAccel(savedShortcut)
 
+    setupAppMenu()
     createWindow()
     syncTrayWithSettings()
     updater.init()

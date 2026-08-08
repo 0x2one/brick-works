@@ -1,7 +1,16 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 const api = {
   fetchImage: (url: string) => ipcRenderer.invoke('fetch:image', url),
+  files: {
+    getPathForFile: (file: File): string => {
+      try {
+        return webUtils.getPathForFile(file)
+      } catch {
+        return ''
+      }
+    }
+  },
   app: {
     info: () => ipcRenderer.invoke('app:info')
   },
@@ -44,6 +53,19 @@ const api = {
       }
     }
   },
+  shortcuts: {
+    onShortcut: (callback: (key: string) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, key: string): void => callback(key)
+      ipcRenderer.on('app:shortcut', handler)
+      return () => {
+        ipcRenderer.removeListener('app:shortcut', handler)
+      }
+    }
+  },
+  clipboard: {
+    readText: () => ipcRenderer.invoke('clipboard:readText'),
+    writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text)
+  },
   lan: {
     getStatus: () => ipcRenderer.invoke('lan:status'),
     start: (dir?: string, lang?: string) => ipcRenderer.invoke('lan:start', dir, lang),
@@ -67,6 +89,7 @@ const api = {
     saveNode: (input: SshNodeInput) => ipcRenderer.invoke('ssh:saveNode', input),
     deleteNode: (id: string) => ipcRenderer.invoke('ssh:deleteNode', id),
     reorderNodes: (ids: string[]) => ipcRenderer.invoke('ssh:reorderNodes', ids),
+    importSshConfig: () => ipcRenderer.invoke('ssh:importSshConfig'),
     chooseKeyFile: () => ipcRenderer.invoke('ssh:chooseKeyFile'),
     clearHostKey: (nodeId: string) => ipcRenderer.invoke('ssh:clearHostKey', nodeId),
     status: () => ipcRenderer.invoke('ssh:status'),
@@ -118,6 +141,8 @@ const api = {
       ipcRenderer.invoke('ssh:sftpDownloadDir', nodeId, remotePath),
     sftpUpload: (nodeId: string, remoteDir: string) =>
       ipcRenderer.invoke('ssh:sftpUpload', nodeId, remoteDir),
+    sftpUploadPaths: (nodeId: string, remoteDir: string, localPaths: string[]) =>
+      ipcRenderer.invoke('ssh:sftpUploadPaths', nodeId, remoteDir, localPaths),
     sftpMkdir: (nodeId: string, remotePath: string) =>
       ipcRenderer.invoke('ssh:sftpMkdir', nodeId, remotePath),
     sftpWriteFile: (nodeId: string, remotePath: string, content?: string) =>
@@ -127,6 +152,34 @@ const api = {
     sftpDisconnect: (nodeId: string) => ipcRenderer.invoke('ssh:sftpDisconnect', nodeId),
     sysInfo: (nodeId: string) => ipcRenderer.invoke('ssh:sysInfo', nodeId),
     disconnectSysInfo: (nodeId: string) => ipcRenderer.invoke('ssh:disconnectSysInfo', nodeId),
+    listProcesses: (nodeId: string) => ipcRenderer.invoke('ssh:listProcesses', nodeId),
+    killProcess: (nodeId: string, pid: number, signal?: string) =>
+      ipcRenderer.invoke('ssh:killProcess', nodeId, pid, signal),
+    listServices: (nodeId: string) => ipcRenderer.invoke('ssh:listServices', nodeId),
+    serviceAction: (
+      nodeId: string,
+      unit: string,
+      action: 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable'
+    ) => ipcRenderer.invoke('ssh:serviceAction', nodeId, unit, action),
+    startLogTail: (nodeId: string, path: string) =>
+      ipcRenderer.invoke('ssh:startLogTail', nodeId, path),
+    stopLogTail: (sessionId: string) => ipcRenderer.invoke('ssh:stopLogTail', sessionId),
+    onLogData: (callback: (payload: SshExecData) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, payload: SshExecData): void =>
+        callback(payload)
+      ipcRenderer.on('ssh:log-data', handler)
+      return () => {
+        ipcRenderer.removeListener('ssh:log-data', handler)
+      }
+    },
+    onLogExit: (callback: (payload: SshTailExit) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, payload: SshTailExit): void =>
+        callback(payload)
+      ipcRenderer.on('ssh:log-exit', handler)
+      return () => {
+        ipcRenderer.removeListener('ssh:log-exit', handler)
+      }
+    },
     onShellData: (callback: (data: SshShellData) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, data: SshShellData): void =>
         callback(data)

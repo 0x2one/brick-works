@@ -16,7 +16,7 @@ import {
   Tooltip,
   Select
 } from 'antd'
-import type { MenuProps } from 'antd'
+import type { MenuProps, InputRef } from 'antd'
 import {
   PlusOutlined,
   ApiOutlined,
@@ -43,13 +43,31 @@ import {
   HolderOutlined,
   SaveOutlined,
   FileTextOutlined,
-  DashboardOutlined
+  DashboardOutlined,
+  SearchOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined,
+  CopyOutlined,
+  ClearOutlined,
+  ZoomInOutlined,
+  ZoomOutOutlined,
+  SnippetsOutlined,
+  ToolOutlined,
+  StarOutlined,
+  StarFilled,
+  BookOutlined,
+  ImportOutlined
 } from '@ant-design/icons'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import SshFileEditor from '../components/SshFileEditor'
 import SshSysInfoPanel from '../components/SshSysInfoPanel'
+import CommandPanel from '../components/CommandPanel'
+import ProcessPanel from '../components/ProcessPanel'
+import ServicesPanel from '../components/ServicesPanel'
+import LogTailPanel from '../components/LogTailPanel'
 import { useTheme } from '../theme/ThemeProvider'
 import { SortableList } from '../components/SortableList'
 
@@ -69,6 +87,10 @@ const BTN_TEXT =
 
 const TITLE_BAR_CLS =
   'h-10 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--border-subtle)] bg-[var(--surface)]'
+
+const FONT_MIN = 10
+const FONT_MAX = 26
+const DEFAULT_FONT = 13
 
 const SSH_ERROR_CODES = [
   'HOST_KEY_MISMATCH',
@@ -90,7 +112,9 @@ const SSH_ERROR_CODES = [
   'SHELL_FAILED'
 ] as const
 
-type MaximizeMode = null | 'console' | 'files' | 'editor' | 'info'
+type MaximizeMode = null | 'console' | 'files' | 'editor' | 'info' | 'tool'
+
+type ToolPanelKey = 'commands' | 'process' | 'services' | 'logs'
 
 interface SessionTab {
   id: string
@@ -102,11 +126,14 @@ interface SessionTab {
   infoOpen: boolean
   remotePath: string
   connecting: boolean
+  /** restored session — do not auto-connect the terminal until the user presses Enter */
+  noAutoConnect?: boolean
 }
 
 interface TermRuntime {
   term: Terminal
   fit: FitAddon
+  search: SearchAddon
   shellSessionId: string | null
 }
 
@@ -514,11 +541,37 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const [uploading, setUploading] = useState(false)
   const [createOpen, setCreateOpen] = useState<'file' | 'dir' | null>(null)
   const [createName, setCreateName] = useState('')
+  const [bookmarks, setBookmarks] = useState<string[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('ssh-bookmarks') || '[]') as string[]
+      return Array.isArray(stored) ? stored : []
+    } catch {
+      return []
+    }
+  })
+  const [dragOver, setDragOver] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importLoading, setImportLoading] = useState(false)
+  const [importCandidates, setImportCandidates] = useState<SshConfigCandidate[]>([])
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importSelected, setImportSelected] = useState<string[]>([])
+  const [importing, setImporting] = useState(false)
   const [copyTipVisible, setCopyTipVisible] = useState(false)
 
   const [editorsByTab, setEditorsByTab] = useState<Record<string, SshFileEditorState[]>>({})
   const [activeEditorPathByTab, setActiveEditorPathByTab] = useState<Record<string, string>>({})
   const [editorHeight, setEditorHeight] = useState(320)
+
+  const [fontSize, setFontSize] = useState(() => {
+    const stored = parseInt(localStorage.getItem('ssh-term-fontsize') || '', 10)
+    return Number.isFinite(stored) ? Math.min(FONT_MAX, Math.max(FONT_MIN, stored)) : DEFAULT_FONT
+  })
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
+  const [searchMatch, setSearchMatch] = useState<{ index: number; count: number } | null>(null)
+  const searchInputRef = useRef<InputRef>(null)
+  const [toolPanel, setToolPanel] = useState<ToolPanelKey | null>(null)
+  const [copyEnabled, setCopyEnabled] = useState(false)
 
   const termHostsRef = useRef<Map<string, HTMLDivElement>>(new Map())
   const termsRef = useRef<Map<string, TermRuntime>>(new Map())
@@ -534,6 +587,8 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const copyTipHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notifyCopiedRef = useRef<() => void>(() => {})
   const loadDirSeqRef = useRef<Map<string, number>>(new Map())
+  const restoredRef = useRef(false)
+  const skipAutoCopyRef = useRef(false)
 
   useEffect(() => {
     notifyCopiedRef.current = () => {
@@ -599,6 +654,50 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   useEffect(() => {
     if (active) loadNodes()
   }, [active, loadNodes])
+
+  useEffect(() => {
+    if (restoredRef.current) return
+    restoredRef.current = true
+    const savedRaw = localStorage.getItem('ssh-session-tabs')
+    const id = window.setTimeout(() => {
+      try {
+        const saved = JSON.parse(savedRaw || '[]') as string[]
+        const ids = Array.isArray(saved)
+          ? saved.filter((x): x is string => typeof x === 'string')
+          : []
+        const valid = ids.filter((id) => nodes.some((n) => n.id === id))
+        if (valid.length === 0) return
+        const restored: SessionTab[] = valid.map((nodeId) => {
+          const node = nodes.find((n) => n.id === nodeId)!
+          return {
+            id: newTabId(),
+            nodeId,
+            title: node.name,
+            subtitle: `${node.username}@${node.host}:${node.port}`,
+            shellSessionId: null,
+            filesOpen: false,
+            infoOpen: false,
+            noAutoConnect: true,
+            remotePath: '/',
+            connecting: false
+          }
+        })
+        setTabs(restored)
+        setActiveTabId(restored[0]?.id ?? null)
+      } catch {
+        // ignore malformed storage
+      }
+    }, 0)
+    return () => window.clearTimeout(id)
+  }, [nodes])
+
+  useEffect(() => {
+    if (tabs.length === 0) {
+      localStorage.removeItem('ssh-session-tabs')
+      return
+    }
+    localStorage.setItem('ssh-session-tabs', JSON.stringify(tabs.map((t) => t.nodeId)))
+  }, [tabs])
 
   const destroyTerm = useCallback((tabId: string) => {
     const rt = termsRef.current.get(tabId)
@@ -668,6 +767,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         return next
       })
       if (maximized) setMaximized(null)
+      setToolPanel(null)
     },
     [stopTabShell, maximized]
   )
@@ -805,18 +905,26 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
 
       const term = new Terminal({
         cursorBlink: true,
-        fontSize: 13,
-        fontFamily: 'Consolas, "Courier New", monospace'
+        fontSize,
+        fontFamily: 'Consolas, "Courier New", monospace',
+        // Search decorations (used to report the match count) require the proposed API.
+        allowProposedApi: true
       })
       applyTermTheme(term, themeResolved)
       const fit = new FitAddon()
+      const search = new SearchAddon()
       term.loadAddon(fit)
+      term.loadAddon(search)
+      search.onDidChangeResults(({ resultIndex, resultCount }) => {
+        setSearchMatch({ index: resultIndex, count: resultCount })
+      })
       term.open(host)
       fit.fit()
-      const rt: TermRuntime = { term, fit, shellSessionId: null }
+      const rt: TermRuntime = { term, fit, search, shellSessionId: null }
       termsRef.current.set(tab.id, rt)
 
       term.onSelectionChange(() => {
+        if (skipAutoCopyRef.current) return
         const text = term.getSelection()
         if (!text) return
         void navigator.clipboard
@@ -846,9 +954,9 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         if (sid) void window.api.ssh.resizeShell(sid, cols, rows)
       })
 
-      await connectShellRef.current(tab.id, false)
+      if (!tab.noAutoConnect) await connectShellRef.current(tab.id, false)
     },
-    [themeResolved]
+    [fontSize, themeResolved]
   )
 
   useEffect(() => {
@@ -893,6 +1001,162 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     })
     return () => window.cancelAnimationFrame(id)
   }, [active, activeTabId])
+
+  useEffect(() => {
+    localStorage.setItem('ssh-term-fontsize', String(fontSize))
+    for (const rt of termsRef.current.values()) {
+      rt.term.options.fontSize = fontSize
+      rt.fit.fit()
+    }
+  }, [fontSize])
+
+  useEffect(() => {
+    if (!active) return
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setSearchOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [active])
+
+  useEffect(() => {
+    const off = window.api.shortcuts.onShortcut((key) => {
+      if (!active) return
+      if (key === 'f') {
+        setSearchOpen((v) => !v)
+        return
+      }
+      const inFormField = Boolean(
+        document.activeElement?.closest('.ant-input, .ant-select, .ant-input-number')
+      )
+      if (inFormField) return
+      if (key === '=' || key === '+') {
+        setFontSize((v) => Math.min(FONT_MAX, v + 1))
+      } else if (key === '-' || key === '_') {
+        setFontSize((v) => Math.max(FONT_MIN, v - 1))
+      } else if (key === '0') {
+        setFontSize(DEFAULT_FONT)
+      }
+    })
+    return off
+  }, [active])
+
+  useEffect(() => {
+    if (searchOpen) {
+      searchInputRef.current?.focus()
+      return
+    }
+    const rt = activeTabId ? termsRef.current.get(activeTabId) : undefined
+    rt?.search.clearDecorations()
+    const id = window.setTimeout(() => setSearchMatch(null), 0)
+    return () => window.clearTimeout(id)
+  }, [searchOpen, activeTabId])
+
+  const runTermSearch = useCallback(
+    (dir: 'next' | 'prev'): void => {
+      if (!activeTabId || !searchText) return
+      const rt = termsRef.current.get(activeTabId)
+      if (!rt?.search) return
+      const opts = {
+        caseSensitive: false,
+        wholeWord: false,
+        // Decorations must be enabled for onDidChangeResults (match count) to fire.
+        // Use transparent overview ruler colors so the visuals stay unchanged.
+        decorations: {
+          matchOverviewRuler: '#00000000',
+          activeMatchColorOverviewRuler: '#00000000'
+        } as const
+      }
+      skipAutoCopyRef.current = true
+      try {
+        if (dir === 'next') rt.search.findNext(searchText, opts)
+        else rt.search.findPrevious(searchText, opts)
+      } finally {
+        skipAutoCopyRef.current = false
+      }
+    },
+    [activeTabId, searchText]
+  )
+
+  const copySelection = useCallback(async (): Promise<void> => {
+    if (!activeTabId) return
+    const rt = termsRef.current.get(activeTabId)
+    if (!rt) return
+    const text = rt.term.getSelection()
+    if (!text) return
+    await window.api.clipboard.writeText(text)
+    notifyCopiedRef.current()
+  }, [activeTabId])
+
+  const pasteClipboard = useCallback(async (): Promise<void> => {
+    if (!activeTabId) return
+    const rt = termsRef.current.get(activeTabId)
+    if (!rt?.shellSessionId) return
+    const text = await window.api.clipboard.readText()
+    if (text) void window.api.ssh.writeShell(rt.shellSessionId, toBase64(text))
+    rt.term.focus()
+  }, [activeTabId])
+
+  const clearTerminal = useCallback((): void => {
+    if (!activeTabId) return
+    termsRef.current.get(activeTabId)?.term.clear()
+  }, [activeTabId])
+
+  const selectAllTerminal = useCallback((): void => {
+    if (!activeTabId) return
+    termsRef.current.get(activeTabId)?.term.selectAll()
+  }, [activeTabId])
+
+  const buildTermMenu = useCallback(
+    (): MenuProps => ({
+      items: [
+        {
+          key: 'copy',
+          icon: <CopyOutlined />,
+          label: t('sshTermCopy'),
+          disabled: !copyEnabled
+        },
+        { key: 'paste', icon: <SnippetsOutlined />, label: t('sshTermPaste') },
+        { key: 'clear', icon: <ClearOutlined />, label: t('sshTermClear') },
+        { key: 'selectall', icon: <FileTextOutlined />, label: t('sshTermSelectAll') },
+        { type: 'divider' },
+        { key: 'font-inc', icon: <ZoomInOutlined />, label: t('sshTermFontInc') },
+        { key: 'font-dec', icon: <ZoomOutOutlined />, label: t('sshTermFontDec') },
+        { key: 'font-reset', icon: <ReloadOutlined />, label: t('sshTermFontReset') },
+        { type: 'divider' },
+        { key: 'search', icon: <SearchOutlined />, label: t('sshTermSearch') }
+      ],
+      onClick: ({ key }) => {
+        switch (key) {
+          case 'copy':
+            void copySelection()
+            break
+          case 'paste':
+            void pasteClipboard()
+            break
+          case 'clear':
+            clearTerminal()
+            break
+          case 'selectall':
+            selectAllTerminal()
+            break
+          case 'font-inc':
+            setFontSize((v) => Math.min(FONT_MAX, v + 1))
+            break
+          case 'font-dec':
+            setFontSize((v) => Math.max(FONT_MIN, v - 1))
+            break
+          case 'font-reset':
+            setFontSize(DEFAULT_FONT)
+            break
+          case 'search':
+            setSearchOpen(true)
+            break
+        }
+      }
+    }),
+    [clearTerminal, copyEnabled, copySelection, pasteClipboard, selectAllTerminal, t]
+  )
 
   const loadDir = useCallback(
     async (tabId: string, nodeId: string, path: string) => {
@@ -975,6 +1239,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         tab.id === activeTab.id ? { ...tab, filesOpen: true, infoOpen: false } : tab
       )
     )
+    setToolPanel(null)
     setMaximized((m) => (m === 'console' ? null : m))
     void loadDir(activeTab.id, activeTab.nodeId, activeTab.remotePath || '/')
   }, [activeTab, loadDir])
@@ -1027,6 +1292,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         tab.id === tabId ? { ...tab, infoOpen: true, filesOpen: false } : tab
       )
     )
+    setToolPanel(null)
     setMaximized((m) => (m === 'files' ? null : m))
     void refreshSysInfo()
   }, [activeTab, refreshSysInfo])
@@ -1042,6 +1308,24 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     )
     if (!othersOpen) await window.api.ssh.disconnectSysInfo(nodeId)
   }, [activeTab, maximized])
+
+  const openTool = useCallback(
+    (key: ToolPanelKey): void => {
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === activeTab?.id ? { ...tab, filesOpen: false, infoOpen: false } : tab
+        )
+      )
+      setToolPanel(key)
+      setMaximized((m) => (m === 'files' || m === 'info' ? null : m))
+    },
+    [activeTab?.id]
+  )
+
+  const closeTool = useCallback((): void => {
+    setToolPanel(null)
+    if (maximized === 'tool') setMaximized(null)
+  }, [maximized])
 
   useEffect(() => {
     if (!active || !activeTab?.infoOpen) return
@@ -1150,7 +1434,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         if (!existing.loading) focusEditor(tabId, entry.path)
         return
       }
-      if (maximized === 'files' || maximized === 'info') setMaximized('console')
+      if (maximized === 'files' || maximized === 'info' || maximized === 'tool') setMaximized('console')
       const init: SshFileEditorState = {
         tabId,
         nodeId,
@@ -1393,6 +1677,116 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     }
   }, [activeTab, createOpen, createName, loadDir, message, t])
 
+  useEffect(() => {
+    localStorage.setItem('ssh-bookmarks', JSON.stringify(bookmarks))
+  }, [bookmarks])
+
+  const currentPathBookmarked = !!activeTab && bookmarks.includes(activeTab.remotePath)
+
+  const toggleBookmark = useCallback((): void => {
+    if (!activeTab) return
+    const p = activeTab.remotePath || '/'
+    setBookmarks((prev) => {
+      if (prev.includes(p)) return prev.filter((x) => x !== p)
+      return [...prev, p]
+    })
+  }, [activeTab])
+
+  const goBookmark = useCallback(
+    (p: string): void => {
+      if (!activeTab) return
+      void loadDir(activeTab.id, activeTab.nodeId, p)
+    },
+    [activeTab, loadDir]
+  )
+
+  const openImport = useCallback(async (): Promise<void> => {
+    setImportOpen(true)
+    setImportLoading(true)
+    setImportError(null)
+    setImportCandidates([])
+    setImportSelected([])
+    try {
+      const res = await window.api.ssh.importSshConfig()
+      if (res.ok) {
+        setImportCandidates(res.candidates)
+        setImportSelected(res.candidates.map((c) => c.name))
+      } else {
+        setImportError(res.error)
+      }
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setImportLoading(false)
+    }
+  }, [])
+
+  const confirmImport = useCallback(async (): Promise<void> => {
+    const selected = importCandidates.filter((c) => importSelected.includes(c.name))
+    if (selected.length === 0) return
+    setImporting(true)
+    try {
+      let count = 0
+      for (const c of selected) {
+        await window.api.ssh.saveNode({
+          name: c.name,
+          host: c.host,
+          port: c.port,
+          username: c.username,
+          authType: c.authType,
+          privateKeyPath: c.privateKeyPath,
+          jumpHostId: null
+        })
+        count += 1
+      }
+      message.success(t('sshImportConfigImported', { count }))
+      setImportOpen(false)
+      loadNodes()
+    } catch (err) {
+      message.error(mapSshError(err, t))
+    } finally {
+      setImporting(false)
+    }
+  }, [importCandidates, importSelected, loadNodes, message, t])
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>): void => {
+      e.preventDefault()
+      setDragOver(false)
+      if (!activeTab) return
+      const files = Array.from(e.dataTransfer?.files ?? [])
+      if (files.length === 0) return
+      const paths = files
+        .map((f) => window.api.files.getPathForFile(f))
+        .filter((p): p is string => Boolean(p))
+      if (paths.length === 0) {
+        message.warning(t('sshClientDropNoPath'))
+        return
+      }
+      void (async () => {
+        setUploading(true)
+        try {
+          const res = await window.api.ssh.sftpUploadPaths(
+            activeTab.nodeId,
+            activeTab.remotePath || '/',
+            paths
+          )
+          if (res.ok) {
+            message.success(t('sshClientUploadOk', { count: res.count ?? 0 }))
+            void loadDir(activeTab.id, activeTab.nodeId, activeTab.remotePath || '/')
+          } else {
+            message.error(mapSshError(res.error ?? '', t))
+          }
+        } catch (err) {
+          message.error(mapSshError(err, t))
+        } finally {
+          setUploading(false)
+        }
+      })()
+    },
+    [activeTab, loadDir, message, t]
+  )
+
   const createMenu: MenuProps['items'] = [
     {
       key: 'file',
@@ -1417,10 +1811,45 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const filesOpen = !!activeTab?.filesOpen
   const infoOpen = !!activeTab?.infoOpen
   const showSidebar = maximized === null || maximized === 'editor'
-  const showConsole = maximized !== 'files' && maximized !== 'info'
+  const showConsole = maximized !== 'files' && maximized !== 'info' && maximized !== 'tool'
   const showConsoleTitle = showConsole && maximized !== 'editor'
-  const showFiles = filesOpen && maximized !== 'console' && maximized !== 'info'
-  const showInfo = infoOpen && maximized !== 'console' && maximized !== 'files'
+  const showFiles = filesOpen && maximized !== 'console' && maximized !== 'info' && maximized !== 'tool'
+  const showInfo = infoOpen && maximized !== 'console' && maximized !== 'files' && maximized !== 'tool'
+  const showTools =
+    toolPanel !== null && maximized !== 'console' && maximized !== 'files' && maximized !== 'info'
+
+  const toolTitle = useMemo(() => {
+    switch (toolPanel) {
+      case 'commands':
+        return t('sshToolCommands')
+      case 'process':
+        return t('sshToolProcess')
+      case 'services':
+        return t('sshToolServices')
+      case 'logs':
+        return t('sshToolLogs')
+      default:
+        return ''
+    }
+  }, [toolPanel, t])
+
+  const renderToolPanel = useCallback(
+    (tab: SessionTab): React.JSX.Element | null => {
+      switch (toolPanel) {
+        case 'commands':
+          return <CommandPanel shellSessionId={tab.shellSessionId} />
+        case 'process':
+          return <ProcessPanel nodeId={tab.nodeId} onClose={closeTool} />
+        case 'services':
+          return <ServicesPanel nodeId={tab.nodeId} onClose={closeTool} />
+        case 'logs':
+          return <LogTailPanel nodeId={tab.nodeId} onClose={closeTool} />
+        default:
+          return null
+      }
+    },
+    [toolPanel, closeTool]
+  )
   const entries = activeTab ? (entriesByTab[activeTab.id] ?? []) : []
   const crumbs = pathSegments(activeTab?.remotePath || '/')
   const tabEditors = activeTab ? (editorsByTab[activeTab.id] ?? []) : []
@@ -1573,7 +2002,14 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   }, [active, activeTabId, hasActiveEditor, fitActiveTerm])
 
   useEffect(() => {
-    if (!active || !activeTabId || maximized === 'editor' || maximized === 'files' || maximized === 'info')
+    if (
+      !active ||
+      !activeTabId ||
+      maximized === 'editor' ||
+      maximized === 'files' ||
+      maximized === 'info' ||
+      maximized === 'tool'
+    )
       return
     const id = window.requestAnimationFrame(fitActiveTerm)
     return () => window.cancelAnimationFrame(id)
@@ -1619,6 +2055,14 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   }}
                 >
                   <PlusOutlined />
+                </button>
+                <button
+                  type="button"
+                  className={BTN_ICON}
+                  title={t('sshImportConfig')}
+                  onClick={() => void openImport()}
+                >
+                  <ImportOutlined />
                 </button>
               </>
             )}
@@ -1897,6 +2341,26 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   >
                     <DashboardOutlined />
                   </button>
+                  <Dropdown
+                    trigger={['click']}
+                    menu={{
+                      items: [
+                        { key: 'commands', icon: <SnippetsOutlined />, label: t('sshToolCommands') },
+                        { key: 'process', icon: <ApiOutlined />, label: t('sshToolProcess') },
+                        { key: 'services', icon: <CloudServerOutlined />, label: t('sshToolServices') },
+                        { key: 'logs', icon: <FileTextOutlined />, label: t('sshToolLogs') }
+                      ],
+                      onClick: ({ key }) => openTool(key as ToolPanelKey)
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className={toolPanel ? BTN_ICON_ACTIVE : BTN_ICON}
+                      title={t('sshTools')}
+                    >
+                      <ToolOutlined />
+                    </button>
+                  </Dropdown>
                   <button
                     type="button"
                     className={BTN_ICON}
@@ -2014,6 +2478,40 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   </button>
                 </div>
               )}
+              {showTools && (
+                <div
+                  className={`${TITLE_BAR_CLS} ${maximized === 'tool' ? 'flex-1' : 'w-[300px] shrink-0'}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+                      {toolTitle}
+                    </div>
+                    <div className="text-[10px] font-mono text-[var(--text-secondary)] truncate">
+                      {activeTab.title}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={BTN_ICON}
+                    title={
+                      maximized === 'tool'
+                        ? t('sshClientExitFullscreen')
+                        : t('sshClientFullscreen')
+                    }
+                    onClick={() => setMaximized((m) => (m === 'tool' ? null : 'tool'))}
+                  >
+                    {maximized === 'tool' ? <CompressOutlined /> : <ExpandOutlined />}
+                  </button>
+                  <button
+                    type="button"
+                    className={BTN_ICON}
+                    title={t('sshClientClose')}
+                    onClick={closeTool}
+                  >
+                    <CloseOutlined />
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 min-h-0 flex overflow-hidden">
@@ -2034,15 +2532,79 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                         className="absolute inset-0 p-1"
                         style={{ display: tab.id === activeTabId ? 'block' : 'none' }}
                       >
-                        <div
-                          ref={(el) => {
-                            if (el) termHostsRef.current.set(tab.id, el)
-                            else termHostsRef.current.delete(tab.id)
+                        <Dropdown
+                          trigger={['contextMenu']}
+                          menu={buildTermMenu()}
+                          onOpenChange={(open) => {
+                            if (!open) return
+                            const rt = termsRef.current.get(tab.id)
+                            setCopyEnabled(Boolean(rt?.term.getSelection()))
                           }}
-                          className="h-full w-full min-h-0 overflow-hidden bg-[var(--bg-warm)]"
-                        />
+                        >
+                          <div
+                            ref={(el) => {
+                              if (el) termHostsRef.current.set(tab.id, el)
+                              else termHostsRef.current.delete(tab.id)
+                            }}
+                            className="h-full w-full min-h-0 overflow-hidden bg-[var(--bg-warm)]"
+                          />
+                        </Dropdown>
                       </div>
                     ))}
+                    {searchOpen && activeTabId && showConsole && (
+                      <div className="absolute top-2 right-2 z-20 flex items-center gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] p-1 shadow-sm">
+                        <Input
+                          ref={searchInputRef}
+                          size="small"
+                          allowClear
+                          placeholder={t('sshTermSearchPlaceholder')}
+                          value={searchText}
+                          onChange={(e) => {
+                            setSearchText(e.target.value)
+                            setSearchMatch(null)
+                          }}
+                          onPressEnter={() => runTermSearch('next')}
+                          className="w-44"
+                        />
+                        {searchMatch && (
+                          <span
+                            className={`shrink-0 text-[10px] ${
+                              searchMatch.count > 0
+                                ? 'text-[var(--text-secondary)]'
+                                : 'text-red-500'
+                            }`}
+                          >
+                            {searchMatch.count > 0
+                              ? `${searchMatch.index + 1}/${searchMatch.count}`
+                              : '0/0'}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className={BTN_ICON}
+                          title={t('sshTermSearchPrev')}
+                          onClick={() => runTermSearch('prev')}
+                        >
+                          <ArrowUpOutlined />
+                        </button>
+                        <button
+                          type="button"
+                          className={BTN_ICON}
+                          title={t('sshTermSearchNext')}
+                          onClick={() => runTermSearch('next')}
+                        >
+                          <ArrowDownOutlined />
+                        </button>
+                        <button
+                          type="button"
+                          className={BTN_ICON}
+                          title={t('sshTermSearchClose')}
+                          onClick={() => setSearchOpen(false)}
+                        >
+                          <CloseOutlined />
+                        </button>
+                      </div>
+                    )}
                   </div>
                   {activeEditor && (
                     <>
@@ -2103,8 +2665,45 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                     >
                       {filesLoading ? <LoadingOutlined /> : <ReloadOutlined />}
                     </button>
+                    <button
+                      type="button"
+                      className={currentPathBookmarked ? BTN_ICON_ACTIVE : BTN_ICON}
+                      title={t('sshClientBookmarkToggle')}
+                      onClick={toggleBookmark}
+                    >
+                      {currentPathBookmarked ? <StarFilled /> : <StarOutlined />}
+                    </button>
+                    <Dropdown
+                      trigger={['click']}
+                      menu={{
+                        items: bookmarks.map((p) => ({
+                          key: p,
+                          label: <span className="font-mono">{p}</span>
+                        })),
+                        onClick: ({ key }) => goBookmark(key)
+                      }}
+                    >
+                      <button type="button" className={BTN_ICON} title={t('sshClientBookmarks')}>
+                        <BookOutlined />
+                      </button>
+                    </Dropdown>
                   </div>
-                  <div className="flex-1 min-h-0 overflow-auto">
+                  <div
+                    className="relative flex-1 min-h-0 overflow-auto"
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setDragOver(true)
+                    }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={handleDrop}
+                  >
+                    {dragOver && (
+                      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed border-[var(--accent)] bg-[var(--accent)]/10">
+                        <span className="rounded-lg bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--accent)]">
+                          {t('sshClientDropUpload')}
+                        </span>
+                      </div>
+                    )}
                     <Spin spinning={filesLoading} className="min-h-full">
                       <Table
                         size="small"
@@ -2216,6 +2815,16 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   </div>
                 </div>
               )}
+              {showTools && activeTab && (
+                <div
+                  key={activeTab.id}
+                  className={`min-h-0 flex flex-col bg-[var(--content-bg)] ${
+                    maximized === 'tool' ? 'flex-1' : 'w-[300px] shrink-0'
+                  }`}
+                >
+                  <div className="flex-1 min-h-0 overflow-auto">{renderToolPanel(activeTab)}</div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2268,6 +2877,59 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
           onChange={(e) => setCreateName(e.target.value)}
           onPressEnter={() => void submitCreate()}
         />
+      </Modal>
+
+      <Modal
+        open={importOpen}
+        title={t('sshImportConfigTitle')}
+        onCancel={() => setImportOpen(false)}
+        onOk={() => void confirmImport()}
+        okText={t('sshImportConfigImport')}
+        okButtonProps={{ disabled: importSelected.length === 0 }}
+        confirmLoading={importing}
+        cancelText={t('sshCancel')}
+        destroyOnHidden
+        centered
+        width={640}
+      >
+        {importError ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('sshImportConfigFail', { msg: importError })} />
+        ) : (
+          <Table
+            size="small"
+            rowKey="name"
+            loading={importLoading}
+            pagination={false}
+            dataSource={importCandidates}
+            rowSelection={{
+              selectedRowKeys: importSelected,
+              onChange: (keys) => setImportSelected(keys.map(String))
+            }}
+            locale={{ emptyText: t('sshImportConfigEmpty') }}
+            columns={[
+              {
+                title: t('sshImportConfigColHost'),
+                dataIndex: 'name',
+                render: (v: string, row: SshConfigCandidate) => (
+                  <span className="font-mono text-xs">
+                    {v}
+                    <span className="text-[var(--text-secondary)]"> → {row.host}</span>
+                  </span>
+                )
+              },
+              { title: t('sshImportConfigColUser'), dataIndex: 'username', width: 120 },
+              { title: t('sshImportConfigColPort'), dataIndex: 'port', width: 72 },
+              {
+                title: t('sshImportConfigColKey'),
+                dataIndex: 'privateKeyPath',
+                width: 200,
+                ellipsis: true,
+                render: (v?: string) =>
+                  v ? <span className="font-mono text-xs">{v}</span> : t('sshAuthPassword')
+              }
+            ]}
+          />
+        )}
       </Modal>
     </div>
   )

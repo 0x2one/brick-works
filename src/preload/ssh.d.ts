@@ -68,6 +68,19 @@ interface SshNodeInput {
   jumpHostId?: string | null
 }
 
+interface SshConfigCandidate {
+  name: string
+  host: string
+  port: number
+  username: string
+  authType: 'password' | 'privateKey'
+  privateKeyPath?: string
+}
+
+type SshImportConfigResult =
+  | { ok: true; path: string; candidates: SshConfigCandidate[] }
+  | { ok: false; error: string }
+
 interface SshTunnelSpec {
   id?: string
   nodeId?: string
@@ -149,3 +162,35 @@ interface SshSysInfo {
 }
 
 type SshSysInfoResult = { ok: true; info: SshSysInfo } | { ok: false; error: string }
+
+interface SshProcessInfo {
+  pid: number
+  ppid: number
+  user: string
+  cpu: number
+  mem: number
+  rss: number
+  stat: string
+  etimes: number
+  cmd: string
+}
+
+interface SshServiceInfo {
+  unit: string
+  loaded: string
+  active: string
+  sub: string
+  description: string
+}
+
+type SshServiceAction = 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable'
+
+interface SshExecData {
+  sessionId: string
+  data: string
+}
+
+interface SshTailExit {
+  sessionId: string
+  reason?: string
+}
