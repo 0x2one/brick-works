@@ -113,6 +113,8 @@ interface SshSftpEntry {
   owner?: number
   group?: number
   mode?: number
+  /** true when the entry is a symbolic link; `type` is resolved to the link target */
+  isSymlink?: boolean
 }
 
 interface SshSftpReadResult {

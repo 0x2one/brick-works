@@ -1,4 +1,4 @@
-import { Client, type ClientChannel, type SFTPWrapper } from 'ssh2'
+import { Client, type ClientChannel, type SFTPWrapper, type FileEntry } from 'ssh2'
 import { promises as fsp } from 'fs'
 import { dirname, join, basename } from 'path'
 import { randomUUID } from 'crypto'
@@ -32,6 +32,8 @@ export interface SshSftpEntry {
   owner?: number
   group?: number
   mode?: number
+  /** true when the entry is a symbolic link; `type` is resolved to the link target */
+  isSymlink?: boolean
 }
 
 export interface SshSftpReadResult {
@@ -237,35 +239,69 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     }
   }
 
-  function listDir(sftp: SFTPWrapper, remotePath: string): Promise<SshSftpEntry[]> {
+  function statFollow(
+    sftp: SFTPWrapper,
+    remotePath: string
+  ): Promise<{ type: SshSftpEntry['type']; size: number; modifyTime: number }> {
     return new Promise((resolve, reject) => {
-      sftp.readdir(remotePath, (err, list) => {
+      sftp.stat(remotePath, (err, stats) => {
+        if (err || !stats) {
+          reject(new Error(err?.message || 'SFTP_STAT_FAILED'))
+          return
+        }
+        resolve({
+          type: entryType(stats),
+          size: stats.size ?? 0,
+          modifyTime: (stats.mtime ?? 0) * 1000
+        })
+      })
+    })
+  }
+
+  async function listDir(sftp: SFTPWrapper, remotePath: string): Promise<SshSftpEntry[]> {
+    const list = await new Promise<FileEntry[]>((resolve, reject) => {
+      sftp.readdir(remotePath, (err, l) => {
         if (err) {
           reject(new Error(err.message || 'SFTP_LIST_FAILED'))
           return
         }
-        const entries: SshSftpEntry[] = (list || []).map((item) => {
-          const attrs = item.attrs
-          return {
-            name: item.filename,
-            path: posixJoin(remotePath === '.' ? '/' : remotePath, item.filename),
-            type: entryType(attrs),
-            size: attrs.size ?? 0,
-            modifyTime: (attrs.mtime ?? 0) * 1000,
-            accessTime: (attrs.atime ?? 0) * 1000,
-            owner: attrs.uid,
-            group: attrs.gid,
-            mode: attrs.mode
-          }
-        })
-        entries.sort((a, b) => {
-          if (a.type === 'directory' && b.type !== 'directory') return -1
-          if (a.type !== 'directory' && b.type === 'directory') return 1
-          return a.name.localeCompare(b.name)
-        })
-        resolve(entries)
+        resolve((l || []) as FileEntry[])
       })
     })
+    const entries: SshSftpEntry[] = list.map((item) => {
+      const attrs = item.attrs
+      return {
+        name: item.filename,
+        path: posixJoin(remotePath === '.' ? '/' : remotePath, item.filename),
+        type: entryType(attrs),
+        size: attrs.size ?? 0,
+        modifyTime: (attrs.mtime ?? 0) * 1000,
+        accessTime: (attrs.atime ?? 0) * 1000,
+        owner: attrs.uid,
+        group: attrs.gid,
+        mode: attrs.mode
+      }
+    })
+    await Promise.all(
+      entries.map(async (entry) => {
+        if (entry.type !== 'symlink') return
+        try {
+          const resolved = await statFollow(sftp, entry.path)
+          entry.type = resolved.type
+          entry.size = resolved.size
+          entry.modifyTime = resolved.modifyTime
+          entry.isSymlink = true
+        } catch {
+          entry.isSymlink = true
+        }
+      })
+    )
+    entries.sort((a, b) => {
+      if (a.type === 'directory' && b.type !== 'directory') return -1
+      if (a.type !== 'directory' && b.type === 'directory') return 1
+      return a.name.localeCompare(b.name)
+    })
+    return entries
   }
 
   function downloadOneFile(
@@ -343,7 +379,7 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     for (const entry of entries) {
       if (entry.name === '.' || entry.name === '..') continue
       const localPath = join(localDir, entry.name)
-      if (entry.type === 'directory') {
+      if (entry.type === 'directory' && !entry.isSymlink) {
         count += await downloadTree(sftp, entry.path, localPath)
       } else if (entry.type === 'file' || entry.type === 'symlink') {
         await fsp.mkdir(dirname(localPath), { recursive: true })
@@ -359,7 +395,7 @@ export function createSshClientManager(options: SshClientManagerOptions): {
     remotePath: string
   ): Promise<{ type: SshSftpEntry['type']; size: number }> {
     return new Promise((resolve, reject) => {
-      sftp.lstat(remotePath, (err, stats) => {
+      sftp.stat(remotePath, (err, stats) => {
         if (err || !stats) {
           reject(new Error(err?.message || 'SFTP_STAT_FAILED'))
           return

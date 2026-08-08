@@ -1986,10 +1986,10 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                                   }
                                 }}
                               >
-                                {row.type === 'directory' ? (
-                                  <FolderOutlined />
-                                ) : row.type === 'symlink' ? (
+                                {row.isSymlink ? (
                                   <LinkOutlined />
+                                ) : row.type === 'directory' ? (
+                                  <FolderOutlined />
                                 ) : (
                                   <FileOutlined />
                                 )}
