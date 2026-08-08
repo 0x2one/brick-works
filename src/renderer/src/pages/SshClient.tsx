@@ -89,7 +89,7 @@ const SSH_ERROR_CODES = [
   'SHELL_FAILED'
 ] as const
 
-type MaximizeMode = null | 'console' | 'files'
+type MaximizeMode = null | 'console' | 'files' | 'editor'
 
 interface SessionTab {
   id: string
@@ -1331,7 +1331,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   ]
 
   const filesOpen = !!activeTab?.filesOpen
-  const showSidebar = maximized === null
+  const showSidebar = maximized === null || maximized === 'editor'
   const showConsole = maximized !== 'files'
   const showFiles = filesOpen && maximized !== 'console'
   const entries = activeTab ? (entriesByTab[activeTab.id] ?? []) : []
@@ -1352,6 +1352,12 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     const id = window.requestAnimationFrame(fitActiveTerm)
     return () => window.cancelAnimationFrame(id)
   }, [active, activeTabId, hasActiveEditor, fitActiveTerm])
+
+  useEffect(() => {
+    if (!active || !activeTabId || maximized === 'editor' || maximized === 'files') return
+    const id = window.requestAnimationFrame(fitActiveTerm)
+    return () => window.cancelAnimationFrame(id)
+  }, [active, activeTabId, maximized, fitActiveTerm])
 
   return (
     <div
@@ -1714,14 +1720,17 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
             </div>
 
             <div className="flex-1 min-h-0 flex overflow-hidden">
-              {showConsole && (
-                <div
-                  ref={consoleHostRef}
-                  className={`min-w-0 min-h-0 flex flex-col bg-[var(--bg-warm)] ${
-                    showFiles ? 'flex-1 border-r border-[var(--border-subtle)]' : 'flex-1'
-                  }`}
-                >
-                  <div className="relative flex-1 min-h-0">
+              <div
+                ref={consoleHostRef}
+                className={`min-w-0 min-h-0 flex flex-col bg-[var(--bg-warm)] ${
+                  showFiles ? 'flex-1 border-r border-[var(--border-subtle)]' : 'flex-1'
+                }`}
+                style={showConsole ? undefined : { display: 'none' }}
+              >
+                  <div
+                    className="relative flex-1 min-h-0"
+                    style={maximized === 'editor' ? { display: 'none' } : undefined}
+                  >
                     {tabs.map((tab) => (
                       <div
                         key={tab.id}
@@ -1740,16 +1749,20 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   </div>
                   {activeEditor && (
                     <>
+                      {maximized !== 'editor' && (
+                        <div
+                          className="shrink-0 h-2 flex items-center justify-center cursor-row-resize text-[var(--text-secondary)] hover:bg-[var(--accent)]/15 active:bg-[var(--accent)]/25"
+                          title={t('sshClientEditResize')}
+                          onPointerDown={handleEditorDividerPointerDown}
+                        >
+                          <HolderOutlined className="text-[10px]" />
+                        </div>
+                      )}
                       <div
-                        className="shrink-0 h-2 flex items-center justify-center cursor-row-resize text-[var(--text-secondary)] hover:bg-[var(--accent)]/15 active:bg-[var(--accent)]/25"
-                        title={t('sshClientEditResize')}
-                        onPointerDown={handleEditorDividerPointerDown}
-                      >
-                        <HolderOutlined className="text-[10px]" />
-                      </div>
-                      <div
-                        className="shrink-0 flex flex-col min-h-0 bg-[var(--surface)] border-t border-[var(--border-subtle)]"
-                        style={{ height: editorHeight }}
+                        className={`flex flex-col min-h-0 bg-[var(--surface)] border-t border-[var(--border-subtle)] ${
+                          maximized === 'editor' ? 'flex-1' : 'shrink-0'
+                        }`}
+                        style={maximized === 'editor' ? undefined : { height: editorHeight }}
                       >
                         <div className="h-9 shrink-0 flex items-center gap-1 px-2 border-b border-[var(--border-subtle)] bg-[var(--bg-warm)]">
                           <FileTextOutlined className="shrink-0 text-[var(--text-secondary)] mr-0.5" />
@@ -1820,6 +1833,20 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                           <button
                             type="button"
                             className={BTN_ICON}
+                            title={
+                              maximized === 'editor'
+                                ? t('sshClientExitFullscreen')
+                                : t('sshClientFullscreen')
+                            }
+                            onClick={() =>
+                              setMaximized((m) => (m === 'editor' ? null : 'editor'))
+                            }
+                          >
+                            {maximized === 'editor' ? <CompressOutlined /> : <ExpandOutlined />}
+                          </button>
+                          <button
+                            type="button"
+                            className={BTN_ICON}
                             title={t('sshClientClose')}
                             onClick={() => void closeEditorPanel(activeEditor.tabId)}
                           >
@@ -1880,8 +1907,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                       </div>
                     </>
                   )}
-                </div>
-              )}
+              </div>
 
               {showFiles && (
                 <div
