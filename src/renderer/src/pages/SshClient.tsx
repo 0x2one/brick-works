@@ -1333,6 +1333,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const filesOpen = !!activeTab?.filesOpen
   const showSidebar = maximized === null || maximized === 'editor'
   const showConsole = maximized !== 'files'
+  const showConsoleTitle = showConsole && maximized !== 'editor'
   const showFiles = filesOpen && maximized !== 'console'
   const entries = activeTab ? (entriesByTab[activeTab.id] ?? []) : []
   const crumbs = pathSegments(activeTab?.remotePath || '/')
@@ -1346,6 +1347,138 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     ? activeEditor.content !== activeEditor.original
     : false
   const hasActiveEditor = tabEditors.length > 0
+
+  const editorHeader =
+    activeTab && activeEditor ? (
+      <div className="h-10 shrink-0 flex items-center gap-1 px-2 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
+        <FileTextOutlined className="shrink-0 text-[var(--text-secondary)] mr-0.5" />
+        <div className="flex-1 min-w-0 flex items-center gap-1 overflow-x-auto">
+          {tabEditors.map((ed) => {
+            const isActive = activeEditor?.path === ed.path
+            const edDirty = ed.content !== ed.original
+            return (
+              <div
+                key={ed.path}
+                title={ed.path}
+                className={`shrink-0 h-7 pl-2.5 pr-1.5 rounded-lg text-xs flex items-center gap-1.5 border cursor-pointer transition-colors ${
+                  isActive
+                    ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                    : 'bg-[var(--bg-warm)] text-[var(--text-primary)] border-[var(--border-subtle)] hover:border-[var(--text-secondary)]'
+                }`}
+                onClick={() => focusEditor(activeTab.id, ed.path)}
+              >
+                {ed.loading ? (
+                  <LoadingOutlined className="text-[10px]" />
+                ) : (
+                  <FileTextOutlined className="text-[10px]" />
+                )}
+                <span className="max-w-[140px] truncate">{ed.name}</span>
+                {edDirty && (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{
+                      background: isActive ? 'rgba(255,255,255,0.85)' : 'var(--accent)'
+                    }}
+                  />
+                )}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className={`h-4 w-4 rounded flex items-center justify-center ${
+                    isActive ? 'hover:bg-white/20' : 'hover:bg-[var(--border-subtle)]'
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void closeFileEditor(activeTab.id, ed.path)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation()
+                      void closeFileEditor(activeTab.id, ed.path)
+                    }
+                  }}
+                >
+                  <CloseOutlined className="text-[9px]" />
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        <button
+          type="button"
+          className={BTN_TEXT}
+          disabled={activeEditor.saving || !activeEditorDirty}
+          title={t('sshClientEditSaveHint')}
+          onClick={() => void saveFileEditor(activeEditor.tabId, activeEditor.path)}
+        >
+          {activeEditor.saving ? <LoadingOutlined /> : <SaveOutlined />}
+          {t('sshClientEditSave')}
+        </button>
+        <button
+          type="button"
+          className={BTN_ICON}
+          title={
+            maximized === 'editor' ? t('sshClientExitFullscreen') : t('sshClientFullscreen')
+          }
+          onClick={() => setMaximized((m) => (m === 'editor' ? null : 'editor'))}
+        >
+          {maximized === 'editor' ? <CompressOutlined /> : <ExpandOutlined />}
+        </button>
+        <button
+          type="button"
+          className={BTN_ICON}
+          title={t('sshClientClose')}
+          onClick={() => void closeEditorPanel(activeEditor.tabId)}
+        >
+          <CloseOutlined />
+        </button>
+      </div>
+    ) : null
+
+  const editorContent = activeEditor ? (
+    <div className="flex-1 min-h-0">
+      {activeEditor.loading ? (
+        <div className="h-full flex items-center justify-center">
+          <Spin />
+        </div>
+      ) : activeEditor.binary ? (
+        <div className="h-full flex items-center justify-center px-6">
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('sshClientEditBinary')} />
+        </div>
+      ) : activeEditor.error ? (
+        <div className="h-full flex items-center justify-center px-6">
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={activeEditor.error} />
+        </div>
+      ) : (
+        <Editor
+          height="100%"
+          language={extToLang(activeEditor.name)}
+          value={activeEditor.content}
+          theme={themeResolved === 'dark' ? 'vs-dark' : 'light'}
+          loading={<Spin />}
+          options={{
+            fontSize: 13,
+            minimap: { enabled: false },
+            wordWrap: 'off',
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            tabSize: 2,
+            renderWhitespace: 'none'
+          }}
+          onChange={(value) => {
+            if (!activeEditor) return
+            updateEditorContent(activeEditor.tabId, activeEditor.path, value ?? '')
+          }}
+          onMount={(editor, monaco) => {
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+              if (!activeEditor) return
+              void saveFileEditor(activeEditor.tabId, activeEditor.path)
+            })
+          }}
+        />
+      )}
+    </div>
+  ) : null
 
   useEffect(() => {
     if (!active || !activeTabId) return
@@ -1624,7 +1757,16 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         ) : (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="shrink-0 flex min-w-0">
-              {showConsole && (
+              {maximized === 'editor' ? (
+                editorHeader ? (
+                  <div
+                    className={`flex-1 min-w-0 ${showFiles ? 'border-r border-[var(--border-subtle)]' : ''}`}
+                  >
+                    {editorHeader}
+                  </div>
+                ) : null
+              ) : (
+                showConsoleTitle && (
                 <div
                   className={`${TITLE_BAR_CLS} ${showFiles ? 'flex-1 min-w-0 border-r border-[var(--border-subtle)]' : 'flex-1 min-w-0'}`}
                 >
@@ -1666,6 +1808,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                     <CloseOutlined />
                   </button>
                 </div>
+                )
               )}
               {showFiles && (
                 <div
@@ -1759,151 +1902,15 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                         </div>
                       )}
                       <div
-                        className={`flex flex-col min-h-0 bg-[var(--surface)] border-t border-[var(--border-subtle)] ${
-                          maximized === 'editor' ? 'flex-1' : 'shrink-0'
+                        className={`flex flex-col min-h-0 bg-[var(--surface)] ${
+                          maximized === 'editor'
+                            ? 'flex-1'
+                            : 'shrink-0 border-t border-[var(--border-subtle)]'
                         }`}
                         style={maximized === 'editor' ? undefined : { height: editorHeight }}
                       >
-                        <div className="h-9 shrink-0 flex items-center gap-1 px-2 border-b border-[var(--border-subtle)] bg-[var(--bg-warm)]">
-                          <FileTextOutlined className="shrink-0 text-[var(--text-secondary)] mr-0.5" />
-                          <div className="flex-1 min-w-0 flex items-center gap-1 overflow-x-auto">
-                            {tabEditors.map((ed) => {
-                              const isActive = activeEditor?.path === ed.path
-                              const edDirty = ed.content !== ed.original
-                              return (
-                                <div
-                                  key={ed.path}
-                                  title={ed.path}
-                                  className={`shrink-0 h-7 pl-2.5 pr-1.5 rounded-lg text-xs flex items-center gap-1.5 border cursor-pointer transition-colors ${
-                                    isActive
-                                      ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-                                      : 'bg-[var(--surface)] text-[var(--text-primary)] border-[var(--border-subtle)] hover:border-[var(--text-secondary)]'
-                                  }`}
-                                  onClick={() => focusEditor(activeTab.id, ed.path)}
-                                >
-                                  {ed.loading ? (
-                                    <LoadingOutlined className="text-[10px]" />
-                                  ) : (
-                                    <FileTextOutlined className="text-[10px]" />
-                                  )}
-                                  <span className="max-w-[140px] truncate">{ed.name}</span>
-                                  {edDirty && (
-                                    <span
-                                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                                      style={{
-                                        background: isActive
-                                          ? 'rgba(255,255,255,0.85)'
-                                          : 'var(--accent)'
-                                      }}
-                                    />
-                                  )}
-                                  <span
-                                    role="button"
-                                    tabIndex={0}
-                                    className={`h-4 w-4 rounded flex items-center justify-center ${
-                                      isActive ? 'hover:bg-white/20' : 'hover:bg-[var(--border-subtle)]'
-                                    }`}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      void closeFileEditor(activeTab.id, ed.path)
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter' || e.key === ' ') {
-                                        e.stopPropagation()
-                                        void closeFileEditor(activeTab.id, ed.path)
-                                      }
-                                    }}
-                                  >
-                                    <CloseOutlined className="text-[9px]" />
-                                  </span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                          <button
-                            type="button"
-                            className={BTN_TEXT}
-                            disabled={activeEditor.saving || !activeEditorDirty}
-                            title={t('sshClientEditSaveHint')}
-                            onClick={() => void saveFileEditor(activeEditor.tabId, activeEditor.path)}
-                          >
-                            {activeEditor.saving ? <LoadingOutlined /> : <SaveOutlined />}
-                            {t('sshClientEditSave')}
-                          </button>
-                          <button
-                            type="button"
-                            className={BTN_ICON}
-                            title={
-                              maximized === 'editor'
-                                ? t('sshClientExitFullscreen')
-                                : t('sshClientFullscreen')
-                            }
-                            onClick={() =>
-                              setMaximized((m) => (m === 'editor' ? null : 'editor'))
-                            }
-                          >
-                            {maximized === 'editor' ? <CompressOutlined /> : <ExpandOutlined />}
-                          </button>
-                          <button
-                            type="button"
-                            className={BTN_ICON}
-                            title={t('sshClientClose')}
-                            onClick={() => void closeEditorPanel(activeEditor.tabId)}
-                          >
-                            <CloseOutlined />
-                          </button>
-                        </div>
-                        <div className="flex-1 min-h-0">
-                          {activeEditor.loading ? (
-                            <div className="h-full flex items-center justify-center">
-                              <Spin />
-                            </div>
-                          ) : activeEditor.binary ? (
-                            <div className="h-full flex items-center justify-center px-6">
-                              <Empty
-                                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                description={t('sshClientEditBinary')}
-                              />
-                            </div>
-                          ) : activeEditor.error ? (
-                            <div className="h-full flex items-center justify-center px-6">
-                              <Empty
-                                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                description={activeEditor.error}
-                              />
-                            </div>
-                          ) : (
-                            <Editor
-                              height="100%"
-                              language={extToLang(activeEditor.name)}
-                              value={activeEditor.content}
-                              theme={themeResolved === 'dark' ? 'vs-dark' : 'light'}
-                              loading={<Spin />}
-                              options={{
-                                fontSize: 13,
-                                minimap: { enabled: false },
-                                wordWrap: 'off',
-                                scrollBeyondLastLine: false,
-                                automaticLayout: true,
-                                tabSize: 2,
-                                renderWhitespace: 'none'
-                              }}
-                              onChange={(value) => {
-                                if (!activeEditor) return
-                                updateEditorContent(activeEditor.tabId, activeEditor.path, value ?? '')
-                              }}
-                              onMount={(editor, monaco) => {
-                                editor.addCommand(
-                                  monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
-                                  () => {
-                                    if (!activeEditor) return
-                                    void saveFileEditor(activeEditor.tabId, activeEditor.path)
-                                  }
-                                )
-                              }}
-                            />
-                          )}
-                        </div>
+                        {maximized !== 'editor' && editorHeader}
+                        {editorContent}
                       </div>
                     </>
                   )}
