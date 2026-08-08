@@ -68,6 +68,19 @@ interface SshNodeInput {
   jumpHostId?: string | null
 }
 
+interface SshConfigCandidate {
+  name: string
+  host: string
+  port: number
+  username: string
+  authType: 'password' | 'privateKey'
+  privateKeyPath?: string
+}
+
+type SshImportConfigResult =
+  | { ok: true; path: string; candidates: SshConfigCandidate[] }
+  | { ok: false; error: string }
+
 interface SshTunnelSpec {
   id?: string
   nodeId?: string
@@ -113,4 +126,80 @@ interface SshSftpEntry {
   owner?: number
   group?: number
   mode?: number
+  /** true when the entry is a symbolic link; `type` is resolved to the link target */
+  isSymlink?: boolean
+}
+
+interface SshSftpReadResult {
+  ok: boolean
+  content?: string
+  binary?: boolean
+  truncated?: boolean
+  size?: number
+  maxBytes?: number
+  error?: string
+}
+
+interface SshSysInfoDisk {
+  filesystem: string
+  mount: string
+  size: number
+  used: number
+  avail: number
+  usePercent: number
+}
+
+interface SshSysInfo {
+  platform: 'linux' | 'darwin' | 'other'
+  hostname: string
+  os: { name: string; kernel: string; arch: string }
+  cpu: { model: string; cores: number; usage: number | null }
+  mem: { total: number; used: number }
+  swap: { total: number; used: number }
+  uptime: number
+  loadavg: number[]
+  disks: SshSysInfoDisk[]
+}
+
+type SshSysInfoResult = { ok: true; info: SshSysInfo } | { ok: false; error: string }
+
+interface SshProcessInfo {
+  pid: number
+  ppid: number
+  user: string
+  cpu: number
+  mem: number
+  rss: number
+  stat: string
+  etimes: number
+  cmd: string
+}
+
+interface SshServiceInfo {
+  unit: string
+  loaded: string
+  active: string
+  sub: string
+  description: string
+}
+
+interface SshPortInfo {
+  protocol: string
+  address: string
+  port: number
+  state: string
+  pid: number | null
+  process: string
+}
+
+type SshServiceAction = 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable'
+
+interface SshExecData {
+  sessionId: string
+  data: string
+}
+
+interface SshTailExit {
+  sessionId: string
+  reason?: string
 }

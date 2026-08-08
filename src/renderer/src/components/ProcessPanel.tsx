@@ -1,0 +1,309 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { App, Button, Empty, Input, Modal, Select, Spin, Table, Tooltip } from 'antd'
+import {
+  CloseOutlined,
+  ReloadOutlined,
+  ExpandOutlined,
+  CompressOutlined,
+  SearchOutlined
+} from '@ant-design/icons'
+import type { ColumnsType } from 'antd/es/table'
+
+function formatRss(kb: number): string {
+  if (!Number.isFinite(kb) || kb < 0) return '-'
+  const bytes = kb * 1024
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+function formatDuration(sec: number): string {
+  const s = Math.max(0, Math.floor(sec || 0))
+  const d = Math.floor(s / 86400)
+  const h = Math.floor((s % 86400) / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  if (d > 0) return `${d}d${h}h`
+  if (h > 0) return `${h}h${m}m`
+  if (m > 0) return `${m}m${s % 60}s`
+  return `${s}s`
+}
+
+interface ProcessPanelProps {
+  nodeId: string
+  onClose: () => void
+  fullscreen?: boolean
+  onToggleFullscreen?: () => void
+}
+
+function ProcessPanel({
+  nodeId,
+  onClose,
+  fullscreen,
+  onToggleFullscreen
+}: ProcessPanelProps): React.JSX.Element {
+  const { t } = useTranslation()
+  const { message } = App.useApp()
+  const [processes, setProcesses] = useState<SshProcessInfo[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [killTarget, setKillTarget] = useState<SshProcessInfo | null>(null)
+  const [signal, setSignal] = useState('TERM')
+  const [killing, setKilling] = useState(false)
+  const [query, setQuery] = useState('')
+  const aliveRef = useRef(true)
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [tableScrollY, setTableScrollY] = useState(360)
+
+  const load = useCallback(async (): Promise<void> => {
+    if (!aliveRef.current) return
+    setLoading(true)
+    setError(null)
+    try {
+      const list = await window.api.ssh.listProcesses(nodeId)
+      if (aliveRef.current) setProcesses(list)
+    } catch (err) {
+      if (aliveRef.current) {
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    } finally {
+      if (aliveRef.current) setLoading(false)
+    }
+  }, [nodeId])
+
+  useEffect(() => {
+    aliveRef.current = true
+    const first = window.setTimeout(() => void load(), 0)
+    const id = window.setInterval(() => void load(), 5000)
+    return () => {
+      aliveRef.current = false
+      window.clearTimeout(first)
+      window.clearInterval(id)
+    }
+  }, [load])
+
+  useEffect(() => {
+    const el = bodyRef.current
+    if (!el) return
+    const update = (): void => {
+      setTableScrollY(Math.max(120, Math.floor(el.clientHeight)))
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const confirmKill = useCallback(async (): Promise<void> => {
+    if (!killTarget) return
+    setKilling(true)
+    try {
+      await window.api.ssh.killProcess(nodeId, killTarget.pid, signal)
+      message.success(t('sshProcKilled', { pid: killTarget.pid }))
+      setKillTarget(null)
+      void load()
+    } catch (err) {
+      message.error(t('sshProcKillFail', { msg: err instanceof Error ? err.message : String(err) }))
+    } finally {
+      setKilling(false)
+    }
+  }, [killTarget, signal, nodeId, message, load, t])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return processes
+    return processes.filter(
+      (p) =>
+        p.cmd.toLowerCase().includes(q) ||
+        p.user.toLowerCase().includes(q) ||
+        String(p.pid).includes(q)
+    )
+  }, [processes, query])
+
+  const columns: ColumnsType<SshProcessInfo> = [
+    {
+      title: 'PID',
+      dataIndex: 'pid',
+      width: 64,
+      sorter: (a, b) => a.pid - b.pid
+    },
+    {
+      title: t('sshProcUser'),
+      dataIndex: 'user',
+      width: 72,
+      ellipsis: true
+    },
+    {
+      title: '%CPU',
+      dataIndex: 'cpu',
+      width: 88,
+      sorter: (a, b) => a.cpu - b.cpu,
+      render: (v: number) => v.toFixed(1)
+    },
+    {
+      title: '%MEM',
+      dataIndex: 'mem',
+      width: 88,
+      sorter: (a, b) => a.mem - b.mem,
+      render: (v: number) => v.toFixed(1)
+    },
+    {
+      title: t('sshProcRss'),
+      dataIndex: 'rss',
+      width: 80,
+      sorter: (a, b) => a.rss - b.rss,
+      render: (v: number) => formatRss(v)
+    },
+    {
+      title: t('sshProcTime'),
+      dataIndex: 'etimes',
+      width: 80,
+      render: (v: number) => formatDuration(v)
+    },
+    {
+      title: t('sshProcCmd'),
+      dataIndex: 'cmd',
+      ellipsis: true,
+      render: (v: string) => (
+        <Tooltip
+          title={v}
+          placement="topLeft"
+          getPopupContainer={() => rootRef.current ?? document.body}
+          styles={{ container: { maxWidth: 'min(60vw, 720px)', wordBreak: 'break-all' } }}
+        >
+          <span className="font-mono text-xs">{v}</span>
+        </Tooltip>
+      )
+    },
+    {
+      title: '',
+      width: 36,
+      render: (_: unknown, row: SshProcessInfo) => (
+        <button
+          type="button"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-red-500"
+          title={t('sshProcKill')}
+          onClick={() => {
+            setKillTarget(row)
+            setSignal('TERM')
+          }}
+        >
+          <CloseOutlined className="text-xs" />
+        </button>
+      )
+    }
+  ]
+
+  return (
+    <div ref={rootRef} className="flex h-full flex-col">
+      <div className="h-10 shrink-0 flex items-center gap-3 px-3 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
+        <div className="shrink-0 flex items-baseline gap-1.5 min-w-0">
+          <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+            {t('sshToolProcess')}
+          </span>
+          <span className="text-[10px] text-[var(--text-secondary)] shrink-0">
+            {t('sshProcCount', { count: filtered.length })}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0 flex justify-end">
+          <Input
+            size="small"
+            allowClear
+            prefix={<SearchOutlined className="text-xs text-[var(--text-secondary)]" />}
+            placeholder={t('sshProcSearch')}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full max-w-[240px]"
+          />
+        </div>
+        <div className="shrink-0 flex items-center gap-1">
+          <button
+            type="button"
+            className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
+            title={t('sshClientRefresh')}
+            onClick={() => void load()}
+          >
+            <ReloadOutlined />
+          </button>
+          {onToggleFullscreen && (
+            <button
+              type="button"
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
+              title={fullscreen ? t('sshClientExitFullscreen') : t('sshClientFullscreen')}
+              onClick={onToggleFullscreen}
+            >
+              {fullscreen ? <CompressOutlined /> : <ExpandOutlined />}
+            </button>
+          )}
+          <button
+            type="button"
+            className="h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)]"
+            title={t('sshClientClose')}
+            onClick={onClose}
+          >
+            <CloseOutlined />
+          </button>
+        </div>
+      </div>
+      <div ref={bodyRef} className="flex-1 min-h-0">
+        {error ? (
+          <div className="h-full flex flex-col items-center justify-center gap-2">
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={error} />
+            <Button size="small" onClick={() => void load()}>
+              {t('sshClientRefresh')}
+            </Button>
+          </div>
+        ) : (
+          <Spin spinning={loading} className="min-h-full">
+            <Table
+              size="small"
+              rowKey="pid"
+              columns={columns}
+              dataSource={filtered}
+              pagination={false}
+              locale={{ emptyText: t('sshProcEmpty') }}
+              tableLayout="fixed"
+              scroll={{ y: tableScrollY }}
+              sticky
+            />
+          </Spin>
+        )}
+      </div>
+
+      <Modal
+        open={!!killTarget}
+        title={t('sshProcKillTitle')}
+        onCancel={() => setKillTarget(null)}
+        onOk={() => void confirmKill()}
+        confirmLoading={killing}
+        okText={t('sshProcKill')}
+        okButtonProps={{ danger: true }}
+        cancelText={t('sshCancel')}
+        destroyOnHidden
+        centered
+      >
+        <div className="text-sm">
+          <p className="mb-2">
+            {t('sshProcKillConfirm', {
+              pid: killTarget?.pid ?? 0,
+              cmd: killTarget?.cmd ?? ''
+            })}
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--text-secondary)]">{t('sshProcSignal')}</span>
+            <Select
+              size="small"
+              value={signal}
+              onChange={setSignal}
+              style={{ width: 120 }}
+              options={['TERM', 'KILL', 'INT', 'HUP'].map((s) => ({ value: s, label: s }))}
+            />
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+export default ProcessPanel

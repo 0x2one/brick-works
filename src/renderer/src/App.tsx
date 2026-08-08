@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, Component } from 'react'
+import { useState, useEffect, useRef, useCallback, Component, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -19,8 +19,9 @@ import About from './pages/About'
 import MemoSticky from './pages/MemoSticky'
 import LanTransfer from './pages/LanTransfer'
 import SshTunnel from './pages/SshTunnel'
-import SshClient from './pages/SshClient'
 import K8sManage from './pages/K8sManage'
+
+const SshClient = lazy(() => import('./pages/SshClient'))
 
 const { Sider, Content } = Layout
 
@@ -268,7 +269,11 @@ function AppLayout(): React.JSX.Element {
               }}
             >
               <PageErrorBoundary>
-                {sshClientMounted && <SshClient active={showSshClient} />}
+                {sshClientMounted && (
+                  <Suspense fallback={null}>
+                    <SshClient active={showSshClient} />
+                  </Suspense>
+                )}
                 {k8sMounted && <K8sManage active={showK8s} />}
                 {devToolsMounted && <DevToolsArea active={showDevTools} />}
                 {!showSshClient && !showK8s && !showDevTools && (

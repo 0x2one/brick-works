@@ -33,6 +33,7 @@ interface SshApi {
   saveNode: (input: SshNodeInput) => Promise<SshNodeView>
   deleteNode: (id: string) => Promise<boolean>
   reorderNodes: (ids: string[]) => Promise<SshNodeView[]>
+  importSshConfig: () => Promise<SshImportConfigResult>
   chooseKeyFile: () => Promise<string | null>
   clearHostKey: (nodeId: string) => Promise<boolean>
   status: () => Promise<SshSessionStatus[]>
@@ -66,13 +67,30 @@ interface SshApi {
     nodeId: string,
     remoteDir: string
   ) => Promise<{ ok: boolean; count?: number; canceled?: boolean; error?: string }>
+  sftpUploadPaths: (
+    nodeId: string,
+    remoteDir: string,
+    localPaths: string[]
+  ) => Promise<{ ok: boolean; count?: number; error?: string }>
   sftpMkdir: (nodeId: string, remotePath: string) => Promise<{ ok: boolean; error?: string }>
   sftpWriteFile: (
     nodeId: string,
     remotePath: string,
     content?: string
   ) => Promise<{ ok: boolean; error?: string }>
+  sftpReadFile: (nodeId: string, remotePath: string) => Promise<SshSftpReadResult>
   sftpDisconnect: (nodeId: string) => Promise<boolean>
+  sysInfo: (nodeId: string) => Promise<SshSysInfoResult>
+  disconnectSysInfo: (nodeId: string) => Promise<boolean>
+  listProcesses: (nodeId: string) => Promise<SshProcessInfo[]>
+  killProcess: (nodeId: string, pid: number, signal?: string) => Promise<{ ok: boolean }>
+  listServices: (nodeId: string) => Promise<SshServiceInfo[]>
+  listPorts: (nodeId: string) => Promise<SshPortInfo[]>
+  serviceAction: (nodeId: string, unit: string, action: SshServiceAction) => Promise<{ ok: boolean; output: string }>
+  startLogTail: (nodeId: string, path: string) => Promise<{ sessionId: string }>
+  stopLogTail: (sessionId: string) => Promise<boolean>
+  onLogData: (callback: (payload: SshExecData) => void) => () => void
+  onLogExit: (callback: (payload: SshTailExit) => void) => () => void
   onShellData: (callback: (data: SshShellData) => void) => () => void
   onShellExit: (callback: (data: SshShellExit) => void) => () => void
 }
@@ -153,6 +171,19 @@ interface UpdaterApi {
   onStatus: (callback: (status: UpdaterStatus) => void) => () => void
 }
 
+interface ClipboardApi {
+  readText: () => Promise<string>
+  writeText: (text: string) => Promise<void>
+}
+
+interface ShortcutsApi {
+  onShortcut: (callback: (key: string) => void) => () => void
+}
+
+interface FilesApi {
+  getPathForFile: (file: File) => string
+}
+
 interface Api {
   fetchImage: (url: string) => Promise<string | null>
   fetchSvg: (url: string) => Promise<string | null>
@@ -160,6 +191,9 @@ interface Api {
   app: AppApi
   settings: SettingsApi
   updater: UpdaterApi
+  shortcuts: ShortcutsApi
+  clipboard: ClipboardApi
+  files: FilesApi
   lan: LanApi
   ssh: SshApi
   sticky: StickyApi
