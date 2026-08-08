@@ -58,14 +58,14 @@ const BTN_ICON =
   'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] ' +
   'disabled:opacity-40 disabled:cursor-not-allowed'
 
+const BTN_ICON_ACTIVE =
+  'h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer ' +
+  'bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25'
+
 const BTN_TEXT =
   'h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs border-none cursor-pointer ' +
   'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] ' +
   'disabled:opacity-40 disabled:cursor-not-allowed'
-
-const BTN_TEXT_ACTIVE =
-  'h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs border-none cursor-pointer ' +
-  'bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25'
 
 const TITLE_BAR_CLS =
   'h-10 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--border-subtle)] bg-[var(--surface)]'
@@ -1867,21 +1867,19 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   </div>
                   <button
                     type="button"
-                    className={filesOpen ? BTN_TEXT_ACTIVE : BTN_TEXT}
+                    className={filesOpen ? BTN_ICON_ACTIVE : BTN_ICON}
                     onClick={() => (filesOpen ? void closeFiles() : openFiles())}
                     title={t('sshClientFiles')}
                   >
                     <FolderOpenOutlined />
-                    {t('sshClientFiles')}
                   </button>
                   <button
                     type="button"
-                    className={infoOpen ? BTN_TEXT_ACTIVE : BTN_TEXT}
+                    className={infoOpen ? BTN_ICON_ACTIVE : BTN_ICON}
                     onClick={() => (infoOpen ? void closeInfo() : void openInfo())}
                     title={t('sshClientInfo')}
                   >
                     <DashboardOutlined />
-                    {t('sshClientInfo')}
                   </button>
                   <button
                     type="button"
