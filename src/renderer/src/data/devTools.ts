@@ -94,6 +94,14 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolPdfMergeSplitDesc',
     tags: ['devTagTool', 'devTagDoc'],
     route: '/dev-tools/pdf-merge-split'
+  },
+  {
+    id: 'text-diff',
+    nameKey: 'devToolTextDiff',
+    descKey: 'devToolTextDiffDesc',
+    tags: ['devTagTool', 'devTagText'],
+    route: '/dev-tools/text-diff',
+    fill: true
   }
 ]
 
