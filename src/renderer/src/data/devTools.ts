@@ -118,6 +118,14 @@ export const devTools: DevToolItem[] = [
     tags: ['devTagTool', 'devTagText'],
     route: '/dev-tools/regex-tester',
     fill: true
+  },
+  {
+    id: 'hex-editor',
+    nameKey: 'devToolHexEditor',
+    descKey: 'devToolHexEditorDesc',
+    tags: ['devTagTool', 'devTagBinary'],
+    route: '/dev-tools/hex-editor',
+    fill: true
   }
 ]
 
