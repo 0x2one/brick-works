@@ -62,13 +62,14 @@ function DevTools(): React.JSX.Element {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <div className="flex items-center gap-1 p-0.5 bg-[var(--surface)] border border-[var(--border-subtle)] rounded-lg w-fit">
-          {TABS.map((key) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={`
+      <div className="sticky top-0 z-10 bg-[var(--content-bg)] pb-4 -mt-6 pt-6 -mx-6 px-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-1 p-0.5 bg-[var(--surface)] border border-[var(--border-subtle)] rounded-lg w-fit">
+            {TABS.map((key) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`
                 px-4 py-1 rounded-md text-sm font-medium transition-all duration-150 cursor-pointer
                 ${
                   activeTab === key
@@ -76,19 +77,20 @@ function DevTools(): React.JSX.Element {
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]'
                 }
               `}
-            >
-              {t(TAB_LABELS[key])}
-            </button>
-          ))}
+              >
+                {t(TAB_LABELS[key])}
+              </button>
+            ))}
+          </div>
+          <Input.Search
+            placeholder={t('searchTools')}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onSearch={setSearchText}
+            style={{ width: 320 }}
+            allowClear
+          />
         </div>
-        <Input.Search
-          placeholder={t('searchTools')}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          onSearch={setSearchText}
-          style={{ width: 320 }}
-          allowClear
-        />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
