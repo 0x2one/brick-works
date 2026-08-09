@@ -303,7 +303,7 @@
 .settings-shell {
   display: grid;
   grid-template-columns: 188px minmax(0, 1fr);
-  height: 520px;
+  height: 580px;
 }
 
 .settings-nav {
