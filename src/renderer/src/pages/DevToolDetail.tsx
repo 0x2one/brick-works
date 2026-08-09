@@ -15,6 +15,8 @@ import PdfImageAnnotate from './tools/PdfImageAnnotate'
 import PdfPreview from './tools/PdfPreview'
 import PdfMergeSplit from './tools/PdfMergeSplit'
 import TextDiff from './tools/TextDiff'
+import ColorConverter from './tools/ColorConverter'
+import RegexTester from './tools/RegexTester'
 
 const toolComponents: Record<string, React.ComponentType> = {
   'random-password': RandomPassword,
@@ -28,7 +30,9 @@ const toolComponents: Record<string, React.ComponentType> = {
   'pdf-image-annotate': PdfImageAnnotate,
   'pdf-preview': PdfPreview,
   'pdf-merge-split': PdfMergeSplit,
-  'text-diff': TextDiff
+  'text-diff': TextDiff,
+  'color-converter': ColorConverter,
+  'regex-tester': RegexTester
 }
 
 function DevToolDetail({ toolId }: { toolId: string }): React.JSX.Element {

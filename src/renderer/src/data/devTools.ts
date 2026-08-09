@@ -102,6 +102,22 @@ export const devTools: DevToolItem[] = [
     tags: ['devTagTool', 'devTagText'],
     route: '/dev-tools/text-diff',
     fill: true
+  },
+  {
+    id: 'color-converter',
+    nameKey: 'devToolColorConverter',
+    descKey: 'devToolColorConverterDesc',
+    tags: ['devTagTool', 'devTagColor'],
+    route: '/dev-tools/color-converter',
+    fill: true
+  },
+  {
+    id: 'regex-tester',
+    nameKey: 'devToolRegexTester',
+    descKey: 'devToolRegexTesterDesc',
+    tags: ['devTagTool', 'devTagText'],
+    route: '/dev-tools/regex-tester',
+    fill: true
   }
 ]
 
