@@ -94,6 +94,38 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolPdfMergeSplitDesc',
     tags: ['devTagTool', 'devTagDoc'],
     route: '/dev-tools/pdf-merge-split'
+  },
+  {
+    id: 'text-diff',
+    nameKey: 'devToolTextDiff',
+    descKey: 'devToolTextDiffDesc',
+    tags: ['devTagTool', 'devTagText'],
+    route: '/dev-tools/text-diff',
+    fill: true
+  },
+  {
+    id: 'color-converter',
+    nameKey: 'devToolColorConverter',
+    descKey: 'devToolColorConverterDesc',
+    tags: ['devTagTool', 'devTagColor'],
+    route: '/dev-tools/color-converter',
+    fill: true
+  },
+  {
+    id: 'regex-tester',
+    nameKey: 'devToolRegexTester',
+    descKey: 'devToolRegexTesterDesc',
+    tags: ['devTagTool', 'devTagText'],
+    route: '/dev-tools/regex-tester',
+    fill: true
+  },
+  {
+    id: 'hex-editor',
+    nameKey: 'devToolHexEditor',
+    descKey: 'devToolHexEditorDesc',
+    tags: ['devTagTool', 'devTagBinary'],
+    route: '/dev-tools/hex-editor',
+    fill: true
   }
 ]
 

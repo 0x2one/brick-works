@@ -14,6 +14,10 @@ import SvgToImage from './tools/SvgToImage'
 import PdfImageAnnotate from './tools/PdfImageAnnotate'
 import PdfPreview from './tools/PdfPreview'
 import PdfMergeSplit from './tools/PdfMergeSplit'
+import TextDiff from './tools/TextDiff'
+import ColorConverter from './tools/ColorConverter'
+import RegexTester from './tools/RegexTester'
+import HexEditor from './tools/HexEditor'
 
 const toolComponents: Record<string, React.ComponentType> = {
   'random-password': RandomPassword,
@@ -26,7 +30,11 @@ const toolComponents: Record<string, React.ComponentType> = {
   'svg-to-image': SvgToImage,
   'pdf-image-annotate': PdfImageAnnotate,
   'pdf-preview': PdfPreview,
-  'pdf-merge-split': PdfMergeSplit
+  'pdf-merge-split': PdfMergeSplit,
+  'text-diff': TextDiff,
+  'color-converter': ColorConverter,
+  'regex-tester': RegexTester,
+  'hex-editor': HexEditor
 }
 
 function DevToolDetail({ toolId }: { toolId: string }): React.JSX.Element {
