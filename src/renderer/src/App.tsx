@@ -11,12 +11,14 @@ import {
   ThunderboltOutlined,
   DeploymentUnitOutlined,
   CloudServerOutlined,
-  CodeOutlined
+  CodeOutlined,
+  CheckSquareOutlined
 } from '@ant-design/icons'
 import TitleBar from './components/TitleBar'
 import DevToolsArea from './pages/DevToolsArea'
 import About from './pages/About'
 import MemoSticky from './pages/MemoSticky'
+import TodoList from './pages/TodoList'
 import LanTransfer from './pages/LanTransfer'
 import SshTunnel from './pages/SshTunnel'
 import K8sManage from './pages/K8sManage'
@@ -61,6 +63,7 @@ class PageErrorBoundary extends Component<{ children: React.ReactNode }, { hasEr
 
 const NAV_ROUTE_KEYS = [
   '/memo-sticky',
+  '/todo',
   '/lan-transfer',
   '/ssh-tunnel',
   '/ssh-client',
@@ -185,6 +188,11 @@ function AppLayout(): React.JSX.Element {
       label: t('memoSticky')
     },
     {
+      key: '/todo',
+      icon: <CheckSquareOutlined />,
+      label: t('todoList')
+    },
+    {
       key: '/lan-transfer',
       icon: <ThunderboltOutlined />,
       label: t('lanTransfer')
@@ -279,6 +287,7 @@ function AppLayout(): React.JSX.Element {
                 {!showSshClient && !showK8s && !showDevTools && (
                   <Routes location={displayLocation}>
                     <Route path="/memo-sticky" element={<MemoSticky />} />
+                    <Route path="/todo" element={<TodoList />} />
                     <Route path="/lan-transfer" element={<LanTransfer />} />
                     <Route path="/ssh-tunnel" element={<SshTunnel />} />
                     <Route path="/about" element={<About />} />

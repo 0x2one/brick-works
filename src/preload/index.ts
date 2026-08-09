@@ -202,6 +202,10 @@ const api = {
     load: () => ipcRenderer.invoke('sticky:load'),
     save: (data: StickyData) => ipcRenderer.invoke('sticky:save', data)
   },
+  todo: {
+    load: () => ipcRenderer.invoke('todo:load'),
+    save: (data: TodoData) => ipcRenderer.invoke('todo:save', data)
+  },
   k8s: {
     listClusters: () => ipcRenderer.invoke('k8s:listClusters'),
     saveCluster: (input: K8sClusterInput) => ipcRenderer.invoke('k8s:saveCluster', input),
