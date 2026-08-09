@@ -1,5 +1,18 @@
 # Changelog
 
+## BrickWorks v1.0.3
+
+### ✨ Features
+- New Hex Editor tool for binary file editing
+- New Color Converter and Regex Tester tools
+- New TextDiff tool with word-level highlight comparison
+- DevTools layout improvements — sticky header and refined search input
+
+### 🐛 Fixes
+- Adjusted layout dimensions for the settings shell and modal
+
+---
+
 ## BrickWorks v1.0.2
 
 Feature and polish release.
