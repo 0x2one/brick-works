@@ -148,6 +148,7 @@ function DevToolsArea({ active = true }: { active?: boolean }): React.JSX.Elemen
                   : 'bg-[var(--bg-warm)] text-[var(--text-primary)] border-[var(--border-subtle)] hover:border-[var(--text-secondary)]'
               }`}
             >
+              <span className="text-xs leading-none opacity-80">{tool.icon}</span>
               <span className="max-w-[160px] truncate">{t(tool.nameKey)}</span>
               <span
                 role="button"

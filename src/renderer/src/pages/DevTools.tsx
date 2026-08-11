@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Input } from 'antd'
-import { HeartOutlined, HeartFilled } from '@ant-design/icons'
+import { HeartOutlined, HeartFilled, SearchOutlined } from '@ant-design/icons'
 import { devTools, useDevToolStats } from '../data/devTools'
+import { EmptyState } from '../components/ui'
 
 const TABS = ['all', 'favorites', 'recent', 'most-used'] as const
 const TAB_LABELS: Record<string, string> = {
@@ -13,15 +14,47 @@ const TAB_LABELS: Record<string, string> = {
   'most-used': 'devToolTabMostUsed'
 }
 
+const TAG_CLS: Record<string, string> = {
+  devTagTool: 'tag-chip',
+  devTagSecurity: 'tag-chip tag-chip--danger',
+  devTagImage: 'tag-chip tag-chip--accent',
+  devTagJson: 'tag-chip tag-chip--info',
+  devTagCodec: 'tag-chip tag-chip--warning',
+  devTagTime: 'tag-chip',
+  devTagGenerate: 'tag-chip tag-chip--success',
+  devTagDoc: 'tag-chip tag-chip--warning',
+  devTagText: 'tag-chip',
+  devTagColor: 'tag-chip tag-chip--accent',
+  devTagBinary: 'tag-chip tag-chip--info'
+}
+
 function DevTools(): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { stats, toggleFavorite, recordUse } = useDevToolStats()
   const [activeTab, setActiveTab] = useState('all')
   const [searchText, setSearchText] = useState('')
+  const [activeTag, setActiveTag] = useState<string | null>(null)
+
+  const tagOptions = useMemo(() => {
+    const seen = new Set<string>()
+    const list: string[] = []
+    for (const tool of devTools) {
+      for (const tag of tool.tags) {
+        if (tag === 'devTagTool' || seen.has(tag)) continue
+        seen.add(tag)
+        list.push(tag)
+      }
+    }
+    return list
+  }, [])
 
   const filteredTools = useMemo(() => {
     let list = [...devTools]
+
+    if (activeTag) {
+      list = list.filter((tool) => tool.tags.includes(activeTag))
+    }
 
     if (searchText) {
       const lower = searchText.toLowerCase()
@@ -53,12 +86,32 @@ function DevTools(): React.JSX.Element {
     }
 
     return list
-  }, [activeTab, searchText, stats, t])
+  }, [activeTag, activeTab, searchText, stats, t])
 
   const handleCardClick = (id: string, route: string): void => {
     recordUse(id)
     navigate(route)
   }
+
+  const showEmpty = filteredTools.length === 0
+
+  const emptyTitle = searchText
+    ? t('noSearchResults')
+    : activeTab === 'favorites'
+      ? t('noFavorites')
+      : t('noSearchResults')
+  const emptyHint = searchText
+    ? t('noSearchResultsHint')
+    : activeTab === 'favorites'
+      ? t('noFavoritesHint')
+      : undefined
+  const emptyIcon = searchText ? (
+    <SearchOutlined />
+  ) : activeTab === 'favorites' ? (
+    <HeartOutlined />
+  ) : (
+    <SearchOutlined />
+  )
 
   return (
     <div className="p-6">
@@ -91,65 +144,101 @@ function DevTools(): React.JSX.Element {
             allowClear
           />
         </div>
+
+        {/* Tag filter */}
+        <div className="flex flex-wrap items-center gap-1.5 mt-3">
+          {tagOptions.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+              aria-pressed={activeTag === tag}
+              className={activeTag === tag ? 'tag-chip is-active' : (TAG_CLS[tag] ?? 'tag-chip')}
+            >
+              {t(tag)}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filteredTools.map((tool) => {
-          const s = stats[tool.id]
-          return (
-            <div
-              key={tool.id}
-              className="tool-card"
-              onClick={() => handleCardClick(tool.id, tool.route)}
-            >
-              <div className="flex items-start justify-between mb-2 gap-2">
-                <span className="font-semibold text-[15px] leading-snug text-[var(--text-primary)]">
-                  {t(tool.nameKey)}
-                </span>
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleFavorite(tool.id)
+      {showEmpty ? (
+        <EmptyState className="!py-16" icon={emptyIcon} title={emptyTitle} hint={emptyHint} />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredTools.map((tool, index) => {
+            const s = stats[tool.id]
+            return (
+              <div
+                key={tool.id}
+                className="tool-card tool-card-enter group relative"
+                style={{ animationDelay: `${Math.min(index, 12) * 40}ms` }}
+              >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label={t(tool.nameKey)}
+                  onClick={() => handleCardClick(tool.id, tool.route)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      handleCardClick(tool.id, tool.route)
+                    }
                   }}
-                  className="cursor-pointer shrink-0 mt-0.5 leading-none"
-                  style={{
-                    color: s?.favorited ? 'var(--accent)' : 'var(--text-secondary)',
-                    fontSize: 15
-                  }}
+                  className="flex flex-col h-full"
+                >
+                  <div className="flex items-center gap-2.5 mb-3 pr-8">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-md bg-[var(--accent-soft)] text-[var(--accent)] text-base shrink-0">
+                      {tool.icon}
+                    </span>
+                    <span className="flex-1 min-w-0 font-semibold text-[15px] leading-snug text-[var(--text-primary)] truncate">
+                      {t(tool.nameKey)}
+                    </span>
+                  </div>
+
+                  <p className="text-sm leading-relaxed text-[var(--text-secondary)] mb-3 line-clamp-2">
+                    {t(tool.descKey)}
+                  </p>
+
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {tool.tags.map((tag) => (
+                      <span key={tag} className={TAG_CLS[tag] ?? 'tag-chip'}>
+                        {t(tag)}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="mt-auto pt-3 border-t border-[var(--border-subtle)] flex gap-3 text-xs text-[var(--text-secondary)]">
+                    {s?.lastUsedAt && (
+                      <span>
+                        {t('lastUsed')}: {new Date(s.lastUsedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                    <span>
+                      {t('useCount')}: {s?.useCount ?? 0}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(tool.id)}
+                  aria-label={s?.favorited ? t('unfavoriteTool') : t('favoriteTool')}
+                  title={s?.favorited ? t('unfavoriteTool') : t('favoriteTool')}
+                  aria-pressed={s?.favorited ?? false}
+                  className="absolute top-3 right-3 flex items-center justify-center w-6 h-6 rounded-md cursor-pointer border-none
+                    transition-colors duration-150 ${
+                      s?.favorited
+                        ? 'text-[var(--accent)] bg-[var(--accent-soft)]'
+                        : 'text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--hover-bg)]'
+                    }"
                 >
                   {s?.favorited ? <HeartFilled /> : <HeartOutlined />}
-                </span>
+                </button>
               </div>
-
-              <p className="text-sm leading-relaxed text-[var(--text-secondary)] mb-3 line-clamp-2">
-                {t(tool.descKey)}
-              </p>
-
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {tool.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-2 py-0.5 text-xs rounded-md bg-[var(--border-subtle)] text-[var(--text-secondary)]"
-                  >
-                    {t(tag)}
-                  </span>
-                ))}
-              </div>
-
-              <div className="mt-auto pt-3 border-t border-[var(--border-subtle)] flex gap-3 text-xs text-[var(--text-secondary)]">
-                {s?.lastUsedAt && (
-                  <span>
-                    {t('lastUsed')}: {new Date(s.lastUsedAt).toLocaleDateString()}
-                  </span>
-                )}
-                <span>
-                  {t('useCount')}: {s?.useCount ?? 0}
-                </span>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

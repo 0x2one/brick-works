@@ -42,26 +42,12 @@ import {
   HolderOutlined
 } from '@ant-design/icons'
 import { SortableList } from '../components/SortableList'
-
-const LABEL_CLS =
-  'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
-
-const CARD_CLS =
-  'rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] overflow-hidden'
-
-const BTN_CLS =
-  'px-3 h-8 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none ' +
-  'bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)] ' +
-  'disabled:opacity-40 disabled:cursor-not-allowed'
-
-const ACCENT_BTN_CLS =
-  'px-4 h-8 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none ' +
-  'bg-[var(--accent)] text-white hover:brightness-110 active:brightness-90 disabled:opacity-40 disabled:cursor-not-allowed'
+import { LABEL_CLS, CARD_CLS, BTN_CLS, ACCENT_BTN_CLS } from '../components/ui'
 
 const STATE_DOT_CLS: Record<string, string> = {
-  connected: 'bg-green-500',
-  connecting: 'bg-amber-400 animate-pulse',
-  error: 'bg-red-500',
+  connected: 'bg-[var(--success)]',
+  connecting: 'bg-[var(--warning)] animate-pulse',
+  error: 'bg-[var(--danger)]',
   disconnected: 'bg-[var(--border-subtle)]'
 }
 
@@ -567,11 +553,7 @@ function NodeEditor({
           </Form.Item>
         </div>
         <div className="grid grid-cols-2 gap-x-3">
-          <Form.Item
-            name="jumpHostId"
-            label={t('sshJumpHost')}
-            tooltip={t('sshJumpHostHint')}
-          >
+          <Form.Item name="jumpHostId" label={t('sshJumpHost')} tooltip={t('sshJumpHostHint')}>
             <Select
               allowClear
               placeholder={t('sshJumpHostNone')}
@@ -987,17 +969,17 @@ function SshTunnel(): React.JSX.Element {
                       {node.name}
                     </span>
                     {state === 'connected' && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-600">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--success)]/10 text-[var(--success)]">
                         {t('sshConnected')}
                       </span>
                     )}
                     {state === 'connecting' && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-600">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--warning)]/15 text-[var(--warning)]">
                         {t('sshConnecting')}
                       </span>
                     )}
                     {state === 'error' && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--danger)]/10 text-[var(--danger)]">
                         {t('sshError')}
                       </span>
                     )}
@@ -1016,7 +998,7 @@ function SshTunnel(): React.JSX.Element {
                     </span>
                   </div>
                   {session?.error && (
-                    <div className="text-[11px] text-red-500 mt-1 truncate">
+                    <div className="text-[11px] text-[var(--danger)] mt-1 truncate">
                       {mapSshError(session.error, t)}
                     </div>
                   )}
@@ -1168,7 +1150,7 @@ function SshTunnel(): React.JSX.Element {
                     {t('sshTunnelCount', { count: nodeTunnels.length })}
                   </div>
                   {displayState === 'error' && session?.error && (
-                    <div className="text-[11px] text-red-500 mt-0.5 truncate">
+                    <div className="text-[11px] text-[var(--danger)] mt-0.5 truncate">
                       {mapSshError(session.error, t)}
                     </div>
                   )}
@@ -1220,9 +1202,9 @@ function SshTunnel(): React.JSX.Element {
                         const starting = live?.status === 'starting' || connecting
                         let dotCls = 'bg-[var(--border-subtle)]'
                         if (connected && live) {
-                          if (live.status === 'running') dotCls = 'bg-green-500'
-                          else if (live.status === 'error') dotCls = 'bg-red-500'
-                          else dotCls = 'bg-amber-400 animate-pulse'
+                          if (live.status === 'running') dotCls = 'bg-[var(--success)]'
+                          else if (live.status === 'error') dotCls = 'bg-[var(--danger)]'
+                          else dotCls = 'bg-[var(--warning)] animate-pulse'
                         }
                         return (
                           <div key={spec.id} className="px-5 py-3 flex items-center gap-3">
@@ -1261,7 +1243,7 @@ function SshTunnel(): React.JSX.Element {
                               )}
                             </div>
                             {connected && live?.status === 'error' && live.error && (
-                              <span className="text-[11px] text-red-500 truncate">
+                              <span className="text-[11px] text-[var(--danger)] truncate">
                                 {live.error}
                               </span>
                             )}
@@ -1327,9 +1309,9 @@ function SshTunnel(): React.JSX.Element {
               <span
                 className={`shrink-0 w-12 ${
                   log.level === 'error'
-                    ? 'text-red-500'
+                    ? 'text-[var(--danger)]'
                     : log.level === 'warn'
-                      ? 'text-amber-500'
+                      ? 'text-[var(--warning)]'
                       : 'text-[var(--text-secondary)]'
                 }`}
               >

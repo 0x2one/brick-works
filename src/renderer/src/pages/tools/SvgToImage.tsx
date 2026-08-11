@@ -10,9 +10,7 @@ import {
   CloseOutlined,
   PictureOutlined
 } from '@ant-design/icons'
-
-const PANEL_HEADER_CLS = 'text-[11px] font-semibold tracking-widest text-[var(--text-secondary)]'
-const INPUT_LABEL_CLS = 'block text-xs font-medium text-[var(--text-secondary)] mb-1.5'
+import { Btn, Panel, Segmented, INPUT_LABEL_CLS } from '../../components/ui'
 
 type InputMode = 'file' | 'url'
 type OutputFormat = 'png' | 'jpg' | 'webp'
@@ -299,133 +297,109 @@ function SvgToImage(): React.JSX.Element {
     <div className="flex flex-col p-6 flex-1 min-h-0">
       <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-y-auto">
         {/* ── Input ── */}
-        <section>
-          <div className="rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4">
-            {/* Mode pills */}
-            <div className="flex gap-1 flex-wrap mb-4">
-              {INPUT_MODES.map((m) => (
-                <button
-                  key={m.key}
-                  onClick={() => {
-                    setInputMode(m.key)
-                    setUrl('')
-                  }}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border-none transition-all duration-100
-                    ${
-                      inputMode === m.key
-                        ? 'bg-[var(--accent)] text-white'
-                        : 'text-[var(--text-secondary)] bg-[var(--bg-warm)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]'
-                    }`}
-                >
-                  {t(m.labelKey)}
-                </button>
-              ))}
-            </div>
+        <Panel>
+          {/* Mode pills */}
+          <Segmented
+            size="md"
+            options={INPUT_MODES.map((m) => ({ value: m.key, label: t(m.labelKey) }))}
+            value={inputMode}
+            onChange={(v) => {
+              setInputMode(v)
+              setUrl('')
+            }}
+            className="mb-4"
+          />
 
-            {inputMode === 'file' ? (
-              <>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".svg,image/svg+xml"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleFileChange(file)
-                    e.target.value = ''
-                  }}
-                  className="hidden"
-                />
-                <div
-                  className={dashedBtnCls + ' min-h-[120px]'}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={handleDrop}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <PictureOutlined style={{ fontSize: 24 }} />
-                  <span>{t('svgToImgDropHint')}</span>
-                </div>
-              </>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleUrlFetch()}
-                  placeholder={t('svgToImgUrlPlaceholder')}
-                  spellCheck={false}
-                  className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)]
+          {inputMode === 'file' ? (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".svg,image/svg+xml"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleFileChange(file)
+                  e.target.value = ''
+                }}
+                className="hidden"
+              />
+              <div
+                className={dashedBtnCls + ' min-h-[120px]'}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+                onClick={() => fileRef.current?.click()}
+              >
+                <PictureOutlined style={{ fontSize: 24 }} />
+                <span>{t('svgToImgDropHint')}</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleUrlFetch()}
+                placeholder={t('svgToImgUrlPlaceholder')}
+                spellCheck={false}
+                className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)]
                     text-sm text-[var(--text-primary)] outline-none
                     focus:border-[var(--accent)] transition-colors duration-150"
-                />
-                <button
-                  onClick={handleUrlFetch}
-                  disabled={!url.trim()}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold
-                    flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none
-                    bg-[var(--accent)] text-white
-                    hover:brightness-110 active:brightness-90
-                    disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <LinkOutlined />
-                  {t('svgToImgFetch')}
-                </button>
-              </div>
-            )}
+              />
+              <Btn
+                variant="primary"
+                icon={<LinkOutlined />}
+                onClick={handleUrlFetch}
+                disabled={!url.trim()}
+              >
+                {t('svgToImgFetch')}
+              </Btn>
+            </div>
+          )}
 
-            {svgText && (
-              <div className="mt-3 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                <span className="truncate font-mono">{svgName || 'SVG'}</span>
-                {intrinsic && (
-                  <span className="shrink-0">
-                    · {intrinsic.w} × {intrinsic.h}
-                  </span>
-                )}
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  className="shrink-0 text-[var(--accent)] hover:brightness-110 transition-all duration-150 cursor-pointer border-none bg-transparent"
-                >
-                  {t('svgToImgReplace')}
-                </button>
-                <button
-                  onClick={() => {
-                    setSvgText(null)
-                    setSvgName('')
-                    setIntrinsic(null)
-                    setResult(null)
-                  }}
-                  className="shrink-0 flex items-center gap-0.5 text-[var(--text-secondary)]
+          {svgText && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+              <span className="truncate font-mono">{svgName || 'SVG'}</span>
+              {intrinsic && (
+                <span className="shrink-0">
+                  · {intrinsic.w} × {intrinsic.h}
+                </span>
+              )}
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="shrink-0 text-[var(--accent)] hover:brightness-110 transition-all duration-150 cursor-pointer border-none bg-transparent"
+              >
+                {t('svgToImgReplace')}
+              </button>
+              <button
+                onClick={() => {
+                  setSvgText(null)
+                  setSvgName('')
+                  setIntrinsic(null)
+                  setResult(null)
+                }}
+                className="shrink-0 flex items-center gap-0.5 text-[var(--text-secondary)]
                     hover:text-[var(--text-primary)] transition-all duration-150 cursor-pointer border-none bg-transparent"
-                >
-                  <CloseOutlined style={{ fontSize: 10 }} />
-                  {t('svgToImgClear')}
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
+              >
+                <CloseOutlined style={{ fontSize: 10 }} />
+                {t('svgToImgClear')}
+              </button>
+            </div>
+          )}
+        </Panel>
 
         {/* ── Options ── */}
-        <section>
-          <div className="rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4 space-y-4">
+        <Panel>
+          <div className="space-y-4">
             <div>
               <label className={INPUT_LABEL_CLS}>{t('svgToImgFormat')}</label>
-              <div className="flex rounded-lg border border-[var(--border-subtle)] overflow-hidden max-w-[320px]">
-                {FORMATS.map((f) => (
-                  <button
-                    key={f.key}
-                    onClick={() => setFormat(f.key)}
-                    className={`flex-1 px-2 py-1.5 text-xs font-medium cursor-pointer border-none transition-all duration-100
-                      ${
-                        format === f.key
-                          ? 'bg-[var(--accent)] text-white'
-                          : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                      }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                options={FORMATS.map((f) => ({ value: f.key, label: f.label }))}
+                value={format}
+                onChange={(v) => setFormat(v)}
+                stretch
+                className="max-w-[320px]"
+              />
             </div>
 
             <div>
@@ -476,27 +450,16 @@ function SvgToImage(): React.JSX.Element {
 
             <div>
               <label className={INPUT_LABEL_CLS}>{t('svgToImgBackground')}</label>
-              <div className="flex rounded-lg border border-[var(--border-subtle)] overflow-hidden max-w-[240px]">
-                {(
-                  [
-                    { key: 'transparent', labelKey: 'svgToImgBgTransparent' },
-                    { key: 'white', labelKey: 'svgToImgBgWhite' }
-                  ] as const
-                ).map((b) => (
-                  <button
-                    key={b.key}
-                    onClick={() => setBg(b.key)}
-                    className={`flex-1 px-2 py-1.5 text-xs font-medium cursor-pointer border-none transition-all duration-100
-                      ${
-                        bg === b.key
-                          ? 'bg-[var(--accent)] text-white'
-                          : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                      }`}
-                  >
-                    {t(b.labelKey)}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                options={[
+                  { value: 'transparent', label: t('svgToImgBgTransparent') },
+                  { value: 'white', label: t('svgToImgBgWhite') }
+                ]}
+                value={bg}
+                onChange={(v) => setBg(v)}
+                stretch
+                className="max-w-[240px]"
+              />
               {format === 'jpg' && bg === 'transparent' && (
                 <div className="text-[10px] text-[var(--text-secondary)] mt-1">
                   {t('svgToImgJpgNoAlpha')}
@@ -504,86 +467,80 @@ function SvgToImage(): React.JSX.Element {
               )}
             </div>
           </div>
-        </section>
+        </Panel>
 
         {/* ── Result ── */}
-        <section>
-          <div className="rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4">
-            <div className={PANEL_HEADER_CLS + ' mb-2'}>{t('svgToImgResult')}</div>
-            {converting && !result && (
-              <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] py-4">
-                <Spin size="small" />
-                {t('svgToImgConverting')}
+        <Panel title={t('svgToImgResult')}>
+          {converting && !result && (
+            <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] py-4">
+              <Spin size="small" />
+              {t('svgToImgConverting')}
+            </div>
+          )}
+          {result ? (
+            <div className="flex flex-col items-center gap-3">
+              <div
+                className="rounded-lg border border-[var(--border-subtle)] p-3 flex items-center justify-center"
+                style={{
+                  backgroundImage:
+                    'conic-gradient(#e5e5e5 0 25%, #fff 0 50%, #e5e5e5 0 75%, #fff 0)',
+                  backgroundSize: '16px 16px'
+                }}
+              >
+                <Image
+                  src={result.dataUrl}
+                  alt="result"
+                  width={224}
+                  preview={{ mask: t('svgToImgPreview') }}
+                />
               </div>
-            )}
-            {result ? (
-              <div className="flex flex-col items-center gap-3">
-                <div
-                  className="rounded-lg border border-[var(--border-subtle)] p-3 flex items-center justify-center"
-                  style={{
-                    backgroundImage:
-                      'conic-gradient(#e5e5e5 0 25%, #fff 0 50%, #e5e5e5 0 75%, #fff 0)',
-                    backgroundSize: '16px 16px'
-                  }}
+              <div className="text-xs text-[var(--text-secondary)]">
+                {Math.round(width)} × {Math.round(height)} · {(result.sizeBytes / 1024).toFixed(1)}{' '}
+                KB
+              </div>
+              <div className="flex gap-2 flex-wrap justify-center">
+                <Btn
+                  variant="primary"
+                  size="md"
+                  icon={<DownloadOutlined />}
+                  onClick={handleDownload}
                 >
-                  <Image
-                    src={result.dataUrl}
-                    alt="result"
-                    width={224}
-                    preview={{ mask: t('svgToImgPreview') }}
-                  />
-                </div>
-                <div className="text-xs text-[var(--text-secondary)]">
-                  {Math.round(width)} × {Math.round(height)} ·{' '}
-                  {(result.sizeBytes / 1024).toFixed(1)} KB
-                </div>
-                <div className="flex gap-2 flex-wrap justify-center">
-                  <button
-                    onClick={handleDownload}
-                    className="px-5 py-2 rounded-lg text-sm font-semibold
-                      flex items-center gap-2 transition-all duration-150 cursor-pointer border-none
-                      bg-[var(--accent)] text-white hover:brightness-110 active:brightness-90"
-                  >
-                    <DownloadOutlined />
-                    {t('svgToImgDownload')}
-                  </button>
-                  <button
-                    onClick={handleCopyImage}
-                    className="px-5 py-2 rounded-lg text-sm font-semibold
-                      flex items-center gap-2 transition-all duration-150 cursor-pointer border-none
-                      bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)]
-                      hover:bg-[var(--border-subtle)]"
-                  >
-                    <SnippetsOutlined />
-                    {t('svgToImgCopyImage')}
-                  </button>
-                  <button
-                    onClick={handleCopyDataUrl}
-                    className="px-5 py-2 rounded-lg text-sm font-semibold
-                      flex items-center gap-2 transition-all duration-150 cursor-pointer border-none
-                      bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)]
-                      hover:bg-[var(--border-subtle)]"
-                  >
-                    {copied ? (
+                  {t('svgToImgDownload')}
+                </Btn>
+                <Btn
+                  variant="default"
+                  size="md"
+                  icon={<SnippetsOutlined />}
+                  onClick={handleCopyImage}
+                >
+                  {t('svgToImgCopyImage')}
+                </Btn>
+                <Btn
+                  variant="default"
+                  size="md"
+                  icon={
+                    copied ? (
                       <CheckOutlined style={{ color: 'var(--accent)' }} />
                     ) : (
                       <SnippetsOutlined />
-                    )}
-                    {copied ? t('copied') : t('svgToImgCopyDataUrl')}
-                  </button>
-                </div>
+                    )
+                  }
+                  onClick={handleCopyDataUrl}
+                >
+                  {copied ? t('copied') : t('svgToImgCopyDataUrl')}
+                </Btn>
               </div>
-            ) : (
-              !converting && (
-                <div className="border-2 border-dashed border-[var(--border-subtle)] rounded-lg py-10 text-center">
-                  <p className="text-sm text-[var(--text-secondary)] opacity-50 italic">
-                    {t('svgToImgNoResult')}
-                  </p>
-                </div>
-              )
-            )}
-          </div>
-        </section>
+            </div>
+          ) : (
+            !converting && (
+              <div className="border-2 border-dashed border-[var(--border-subtle)] rounded-lg py-10 text-center">
+                <p className="text-sm text-[var(--text-secondary)] opacity-50 italic">
+                  {t('svgToImgNoResult')}
+                </p>
+              </div>
+            )
+          )}
+        </Panel>
       </div>
     </div>
   )

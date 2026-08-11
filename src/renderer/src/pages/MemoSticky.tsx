@@ -184,7 +184,7 @@ function NoteCard({
                       isCurl
                         ? 'whitespace-nowrap'
                         : 'whitespace-pre-wrap break-words'
-                    } hover:bg-black/[0.04] first:mt-3 last:mb-3`}
+                    } hover:bg-[var(--hover-bg)] first:mt-3 last:mb-3`}
                     style={{ color: 'var(--sticky-text)' }}
                     onClick={(e) => handleCopyPara(e, para)}
                   >

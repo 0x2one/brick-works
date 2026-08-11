@@ -66,7 +66,12 @@ function DevToolDetail({ toolId }: { toolId: string }): React.JSX.Element {
           <span>{t('allTools')}</span>
         </button>
         <span className="text-[var(--text-secondary)] opacity-50 select-none">/</span>
-        <span className="text-[var(--text-primary)] font-medium truncate">{t(tool.nameKey)}</span>
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="flex items-center justify-center w-6 h-6 rounded-md bg-[var(--accent-soft)] text-[var(--accent)] text-sm shrink-0">
+            {tool.icon}
+          </span>
+          <span className="text-[var(--text-primary)] font-medium truncate">{t(tool.nameKey)}</span>
+        </span>
       </nav>
       {ToolComponent ? (
         <ToolComponent />

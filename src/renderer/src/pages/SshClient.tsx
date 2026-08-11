@@ -2674,7 +2674,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                             className={`shrink-0 text-[10px] ${
                               searchMatch.count > 0
                                 ? 'text-[var(--text-secondary)]'
-                                : 'text-red-500'
+                                : 'text-[var(--danger)]'
                             }`}
                           >
                             {searchMatch.count > 0

@@ -15,8 +15,7 @@ import type * as Monaco from 'monaco-editor'
 import { diffLines, diffWordsWithSpace, diffChars } from 'diff'
 import { useTheme } from '../../theme/ThemeProvider'
 import '../../components/MonacoSetup'
-
-const PANEL_HEADER_CLS = 'text-[11px] font-semibold tracking-widest text-[var(--text-secondary)]'
+import { PANEL_HEADER_CLS } from '../../components/ui'
 
 type DiffLevel = 'word' | 'char'
 
@@ -318,9 +317,9 @@ function TextDiff(): React.JSX.Element {
           </button>
 
           <span className="ml-auto text-xs text-[var(--text-secondary)] tabular-nums">
-            <span className="text-[#16a34a] dark:text-[#4ade80]">+{stats.added}</span>
+            <span className="text-[var(--success)]">+{stats.added}</span>
             <span className="mx-1.5 opacity-40">·</span>
-            <span className="text-[#dc2626] dark:text-[#f87171]">−{stats.removed}</span>
+            <span className="text-[var(--danger)]">−{stats.removed}</span>
           </span>
         </div>
       </div>

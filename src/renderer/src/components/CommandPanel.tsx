@@ -201,7 +201,7 @@ function CommandPanel({ shellSessionId }: CommandPanelProps): React.JSX.Element 
                 </button>
                 <button
                   type="button"
-                  className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-red-500"
+                  className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--danger)]"
                   title={t('sshDelete')}
                   onClick={() => remove(snip)}
                 >

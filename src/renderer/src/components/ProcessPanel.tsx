@@ -182,7 +182,7 @@ function ProcessPanel({
       render: (_: unknown, row: SshProcessInfo) => (
         <button
           type="button"
-          className="inline-flex h-6 w-6 items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-red-500"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--danger)]"
           title={t('sshProcKill')}
           onClick={() => {
             setKillTarget(row)

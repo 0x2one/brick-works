@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, Select } from 'antd'
 import { ClearOutlined, CopyOutlined } from '@ant-design/icons'
-
-const PANEL_HEADER_CLS = 'text-[11px] font-semibold tracking-widest text-[var(--text-secondary)]'
+import { Btn, PANEL_HEADER_CLS } from '../../components/ui'
 
 const FLAGS = [
   { key: 'g', labelKey: 'regexFlagGlobal', desc: 'global' },
@@ -176,7 +175,7 @@ function RegexTester(): React.JSX.Element {
       {/* ── Pinned control bar ── */}
       <div className="sticky top-0 z-10 bg-[var(--content-bg)] pb-3 space-y-3">
         {/* Pattern input row */}
-        <div className="flex items-stretch rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] overflow-hidden focus-within:border-[var(--accent)] transition-colors duration-150">
+        <div className="flex items-stretch rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] overflow-hidden focus-within:border-[var(--accent)] transition-colors duration-150">
           <span className="flex items-center pl-3 pr-1 font-mono text-sm text-[var(--text-secondary)] select-none">
             /
           </span>
@@ -216,22 +215,20 @@ function RegexTester(): React.JSX.Element {
             allowClear
             className="text-xs"
           />
-          <button
+          <Btn
+            variant="ghost"
+            icon={<ClearOutlined style={{ fontSize: 11 }} />}
             onClick={() => {
               setPattern('')
               setFlags('gi')
             }}
-            className="px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer border-none
-              bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]
-              hover:bg-[var(--border-subtle)] transition-all duration-100 flex items-center gap-1"
           >
-            <ClearOutlined style={{ fontSize: 11 }} />
             {t('regexClear')}
-          </button>
+          </Btn>
         </div>
 
         {regexError && (
-          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-xs text-[#dc2626] dark:text-[#f87171] font-mono break-all">
+          <div className="px-3 py-2 rounded-lg bg-[var(--danger-soft)] border border-[var(--danger-border)] text-xs text-[var(--danger)] font-mono break-all">
             {regexError}
           </div>
         )}
@@ -240,7 +237,7 @@ function RegexTester(): React.JSX.Element {
       {/* ── Body: two columns ── */}
       <div className="flex-1 min-h-0 flex gap-4">
         {/* Left: test text */}
-        <section className="flex-1 min-w-0 flex flex-col rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4">
+        <section className="flex-1 min-w-0 flex flex-col rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] p-4">
           <div className="flex items-center justify-between mb-3 shrink-0">
             <span className={PANEL_HEADER_CLS}>{t('regexTestText')}</span>
             <span className="text-xs text-[var(--text-secondary)] tabular-nums">
@@ -282,7 +279,7 @@ function RegexTester(): React.JSX.Element {
               placeholder={t('regexTextPlaceholder')}
               spellCheck={false}
               className="h-24 shrink-0 w-full px-3 py-2 rounded-lg border border-[var(--border-subtle)]
-                bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]
+                bg-[var(--surface)] text-[var(--text-primary)]
                 font-mono text-sm leading-relaxed outline-none resize-none
                 focus:border-[var(--accent)] transition-colors duration-150"
             />
@@ -290,7 +287,7 @@ function RegexTester(): React.JSX.Element {
         </section>
 
         {/* Right: match list */}
-        <section className="w-[340px] shrink-0 flex flex-col rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4">
+        <section className="w-[340px] shrink-0 flex flex-col rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] p-4">
           <div className="flex items-center justify-between mb-3 shrink-0">
             <span className={PANEL_HEADER_CLS}>{t('regexMatches')}</span>
             {matches.length > 0 && (

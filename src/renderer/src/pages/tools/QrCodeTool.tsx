@@ -2,9 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, ColorPicker, Image, Spin } from 'antd'
 import {
-  SnippetsOutlined,
   ReloadOutlined,
-  CheckOutlined,
   PaperClipOutlined,
   FolderOpenOutlined,
   LinkOutlined,
@@ -15,9 +13,8 @@ import {
 } from '@ant-design/icons'
 import QRCode from 'qrcode'
 import jsQR from 'jsqr'
-
-const PANEL_HEADER_CLS = 'text-[11px] font-semibold tracking-widest text-[var(--text-secondary)]'
-const INPUT_LABEL_CLS = 'block text-xs font-medium text-[var(--text-secondary)] mb-1.5'
+import { Btn, CopyButton, Panel, Segmented } from '../../components/ui'
+import { PANEL_HEADER_CLS, INPUT_LABEL_CLS } from '../../components/ui'
 
 type ToolMode = 'generate' | 'decode'
 type DecodeMode = 'clipboard' | 'file' | 'url' | 'drop'
@@ -317,406 +314,338 @@ function QrCodeTool(): React.JSX.Element {
     setCopied(false)
   }, [])
 
-  const generateBtnCls = `
-    w-full py-2.5 px-6 rounded-lg text-sm font-semibold
-    flex items-center justify-center gap-2
-    transition-all duration-150 cursor-pointer border-none
-    bg-[var(--accent)] text-white
-    hover:brightness-110 active:brightness-90
-    disabled:opacity-40 disabled:cursor-not-allowed
-  `
-
   return (
     <div className="flex flex-col p-6 flex-1 min-h-0">
       <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-y-auto">
         {/* ── Mode switch ── */}
         <section>
-          <div className="flex gap-1 flex-wrap">
-            {TOOL_MODES.map((m) => (
-              <button
-                key={m.key}
-                onClick={() => setToolMode(m.key)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border-none transition-all duration-100
-                  ${
-                    toolMode === m.key
-                      ? 'bg-[var(--accent)] text-white'
-                      : 'text-[var(--text-secondary)] bg-[var(--bg-warm)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]'
-                  }`}
-              >
-                {t(m.labelKey)}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            size="md"
+            options={TOOL_MODES.map((m) => ({ value: m.key, label: t(m.labelKey) }))}
+            value={toolMode}
+            onChange={(v) => setToolMode(v)}
+            className="w-fit"
+          />
         </section>
 
         {/* ── Generate panel ── */}
         {toolMode === 'generate' && (
-          <section>
-            <div className="rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4">
-              <div className="grid grid-cols-[minmax(0,1fr)_240px] gap-4 items-start">
-                {/* Left: content + preview */}
-                <div className="min-w-0">
-                  <label className={INPUT_LABEL_CLS}>{t('qrGenContent')}</label>
-                  <textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    rows={4}
-                    placeholder={t('qrGenContentPlaceholder')}
-                    spellCheck={false}
-                    className="w-full px-3 py-2 rounded-lg border border-[var(--border-subtle)]
-                      bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]
+          <Panel>
+            <div className="grid grid-cols-[minmax(0,1fr)_240px] gap-4 items-start">
+              {/* Left: content + preview */}
+              <div className="min-w-0">
+                <label className={INPUT_LABEL_CLS}>{t('qrGenContent')}</label>
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  rows={4}
+                  placeholder={t('qrGenContentPlaceholder')}
+                  spellCheck={false}
+                  className="w-full px-3 py-2 rounded-lg border border-[var(--border-subtle)]
+                      bg-[var(--surface)] text-[var(--text-primary)]
                       text-sm outline-none resize-vertical focus:border-[var(--accent)] transition-colors duration-150 font-mono"
-                  />
-                  <button
-                    onClick={handleGenerate}
-                    disabled={!content.trim()}
-                    className={generateBtnCls + ' mt-3'}
-                  >
-                    <ReloadOutlined />
-                    {t('qrGenGenerate')}
-                  </button>
+                />
+                <Btn
+                  variant="primary"
+                  size="md"
+                  block
+                  icon={<ReloadOutlined />}
+                  onClick={handleGenerate}
+                  disabled={!content.trim()}
+                  className="mt-3"
+                >
+                  {t('qrGenGenerate')}
+                </Btn>
 
-                  <div className="mt-5">
-                    <div className={PANEL_HEADER_CLS + ' mb-2'}>{t('qrGenPreview')}</div>
-                    <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-warm)] p-4 flex items-center justify-center min-h-[220px]">
-                      {generated ? (
-                        <Image
-                          src={generated}
-                          alt="qr"
-                          width={224}
-                          preview={{ mask: t('qrGenPreview') }}
-                        />
-                      ) : (
-                        <span className="text-sm text-[var(--text-secondary)] opacity-50 italic">
-                          {t('clickGenerate')}
-                        </span>
-                      )}
-                    </div>
-                    {generated && (
-                      <button
-                        onClick={() => handleDownload(generated)}
-                        className="mt-3 px-4 py-2 rounded-lg text-sm font-semibold
-                          flex items-center gap-2 transition-all duration-150 cursor-pointer border-none
-                          bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)]
-                          hover:bg-[var(--border-subtle)]"
-                      >
-                        <DownloadOutlined />
-                        {t('qrGenDownload')}
-                      </button>
+                <div className="mt-5">
+                  <div className={PANEL_HEADER_CLS + ' mb-2'}>{t('qrGenPreview')}</div>
+                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-warm)] p-4 flex items-center justify-center min-h-[220px]">
+                    {generated ? (
+                      <Image
+                        src={generated}
+                        alt="qr"
+                        width={224}
+                        preview={{ mask: t('qrGenPreview') }}
+                      />
+                    ) : (
+                      <span className="text-sm text-[var(--text-secondary)] opacity-50 italic">
+                        {t('clickGenerate')}
+                      </span>
                     )}
+                  </div>
+                  {generated && (
+                    <Btn
+                      variant="default"
+                      size="md"
+                      icon={<DownloadOutlined />}
+                      onClick={() => handleDownload(generated)}
+                      className="mt-3"
+                    >
+                      {t('qrGenDownload')}
+                    </Btn>
+                  )}
+                </div>
+              </div>
+
+              {/* Right: options */}
+              <div className="space-y-4">
+                <div>
+                  <label className={INPUT_LABEL_CLS}>{t('qrGenEcLevel')}</label>
+                  <Segmented
+                    options={EC_LEVELS.map((lv) => ({ value: lv, label: lv }))}
+                    value={ecLevel}
+                    onChange={(v) => setEcLevel(v)}
+                    stretch
+                  />
+                  <div className="text-[10px] text-[var(--text-secondary)] mt-1">
+                    {t('qrGenEcHint')}
                   </div>
                 </div>
 
-                {/* Right: options */}
-                <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={INPUT_LABEL_CLS}>{t('qrGenEcLevel')}</label>
-                    <div className="flex rounded-lg border border-[var(--border-subtle)] overflow-hidden">
-                      {EC_LEVELS.map((lv) => (
-                        <button
-                          key={lv}
-                          onClick={() => setEcLevel(lv)}
-                          className={`flex-1 px-2 py-1.5 text-xs font-medium cursor-pointer border-none transition-all duration-100
-                            ${
-                              ecLevel === lv
-                                ? 'bg-[var(--accent)] text-white'
-                                : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                            }`}
-                        >
-                          {lv}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="text-[10px] text-[var(--text-secondary)] mt-1">
-                      {t('qrGenEcHint')}
-                    </div>
+                    <label className={INPUT_LABEL_CLS}>{t('qrGenFgColor')}</label>
+                    <ColorPicker
+                      value={fgColor}
+                      onChange={(c) => setFgColor(c.toHexString())}
+                      disabledAlpha
+                      showText
+                      className="!w-full"
+                    />
                   </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={INPUT_LABEL_CLS}>{t('qrGenFgColor')}</label>
-                      <ColorPicker
-                        value={fgColor}
-                        onChange={(c) => setFgColor(c.toHexString())}
-                        disabledAlpha
-                        showText
-                        className="!w-full"
-                      />
-                    </div>
-                    <div>
-                      <label className={INPUT_LABEL_CLS}>{t('qrGenBgColor')}</label>
-                      <ColorPicker
-                        value={bgColor}
-                        onChange={(c) => setBgColor(c.toHexString())}
-                        disabledAlpha
-                        showText
-                        className="!w-full"
-                      />
-                    </div>
-                  </div>
-
                   <div>
-                    <label className={INPUT_LABEL_CLS}>{t('qrGenSize')}</label>
-                    <div className="flex rounded-lg border border-[var(--border-subtle)] overflow-hidden">
-                      {QR_SIZES.map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => setQrSize(s)}
-                          className={`flex-1 px-2 py-1.5 text-xs font-medium cursor-pointer border-none transition-all duration-100
-                            ${
-                              qrSize === s
-                                ? 'bg-[var(--accent)] text-white'
-                                : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                            }`}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
+                    <label className={INPUT_LABEL_CLS}>{t('qrGenBgColor')}</label>
+                    <ColorPicker
+                      value={bgColor}
+                      onChange={(c) => setBgColor(c.toHexString())}
+                      disabledAlpha
+                      showText
+                      className="!w-full"
+                    />
                   </div>
+                </div>
 
-                  {/* Logo */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={INPUT_LABEL_CLS + ' !mb-0'}>{t('qrGenLogo')}</span>
-                      <button
-                        onClick={() => setLogoEnabled(!logoEnabled)}
-                        className={`px-3 h-7 rounded-md text-xs font-semibold cursor-pointer border transition-all duration-100
+                <div>
+                  <label className={INPUT_LABEL_CLS}>{t('qrGenSize')}</label>
+                  <Segmented
+                    options={QR_SIZES.map((s) => ({ value: String(s), label: String(s) }))}
+                    value={String(qrSize)}
+                    onChange={(v) => setQrSize(Number(v))}
+                    stretch
+                  />
+                </div>
+
+                {/* Logo */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={INPUT_LABEL_CLS + ' !mb-0'}>{t('qrGenLogo')}</span>
+                    <button
+                      onClick={() => setLogoEnabled(!logoEnabled)}
+                      className={`px-3 h-7 rounded-md text-xs font-semibold cursor-pointer border transition-all duration-100
                           ${
                             logoEnabled
                               ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
                               : 'bg-transparent text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)]'
                           }`}
-                      >
-                        {logoEnabled ? t('qrGenLogoOn') : t('qrGenLogoOff')}
-                      </button>
-                    </div>
+                    >
+                      {logoEnabled ? t('qrGenLogoOn') : t('qrGenLogoOff')}
+                    </button>
+                  </div>
 
-                    {logoEnabled && (
-                      <div className="mt-2 space-y-3">
-                        <div className="flex gap-1.5 flex-wrap">
-                          {LOGO_EMOJIS.map((e) => (
-                            <button
-                              key={e}
-                              onClick={() => setLogoEmoji(e)}
-                              className={`w-8 h-8 rounded-lg text-lg cursor-pointer border transition-all duration-100
+                  {logoEnabled && (
+                    <div className="mt-2 space-y-3">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {LOGO_EMOJIS.map((e) => (
+                          <button
+                            key={e}
+                            onClick={() => setLogoEmoji(e)}
+                            className={`w-8 h-8 rounded-lg text-lg cursor-pointer border transition-all duration-100
                                 ${
                                   !logoImageDataUrl && logoEmoji === e
                                     ? 'border-[var(--accent)] bg-[var(--accent)]/10'
                                     : 'border-[var(--border-subtle)] bg-transparent hover:border-[var(--text-secondary)]'
                                 }`}
-                            >
-                              {e}
-                            </button>
-                          ))}
-                        </div>
+                          >
+                            {e}
+                          </button>
+                        ))}
+                      </div>
 
-                        <div className="flex items-center gap-2">
-                          <input
-                            ref={logoFileRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={handleLogoFileChange}
-                            className="hidden"
-                          />
-                          <button
-                            onClick={() => logoFileRef.current?.click()}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                      <div className="flex items-center gap-2">
+                        <input
+                          ref={logoFileRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoFileChange}
+                          className="hidden"
+                        />
+                        <button
+                          onClick={() => logoFileRef.current?.click()}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
                               text-[var(--text-secondary)] border border-[var(--border-subtle)]
                               hover:text-[var(--text-primary)] hover:border-[var(--text-secondary)]
                               transition-all duration-150 cursor-pointer bg-transparent"
-                          >
-                            <PlusOutlined />
-                            {t('qrGenLogoImage')}
-                          </button>
-                          {logoImageDataUrl && (
-                            <>
-                              <img
-                                src={logoImageDataUrl}
-                                alt="logo"
-                                className="w-8 h-8 rounded object-contain border border-[var(--border-subtle)] bg-white"
-                              />
-                              <button
-                                onClick={() => setLogoImageDataUrl(null)}
-                                className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-secondary)]
+                        >
+                          <PlusOutlined />
+                          {t('qrGenLogoImage')}
+                        </button>
+                        {logoImageDataUrl && (
+                          <>
+                            <img
+                              src={logoImageDataUrl}
+                              alt="logo"
+                              className="w-8 h-8 rounded object-contain border border-[var(--border-subtle)] bg-white"
+                            />
+                            <button
+                              onClick={() => setLogoImageDataUrl(null)}
+                              className="flex items-center justify-center w-7 h-7 rounded text-[var(--text-secondary)]
                                   hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]
                                   transition-all duration-150 cursor-pointer border-none bg-transparent"
-                              >
-                                <CloseOutlined style={{ fontSize: 11 }} />
-                              </button>
-                            </>
-                          )}
-                        </div>
+                            >
+                              <CloseOutlined style={{ fontSize: 11 }} />
+                            </button>
+                          </>
+                        )}
+                      </div>
 
-                        <div>
-                          <label className={INPUT_LABEL_CLS}>{t('qrGenLogoSize')}</label>
-                          <div className="flex rounded-lg border border-[var(--border-subtle)] overflow-hidden">
-                            {LOGO_RATIOS.map((r) => (
-                              <button
-                                key={r}
-                                onClick={() => setLogoRatio(r)}
-                                className={`flex-1 px-2 py-1.5 text-xs font-medium cursor-pointer border-none transition-all duration-100
-                                  ${
-                                    logoRatio === r
-                                      ? 'bg-[var(--accent)] text-white'
-                                      : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                                  }`}
-                              >
-                                {Math.round(r * 100)}%
-                              </button>
-                            ))}
-                          </div>
+                      <div>
+                        <label className={INPUT_LABEL_CLS}>{t('qrGenLogoSize')}</label>
+                        <Segmented
+                          options={LOGO_RATIOS.map((r) => ({
+                            value: String(r),
+                            label: `${Math.round(r * 100)}%`
+                          }))}
+                          value={String(logoRatio)}
+                          onChange={(v) => setLogoRatio(Number(v))}
+                          stretch
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Panel>
+        )}
+
+        {/* ── Decode panel ── */}
+        {toolMode === 'decode' && (
+          <Panel>
+            {/* Sub mode pills */}
+            <Segmented
+              options={DECODE_MODES.map((m) => ({ value: m.key, label: t(m.labelKey) }))}
+              value={subMode}
+              onChange={(v) => handleSwitchDecodeMode(v)}
+              className="mb-4"
+            />
+
+            {subMode === 'clipboard' && (
+              <div className="mb-4">
+                <button onClick={handleClipboardRead} className={dashedBtnCls}>
+                  <PaperClipOutlined style={{ fontSize: 24 }} />
+                  <span>{t('qrDecPasteHint')}</span>
+                </button>
+              </div>
+            )}
+
+            {subMode === 'file' && (
+              <div className="mb-4">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <button onClick={() => fileRef.current?.click()} className={dashedBtnCls}>
+                  <FolderOpenOutlined style={{ fontSize: 24 }} />
+                  <span>{t('qrDecSelectFile')}</span>
+                </button>
+              </div>
+            )}
+
+            {subMode === 'url' && (
+              <div className="mb-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleUrlDecode()}
+                    placeholder={t('qrDecUrlPlaceholder')}
+                    spellCheck={false}
+                    className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)]
+                        text-sm text-[var(--text-primary)] outline-none
+                        focus:border-[var(--accent)] transition-colors duration-150"
+                  />
+                  <Btn
+                    variant="primary"
+                    icon={<LinkOutlined />}
+                    onClick={handleUrlDecode}
+                    disabled={!url.trim() || decoding}
+                  >
+                    {t('qrDecDecode')}
+                  </Btn>
+                </div>
+              </div>
+            )}
+
+            {subMode === 'drop' && (
+              <div
+                className={dashedBtnCls + ' mb-4 min-h-[140px]'}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+              >
+                <PictureOutlined style={{ fontSize: 24 }} />
+                <span>{t('qrDecDropHint')}</span>
+              </div>
+            )}
+
+            {/* Result */}
+            {decodeImage && (
+              <div>
+                <div className={PANEL_HEADER_CLS + ' mb-2'}>{t('qrDecResult')}</div>
+                <div className="flex gap-4">
+                  <div className="w-32 h-32 shrink-0 rounded-lg overflow-hidden bg-[var(--bg-warm)] border border-[var(--border-subtle)] flex items-center justify-center">
+                    <Image
+                      src={decodeImage}
+                      alt="source"
+                      className="w-full h-full object-contain"
+                      preview={{ mask: null }}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {decoding ? (
+                      <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] py-4">
+                        <Spin size="small" />
+                        {t('qrDecDecoding')}
+                      </div>
+                    ) : decodeResult ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 px-3 py-2 rounded-md bg-[var(--bg-warm)] text-sm font-mono text-[var(--text-primary)] break-all select-all">
+                            {decodeResult.text}
+                          </code>
+                          <CopyButton
+                            copied={copied}
+                            onCopy={() => handleCopyText(decodeResult.text)}
+                            title={t('copy')}
+                          />
                         </div>
+                        <div className="text-[11px] text-[var(--text-secondary)]">
+                          {t('qrDecVersion')}: {decodeResult.version}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-[var(--text-secondary)] italic py-4">
+                        {t('qrDecNotFound')}
                       </div>
                     )}
                   </div>
                 </div>
               </div>
-            </div>
-          </section>
-        )}
-
-        {/* ── Decode panel ── */}
-        {toolMode === 'decode' && (
-          <section>
-            <div className="rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4">
-              {/* Sub mode pills */}
-              <div className="flex gap-1 flex-wrap mb-4">
-                {DECODE_MODES.map((m) => (
-                  <button
-                    key={m.key}
-                    onClick={() => handleSwitchDecodeMode(m.key)}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border-none transition-all duration-100
-                      ${
-                        subMode === m.key
-                          ? 'bg-[var(--accent)] text-white'
-                          : 'text-[var(--text-secondary)] bg-[var(--bg-warm)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]'
-                      }`}
-                  >
-                    {t(m.labelKey)}
-                  </button>
-                ))}
-              </div>
-
-              {subMode === 'clipboard' && (
-                <div className="mb-4">
-                  <button onClick={handleClipboardRead} className={dashedBtnCls}>
-                    <PaperClipOutlined style={{ fontSize: 24 }} />
-                    <span>{t('qrDecPasteHint')}</span>
-                  </button>
-                </div>
-              )}
-
-              {subMode === 'file' && (
-                <div className="mb-4">
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <button onClick={() => fileRef.current?.click()} className={dashedBtnCls}>
-                    <FolderOpenOutlined style={{ fontSize: 24 }} />
-                    <span>{t('qrDecSelectFile')}</span>
-                  </button>
-                </div>
-              )}
-
-              {subMode === 'url' && (
-                <div className="mb-4">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleUrlDecode()}
-                      placeholder={t('qrDecUrlPlaceholder')}
-                      spellCheck={false}
-                      className="flex-1 px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)]
-                        text-sm text-[var(--text-primary)] outline-none
-                        focus:border-[var(--accent)] transition-colors duration-150"
-                    />
-                    <button
-                      onClick={handleUrlDecode}
-                      disabled={!url.trim() || decoding}
-                      className="px-4 py-2 rounded-lg text-sm font-semibold
-                        flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none
-                        bg-[var(--accent)] text-white
-                        hover:brightness-110 active:brightness-90
-                        disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <LinkOutlined />
-                      {t('qrDecDecode')}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {subMode === 'drop' && (
-                <div
-                  className={dashedBtnCls + ' mb-4 min-h-[140px]'}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={handleDrop}
-                >
-                  <PictureOutlined style={{ fontSize: 24 }} />
-                  <span>{t('qrDecDropHint')}</span>
-                </div>
-              )}
-
-              {/* Result */}
-              {decodeImage && (
-                <div>
-                  <div className={PANEL_HEADER_CLS + ' mb-2'}>{t('qrDecResult')}</div>
-                  <div className="flex gap-4">
-                    <div className="w-32 h-32 shrink-0 rounded-lg overflow-hidden bg-[var(--bg-warm)] border border-[var(--border-subtle)] flex items-center justify-center">
-                      <Image
-                        src={decodeImage}
-                        alt="source"
-                        className="w-full h-full object-contain"
-                        preview={{ mask: null }}
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      {decoding ? (
-                        <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] py-4">
-                          <Spin size="small" />
-                          {t('qrDecDecoding')}
-                        </div>
-                      ) : decodeResult ? (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 px-3 py-2 rounded-md bg-[var(--bg-warm)] text-sm font-mono text-[var(--text-primary)] break-all select-all">
-                              {decodeResult.text}
-                            </code>
-                            <button
-                              onClick={() => handleCopyText(decodeResult.text)}
-                              className="shrink-0 flex items-center justify-center w-8 h-8 rounded text-[var(--text-secondary)]
-                                hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]
-                                transition-all duration-150 cursor-pointer border-none bg-transparent"
-                            >
-                              {copied ? (
-                                <CheckOutlined style={{ color: 'var(--accent)', fontSize: 14 }} />
-                              ) : (
-                                <SnippetsOutlined style={{ fontSize: 14 }} />
-                              )}
-                            </button>
-                          </div>
-                          <div className="text-[11px] text-[var(--text-secondary)]">
-                            {t('qrDecVersion')}: {decodeResult.version}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-[var(--text-secondary)] italic py-4">
-                          {t('qrDecNotFound')}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </section>
+            )}
+          </Panel>
         )}
       </div>
     </div>

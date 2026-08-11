@@ -1021,7 +1021,7 @@ function PdfPreview(): React.JSX.Element {
                 {/* Comment popup */}
                 {openPopup && (
                   <div
-                    className="absolute z-20 max-w-[260px] rounded-lg shadow-md border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-2.5"
+                    className="absolute z-20 max-w-[260px] rounded-lg shadow-md border border-[var(--border-subtle)] bg-[var(--surface)] p-2.5"
                     style={{
                       left: Math.min(openPopup.x + 14, Math.max(display.width - 260, 8)),
                       top: openPopup.y + 14

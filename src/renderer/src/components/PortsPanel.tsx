@@ -159,7 +159,7 @@ function PortsPanel({
         <button
           type="button"
           disabled={row.pid == null}
-          className="inline-flex h-6 w-6 items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md border-none cursor-pointer bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--danger)] disabled:opacity-40 disabled:cursor-not-allowed"
           title={t('sshPortKill')}
           onClick={() => {
             setKillTarget(row)

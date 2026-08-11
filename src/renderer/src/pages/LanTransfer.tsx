@@ -12,17 +12,8 @@ import {
   QrcodeOutlined
 } from '@ant-design/icons'
 import { QRCodeSVG } from 'qrcode.react'
-
-const LABEL_CLS =
-  'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
-
-const CARD_CLS =
-  'rounded-xl border border-[var(--border-subtle)] bg-[var(--surface)] overflow-hidden'
-
-const BTN_CLS =
-  'px-3 h-8 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none ' +
-  'bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)] ' +
-  'disabled:opacity-40 disabled:cursor-not-allowed'
+import { Btn } from '../components/ui'
+import { LABEL_CLS, CARD_CLS } from '../components/ui'
 
 function LanTransfer(): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -112,28 +103,24 @@ function LanTransfer(): React.JSX.Element {
             <span className={LABEL_CLS}>{t('lanStatus')}</span>
             <span
               className={`flex items-center gap-1.5 text-xs font-medium ${
-                running ? 'text-green-600' : 'text-[var(--text-secondary)]'
+                running ? 'text-[var(--success)]' : 'text-[var(--text-secondary)]'
               }`}
             >
               <span
-                className={`w-2 h-2 rounded-full ${running ? 'bg-green-500' : 'bg-[var(--border-subtle)]'}`}
+                className={`w-2 h-2 rounded-full ${running ? 'bg-[var(--success)]' : 'bg-[var(--border-subtle)]'}`}
               />
               {running ? t('lanRunning') : t('lanStopped')}
             </span>
           </div>
           <div className="px-5 py-4 flex items-center gap-3">
-            <button
+            <Btn
+              variant={running ? 'default' : 'primary'}
+              icon={running ? <StopOutlined /> : <PlayCircleOutlined />}
               onClick={handleToggle}
               disabled={starting}
-              className={
-                running
-                  ? 'px-4 h-8 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]'
-                  : 'px-4 h-8 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none bg-[var(--accent)] text-white hover:brightness-110 active:brightness-90'
-              }
             >
-              {running ? <StopOutlined /> : <PlayCircleOutlined />}
               {running ? t('lanStop') : t('lanStart')}
-            </button>
+            </Btn>
             {running && status?.port != null && (
               <span className="text-xs text-[var(--text-secondary)]">
                 {t('lanPort')}: <span className="font-mono">{status.port}</span>
@@ -155,18 +142,16 @@ function LanTransfer(): React.JSX.Element {
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={handleChooseDir} disabled={running} className={BTN_CLS}>
-                <FolderOpenOutlined />
+              <Btn icon={<FolderOpenOutlined />} onClick={handleChooseDir} disabled={running}>
                 {t('lanChooseDir')}
-              </button>
-              <button
+              </Btn>
+              <Btn
+                icon={<FolderOutlined />}
                 onClick={() => window.api.lan.openDir()}
                 disabled={!status?.dir}
-                className={BTN_CLS}
               >
-                <FolderOutlined />
                 {t('lanOpenDir')}
-              </button>
+              </Btn>
             </div>
             <p className="mt-3 text-[11px] text-[var(--text-secondary)]">
               {running ? t('lanDirRestart') : t('lanDefaultHint')}
@@ -200,18 +185,15 @@ function LanTransfer(): React.JSX.Element {
                     placeholder={t('lanNetworkIp')}
                   />
                 )}
-                <button onClick={() => handleCopy(baseUrl)} className={BTN_CLS}>
-                  <CopyOutlined />
+                <Btn icon={<CopyOutlined />} onClick={() => handleCopy(baseUrl)}>
                   {t('lanCopy')}
-                </button>
-                <button onClick={() => window.api.lan.openBrowser(baseUrl)} className={BTN_CLS}>
-                  <GlobalOutlined />
+                </Btn>
+                <Btn icon={<GlobalOutlined />} onClick={() => window.api.lan.openBrowser(baseUrl)}>
                   {t('lanOpenBrowser')}
-                </button>
-                <button onClick={() => setQrOpen(true)} className={BTN_CLS}>
-                  <QrcodeOutlined />
+                </Btn>
+                <Btn icon={<QrcodeOutlined />} onClick={() => setQrOpen(true)}>
                   {t('lanQrCode')}
-                </button>
+                </Btn>
               </div>
               {status?.ips && status.ips.length > 0 && (
                 <p className="text-[11px] text-[var(--text-secondary)]">{t('lanNetworkIpHint')}</p>
@@ -224,10 +206,9 @@ function LanTransfer(): React.JSX.Element {
                     <code className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-warm)] text-xs font-mono text-[var(--text-primary)] select-all truncate">
                       {token}
                     </code>
-                    <button onClick={() => handleCopy(token)} className={BTN_CLS}>
-                      <CopyOutlined />
+                    <Btn icon={<CopyOutlined />} onClick={() => handleCopy(token)}>
                       {t('lanCopyToken')}
-                    </button>
+                    </Btn>
                   </div>
                   <p className="mt-2 text-[11px] text-[var(--text-secondary)]">
                     {t('lanTokenHint')}
@@ -247,10 +228,9 @@ function LanTransfer(): React.JSX.Element {
                       text-xs text-[var(--text-primary)] outline-none
                       focus:border-[var(--accent)] transition-colors duration-150"
                   />
-                  <button onClick={() => handleCopy(deepLink)} className={BTN_CLS}>
-                    <LinkOutlined />
+                  <Btn icon={<LinkOutlined />} onClick={() => handleCopy(deepLink)}>
                     {t('lanCopyDeepLink')}
-                  </button>
+                  </Btn>
                 </div>
               </div>
             </div>

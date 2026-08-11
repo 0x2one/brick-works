@@ -10,6 +10,7 @@ import {
   DownloadOutlined,
   CheckOutlined
 } from '@ant-design/icons'
+import { LABEL_CLS } from '../../components/ui'
 
 const MODES = ['url', 'clipboard', 'file', 'reverse'] as const
 
@@ -32,9 +33,6 @@ function blobToBase64(blob: Blob): Promise<string> {
 function isValidDataUrl(s: string): boolean {
   return /^data:image\/[\w+-]+;base64,/.test(s.trim())
 }
-
-const LABEL_CLS =
-  'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
 
 function ImageToBase64(): React.JSX.Element {
   const { t } = useTranslation()

@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App } from 'antd'
-import { SnippetsOutlined, DeleteOutlined, FolderOpenOutlined } from '@ant-design/icons'
+import { DeleteOutlined, FolderOpenOutlined, SnippetsOutlined } from '@ant-design/icons'
+import { Btn, PANEL_HEADER_CLS } from '../../components/ui'
 
 // ── Format definitions ──
 
@@ -214,8 +215,6 @@ function formatCookie(input: string): string {
 }
 
 // ── Component ──
-
-const PANEL_HEADER_CLS = 'text-[11px] font-semibold tracking-widest text-[var(--text-secondary)]'
 
 function CodecConverter(): React.JSX.Element {
   const { t } = useTranslation()
@@ -442,39 +441,26 @@ function CodecConverter(): React.JSX.Element {
           <div className="flex flex-col flex-1 min-h-0">
             <div className="flex items-center justify-between mb-1.5 h-7 shrink-0">
               <div className="flex items-center gap-2">
-                <button
+                <Btn
+                  variant="primary"
                   onClick={handleConvert}
                   disabled={!input.trim() || processing}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold
-                    flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none
-                    bg-[var(--accent)] text-white active:brightness-90
-                    disabled:opacity-40 disabled:cursor-not-allowed
-                    hover:brightness-110 hover:shadow-[0_0_8px_var(--accent)]"
+                  className="hover:shadow-[0_0_8px_var(--accent)]"
                 >
                   {t('codecConvert')}
-                </button>
-                <button
+                </Btn>
+                <Btn
+                  icon={<FolderOpenOutlined style={{ fontSize: 11 }} />}
                   onClick={() => fileRef.current?.click()}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium
-                    flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none
-                    bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)]
-                    hover:bg-[var(--border-subtle)]"
-                >
-                  <FolderOpenOutlined style={{ fontSize: 11 }} />
-                </button>
-                <button
+                />
+                <Btn
+                  icon={<DeleteOutlined style={{ fontSize: 11 }} />}
                   onClick={() => {
                     setInput('')
                     setOutput('')
                   }}
                   disabled={!input && !output}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium
-                    flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none
-                    bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)]
-                    hover:bg-[var(--border-subtle)] disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <DeleteOutlined style={{ fontSize: 11 }} />
-                </button>
+                />
               </div>
               <span className={PANEL_HEADER_CLS}>{t('codecInput')}</span>
             </div>
@@ -487,7 +473,7 @@ function CodecConverter(): React.JSX.Element {
               placeholder={t('codecInputPlaceholder')}
               spellCheck={false}
               className="flex-1 w-full px-4 py-3 rounded-lg border border-[var(--border-subtle)]
-                bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]
+                bg-[var(--surface)] text-[var(--text-primary)]
                 font-mono text-sm leading-relaxed outline-none resize-none
                 focus:border-[var(--accent)] transition-colors duration-150"
             />
@@ -497,17 +483,15 @@ function CodecConverter(): React.JSX.Element {
           <div className="flex flex-col flex-[0.8] min-h-0">
             <div className="flex items-center justify-between mb-1.5 h-7 shrink-0">
               <div className="flex items-center gap-2">
-                <button
+                <Btn
+                  variant="ghost"
+                  icon={<SnippetsOutlined style={{ fontSize: 12 }} />}
                   onClick={handleCopy}
                   disabled={!output}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium
-                    text-[var(--text-secondary)] hover:text-[var(--text-primary)]
-                    hover:bg-[var(--border-subtle)] transition-all duration-150 cursor-pointer border-none bg-transparent
-                    disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  className="!h-7 !px-2.5"
                 >
-                  <SnippetsOutlined style={{ fontSize: 12 }} />
                   {t('copy')}
-                </button>
+                </Btn>
               </div>
               <span className={PANEL_HEADER_CLS}>{t('codecOutput')}</span>
             </div>
@@ -517,7 +501,7 @@ function CodecConverter(): React.JSX.Element {
               placeholder={t('codecOutputPlaceholder')}
               spellCheck={false}
               className="flex-1 w-full px-4 py-3 rounded-lg border border-[var(--border-subtle)]
-                bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]
+                bg-[var(--surface)] text-[var(--text-primary)]
                 font-mono text-sm leading-relaxed outline-none resize-none select-all
                 focus:border-[var(--accent)] transition-colors duration-150"
             />

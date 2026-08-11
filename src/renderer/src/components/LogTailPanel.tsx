@@ -229,7 +229,7 @@ function LogTailPanel({
           </span>
         )}
         {error && (
-          <span className="text-[10px] text-red-500" title={error}>
+          <span className="text-[10px] text-[var(--danger)]" title={error}>
             {t('sshLogStartFail', { msg: error })}
           </span>
         )}

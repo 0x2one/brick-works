@@ -234,7 +234,7 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
         <span className="text-xs text-[var(--text-secondary)] truncate">{status.server}</span>
       )}
       {status?.error && (
-        <span className="text-xs text-red-500 truncate">
+        <span className="text-xs text-[var(--danger)] truncate">
           {status.error === 'KUBECONFIG_EXEC_FORBIDDEN' ? t('k8sExecForbidden') : status.error}
         </span>
       )}

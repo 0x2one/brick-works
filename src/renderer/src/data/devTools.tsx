@@ -1,4 +1,21 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import {
+  KeyOutlined,
+  PictureOutlined,
+  CodeOutlined,
+  SwapOutlined,
+  ClockCircleOutlined,
+  BarcodeOutlined,
+  QrcodeOutlined,
+  FileImageOutlined,
+  HighlightOutlined,
+  EyeOutlined,
+  ScissorOutlined,
+  DiffOutlined,
+  BgColorsOutlined,
+  FunctionOutlined,
+  FileSearchOutlined
+} from '@ant-design/icons'
 
 export interface DevToolItem {
   id: string
@@ -7,6 +24,7 @@ export interface DevToolItem {
   tags: string[]
   route: string
   fill?: boolean
+  icon: ReactNode
 }
 
 export const devTools: DevToolItem[] = [
@@ -15,14 +33,16 @@ export const devTools: DevToolItem[] = [
     nameKey: 'devToolRandomPassword',
     descKey: 'devToolRandomPasswordDesc',
     tags: ['devTagTool', 'devTagSecurity'],
-    route: '/dev-tools/random-password'
+    route: '/dev-tools/random-password',
+    icon: <KeyOutlined />
   },
   {
     id: 'image-to-base64',
     nameKey: 'devToolImageToBase64',
     descKey: 'devToolImageToBase64Desc',
     tags: ['devTagTool', 'devTagImage'],
-    route: '/dev-tools/image-to-base64'
+    route: '/dev-tools/image-to-base64',
+    icon: <PictureOutlined />
   },
   {
     id: 'json-beautify',
@@ -30,7 +50,8 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolJsonBeautifyDesc',
     tags: ['devTagTool', 'devTagJson'],
     route: '/dev-tools/json-beautify',
-    fill: true
+    fill: true,
+    icon: <CodeOutlined />
   },
   {
     id: 'codec-converter',
@@ -38,7 +59,8 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolCodecDesc',
     tags: ['devTagTool', 'devTagCodec'],
     route: '/dev-tools/codec-converter',
-    fill: true
+    fill: true,
+    icon: <SwapOutlined />
   },
   {
     id: 'timestamp-converter',
@@ -46,7 +68,8 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolTimestampDesc',
     tags: ['devTagTool', 'devTagTime'],
     route: '/dev-tools/timestamp-converter',
-    fill: true
+    fill: true,
+    icon: <ClockCircleOutlined />
   },
   {
     id: 'uuid-generator',
@@ -54,7 +77,8 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolUuidGenDesc',
     tags: ['devTagTool', 'devTagGenerate'],
     route: '/dev-tools/uuid-generator',
-    fill: true
+    fill: true,
+    icon: <BarcodeOutlined />
   },
   {
     id: 'qr-code',
@@ -62,7 +86,8 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolQrCodeDesc',
     tags: ['devTagTool', 'devTagImage'],
     route: '/dev-tools/qr-code',
-    fill: true
+    fill: true,
+    icon: <QrcodeOutlined />
   },
   {
     id: 'svg-to-image',
@@ -70,7 +95,8 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolSvgToImgDesc',
     tags: ['devTagTool', 'devTagImage'],
     route: '/dev-tools/svg-to-image',
-    fill: true
+    fill: true,
+    icon: <FileImageOutlined />
   },
   {
     id: 'pdf-image-annotate',
@@ -78,7 +104,8 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolPdfImageAnnotateDesc',
     tags: ['devTagTool', 'devTagDoc', 'devTagImage'],
     route: '/dev-tools/pdf-image-annotate',
-    fill: true
+    fill: true,
+    icon: <HighlightOutlined />
   },
   {
     id: 'pdf-preview',
@@ -86,14 +113,16 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolPdfPreviewDesc',
     tags: ['devTagTool', 'devTagDoc'],
     route: '/dev-tools/pdf-preview',
-    fill: true
+    fill: true,
+    icon: <EyeOutlined />
   },
   {
     id: 'pdf-merge-split',
     nameKey: 'devToolPdfMergeSplit',
     descKey: 'devToolPdfMergeSplitDesc',
     tags: ['devTagTool', 'devTagDoc'],
-    route: '/dev-tools/pdf-merge-split'
+    route: '/dev-tools/pdf-merge-split',
+    icon: <ScissorOutlined />
   },
   {
     id: 'text-diff',
@@ -101,7 +130,8 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolTextDiffDesc',
     tags: ['devTagTool', 'devTagText'],
     route: '/dev-tools/text-diff',
-    fill: true
+    fill: true,
+    icon: <DiffOutlined />
   },
   {
     id: 'color-converter',
@@ -109,7 +139,8 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolColorConverterDesc',
     tags: ['devTagTool', 'devTagColor'],
     route: '/dev-tools/color-converter',
-    fill: true
+    fill: true,
+    icon: <BgColorsOutlined />
   },
   {
     id: 'regex-tester',
@@ -117,7 +148,8 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolRegexTesterDesc',
     tags: ['devTagTool', 'devTagText'],
     route: '/dev-tools/regex-tester',
-    fill: true
+    fill: true,
+    icon: <FunctionOutlined />
   },
   {
     id: 'hex-editor',
@@ -125,7 +157,8 @@ export const devTools: DevToolItem[] = [
     descKey: 'devToolHexEditorDesc',
     tags: ['devTagTool', 'devTagBinary'],
     route: '/dev-tools/hex-editor',
-    fill: true
+    fill: true,
+    icon: <FileSearchOutlined />
   }
 ]
 
@@ -157,6 +190,10 @@ export function useDevToolStats(): {
 } {
   const [stats, setStats] = useState<Record<string, DevToolStats>>(loadStats)
 
+  useEffect(() => {
+    saveStats(stats)
+  }, [stats])
+
   const toggleFavorite = useCallback((id: string) => {
     setStats((prev) => {
       const next = {
@@ -166,7 +203,6 @@ export function useDevToolStats(): {
           favorited: !(prev[id]?.favorited ?? false)
         }
       }
-      saveStats(next)
       return next
     })
   }, [])
@@ -181,7 +217,6 @@ export function useDevToolStats(): {
           useCount: (prev[id]?.useCount ?? 0) + 1
         }
       }
-      saveStats(next)
       return next
     })
   }, [])

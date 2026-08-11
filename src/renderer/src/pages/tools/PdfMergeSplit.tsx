@@ -14,6 +14,7 @@ import {
   PlusOutlined
 } from '@ant-design/icons'
 import { PDFDocument } from 'pdf-lib'
+import { Btn, LABEL_CLS } from '../../components/ui'
 
 type Mode = 'merge' | 'split' | 'extract'
 
@@ -28,15 +29,6 @@ interface OutputFile {
   name: string
   bytes: Uint8Array
 }
-
-const LABEL_CLS =
-  'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
-
-const BTN_PRIMARY =
-  'px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none bg-[var(--accent)] text-white hover:brightness-110 active:brightness-90 disabled:opacity-40 disabled:cursor-not-allowed'
-
-const BTN_GHOST =
-  'px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-all duration-150 cursor-pointer border border-[var(--border-subtle)] bg-[var(--surface)] text-[var(--text-primary)] hover:border-[var(--accent)] disabled:opacity-40 disabled:cursor-not-allowed'
 
 const MODE_ICONS: Record<Mode, ReactNode> = {
   merge: <MergeCellsOutlined />,
@@ -388,10 +380,9 @@ function PdfMergeSplit(): React.JSX.Element {
               {t('pdfMsPageSummary', { files: files.length, pages: totalPages })}
             </label>
             {mode === 'merge' && (
-              <button type="button" onClick={() => fileRef.current?.click()} className={BTN_GHOST}>
-                <PlusOutlined />
+              <Btn icon={<PlusOutlined />} onClick={() => fileRef.current?.click()}>
                 {t('pdfMsAddMore')}
-              </button>
+              </Btn>
             )}
           </div>
           <ul className="flex flex-col gap-2">
@@ -412,34 +403,25 @@ function PdfMergeSplit(): React.JSX.Element {
                 </div>
                 {mode === 'merge' && (
                   <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
+                    <Btn
+                      icon={<ArrowUpOutlined />}
                       onClick={() => moveFile(index, -1)}
                       disabled={index === 0}
-                      className={BTN_GHOST}
                       title={t('pdfMsMoveUp')}
-                    >
-                      <ArrowUpOutlined />
-                    </button>
-                    <button
-                      type="button"
+                    />
+                    <Btn
+                      icon={<ArrowDownOutlined />}
                       onClick={() => moveFile(index, 1)}
                       disabled={index === files.length - 1}
-                      className={BTN_GHOST}
                       title={t('pdfMsMoveDown')}
-                    >
-                      <ArrowDownOutlined />
-                    </button>
+                    />
                   </div>
                 )}
-                <button
-                  type="button"
+                <Btn
+                  icon={<DeleteOutlined />}
                   onClick={() => removeFile(file.id)}
-                  className={BTN_GHOST}
                   title={t('pdfMsRemove')}
-                >
-                  <DeleteOutlined />
-                </button>
+                />
               </li>
             ))}
           </ul>
@@ -497,37 +479,37 @@ function PdfMergeSplit(): React.JSX.Element {
       {files.length > 0 && (
         <div className="mb-6 flex flex-wrap gap-2">
           {mode === 'merge' && (
-            <button
-              type="button"
+            <Btn
+              variant="primary"
+              size="md"
+              icon={<MergeCellsOutlined />}
               onClick={handleMerge}
               disabled={processing || files.length < 2}
-              className={BTN_PRIMARY}
             >
-              <MergeCellsOutlined />
               {processing ? t('pdfMsProcessing') : t('pdfMsDoMerge')}
-            </button>
+            </Btn>
           )}
           {mode === 'split' && (
-            <button
-              type="button"
+            <Btn
+              variant="primary"
+              size="md"
+              icon={<ScissorOutlined />}
               onClick={handleSplit}
               disabled={processing}
-              className={BTN_PRIMARY}
             >
-              <ScissorOutlined />
               {processing ? t('pdfMsProcessing') : t('pdfMsDoSplit')}
-            </button>
+            </Btn>
           )}
           {mode === 'extract' && (
-            <button
-              type="button"
+            <Btn
+              variant="primary"
+              size="md"
+              icon={<PartitionOutlined />}
               onClick={handleExtract}
               disabled={processing || !rangeInput.trim()}
-              className={BTN_PRIMARY}
             >
-              <PartitionOutlined />
               {processing ? t('pdfMsProcessing') : t('pdfMsDoExtract')}
-            </button>
+            </Btn>
           )}
         </div>
       )}
@@ -540,10 +522,9 @@ function PdfMergeSplit(): React.JSX.Element {
               {t('pdfMsOutputList')} · {outputs.length}
             </label>
             {outputs.length > 1 && (
-              <button type="button" onClick={handleDownloadAll} className={BTN_GHOST}>
-                <DownloadOutlined />
+              <Btn icon={<DownloadOutlined />} onClick={handleDownloadAll}>
                 {t('pdfMsDownloadAll')}
-              </button>
+              </Btn>
             )}
           </div>
           <ul className="flex flex-col gap-2">
@@ -561,14 +542,14 @@ function PdfMergeSplit(): React.JSX.Element {
                     {formatSize(out.bytes.byteLength)}
                   </div>
                 </div>
-                <button
-                  type="button"
+                <Btn
+                  variant="primary"
+                  size="md"
+                  icon={<DownloadOutlined />}
                   onClick={() => downloadBytes(out.bytes, out.name)}
-                  className={BTN_PRIMARY}
                 >
-                  <DownloadOutlined />
                   {t('pdfMsDownload')}
-                </button>
+                </Btn>
               </li>
             ))}
           </ul>

@@ -7,6 +7,7 @@ import {
   SearchOutlined,
   AimOutlined
 } from '@ant-design/icons'
+import { Btn, Segmented } from '../../components/ui'
 
 const BYTES_PER_ROW = 16
 const ROW_HEIGHT = 22
@@ -267,10 +268,6 @@ function HexEditor(): React.JSX.Element {
   const modifiedCount = modifiedOffsets.size
   const hasData = data.length > 0
 
-  const toolBtnCls =
-    'px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 cursor-pointer border-none ' +
-    'bg-[var(--bg-warm)] text-[var(--text-primary)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)] disabled:opacity-40 disabled:cursor-not-allowed'
-
   const byteCellCls =
     'w-9 h-5 flex items-center justify-center rounded-[3px] font-mono text-xs cursor-pointer select-none hover:bg-[var(--border-subtle)]'
 
@@ -280,10 +277,9 @@ function HexEditor(): React.JSX.Element {
       <div className="sticky top-0 z-10 bg-[var(--content-bg)] pb-3">
         <div className="flex flex-wrap items-center gap-2">
           <input ref={fileRef} type="file" onChange={handleFileChange} className="hidden" />
-          <button onClick={() => fileRef.current?.click()} className={toolBtnCls}>
-            <FolderOpenOutlined />
+          <Btn icon={<FolderOpenOutlined />} onClick={() => fileRef.current?.click()}>
             {t('hexOpen')}
-          </button>
+          </Btn>
 
           <span className="text-xs text-[var(--text-secondary)] tabular-nums max-w-[220px] truncate">
             {fileName || t('hexNoFile')}
@@ -303,34 +299,28 @@ function HexEditor(): React.JSX.Element {
 
           {/* Search */}
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setHexMode(true)}
-              className={
-                toolBtnCls + (hexMode ? ' !border-[var(--accent)] !text-[var(--accent)]' : '')
-              }
-            >
-              HEX
-            </button>
-            <button
-              onClick={() => setHexMode(false)}
-              className={
-                toolBtnCls + (!hexMode ? ' !border-[var(--accent)] !text-[var(--accent)]' : '')
-              }
-            >
-              ASCII
-            </button>
+            <Segmented
+              options={[
+                { value: 'hex', label: 'HEX' },
+                { value: 'ascii', label: 'ASCII' }
+              ]}
+              value={hexMode ? 'hex' : 'ascii'}
+              onChange={(v) => setHexMode(v === 'hex')}
+            />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={hexMode ? t('hexSearchHex') : t('hexSearchAscii')}
               spellCheck={false}
               onKeyDown={(e) => e.key === 'Enter' && runSearch(1)}
-              className="w-44 px-2.5 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)]
+              className="w-44 px-2.5 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)]
                 text-[var(--text-primary)] font-mono text-xs outline-none focus:border-[var(--accent)] transition-colors"
             />
-            <button onClick={() => runSearch(1)} className={toolBtnCls} title={t('hexFindNext')}>
-              <SearchOutlined style={{ fontSize: 11 }} />
-            </button>
+            <Btn
+              icon={<SearchOutlined style={{ fontSize: 11 }} />}
+              onClick={() => runSearch(1)}
+              title={t('hexFindNext')}
+            />
             {searchResults.length > 0 && (
               <span className="text-xs text-[var(--text-secondary)] tabular-nums whitespace-nowrap">
                 {searchIdx + 1}/{searchResults.length}
@@ -348,26 +338,26 @@ function HexEditor(): React.JSX.Element {
               placeholder={t('hexGotoPlaceholder')}
               spellCheck={false}
               onKeyDown={(e) => e.key === 'Enter' && handleGoto()}
-              className="w-28 px-2.5 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)]
+              className="w-28 px-2.5 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)]
                 text-[var(--text-primary)] font-mono text-xs outline-none focus:border-[var(--accent)] transition-colors"
             />
-            <button onClick={handleGoto} className={toolBtnCls} title={t('hexGoto')}>
-              <AimOutlined style={{ fontSize: 11 }} />
-            </button>
+            <Btn
+              icon={<AimOutlined style={{ fontSize: 11 }} />}
+              onClick={handleGoto}
+              title={t('hexGoto')}
+            />
           </div>
 
           <div className="w-px h-5 bg-[var(--border-subtle)]" />
 
-          <button
+          <Btn
+            variant="primary"
+            icon={<DownloadOutlined style={{ fontSize: 11 }} />}
             onClick={handleDownload}
             disabled={!hasData}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5
-              transition-all duration-150 cursor-pointer border-none bg-[var(--accent)] text-white
-              hover:brightness-110 active:brightness-90 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <DownloadOutlined style={{ fontSize: 11 }} />
             {t('hexDownload')}
-          </button>
+          </Btn>
         </div>
       </div>
 
@@ -385,7 +375,7 @@ function HexEditor(): React.JSX.Element {
           </button>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 flex flex-col rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] overflow-hidden">
           {/* Column header */}
           <div className="shrink-0 flex items-center px-3 py-1.5 border-b border-[var(--border-subtle)] bg-[var(--bg-warm)] font-mono text-[10px] text-[var(--text-secondary)] select-none">
             <span className="w-20 shrink-0">Offset</span>
@@ -442,7 +432,7 @@ function HexEditor(): React.JSX.Element {
                                 }
                               }}
                               spellCheck={false}
-                              className="w-8 h-5 rounded-[3px] border border-[var(--accent)] bg-white dark:bg-[var(--surface)]
+                              className="w-8 h-5 rounded-[3px] border border-[var(--accent)] bg-[var(--surface)]
                                 text-[var(--accent)] text-xs font-mono text-center outline-none"
                             />
                           ) : (
@@ -491,7 +481,7 @@ function HexEditor(): React.JSX.Element {
                                 }
                               }}
                               spellCheck={false}
-                              className="w-3.5 h-5 rounded-[2px] border border-[var(--accent)] bg-white dark:bg-[var(--surface)]
+                              className="w-3.5 h-5 rounded-[2px] border border-[var(--accent)] bg-[var(--surface)]
                                 text-[var(--accent)] text-xs font-mono text-center outline-none p-0"
                             />
                           ) : (

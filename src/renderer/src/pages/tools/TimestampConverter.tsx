@@ -1,9 +1,8 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, Select, Tooltip } from 'antd'
-import { SnippetsOutlined, CloseOutlined, ClockCircleOutlined } from '@ant-design/icons'
-
-const PANEL_HEADER_CLS = 'text-[11px] font-semibold tracking-widest text-[var(--text-secondary)]'
+import { ClockCircleOutlined, CloseOutlined } from '@ant-design/icons'
+import { Btn, CopyButton, Panel, Segmented, PANEL_HEADER_CLS } from '../../components/ui'
 
 const ALL_TIMEZONES: string[] = (() => {
   try {
@@ -144,7 +143,7 @@ function TimestampConverter(): React.JSX.Element {
     localTimezone,
     ...PRESET_CLOCK_ZONES.filter((z) => z !== localTimezone)
   ])
-  const [clockNow, setClockNow] = useState(Date.now())
+  const [clockNow, setClockNow] = useState<number>(() => Date.now())
   const clockTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -203,11 +202,15 @@ function TimestampConverter(): React.JSX.Element {
   }, [tsUnit])
 
   // ── Copy ──
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
+
   const handleCopy = useCallback(
-    async (text: string) => {
+    async (key: string, text: string) => {
       try {
         await navigator.clipboard.writeText(text)
         message.success(t('copied'))
+        setCopiedKey(key)
+        window.setTimeout(() => setCopiedKey(null), 1500)
       } catch {
         message.error(t('copyFailed'))
       }
@@ -248,7 +251,7 @@ function TimestampConverter(): React.JSX.Element {
               return (
                 <div
                   key={zone}
-                  className="relative min-w-[120px] flex-1 max-w-[160px] rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-3"
+                  className="relative min-w-[120px] flex-1 max-w-[160px] rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] p-3"
                 >
                   {!isLocal && zone !== 'UTC' && (
                     <button
@@ -278,34 +281,22 @@ function TimestampConverter(): React.JSX.Element {
 
         {/* ── Mode Switch ── */}
         <section>
-          <div className="flex gap-1 mb-3">
-            <button
-              onClick={() => setMode('time-to-ts')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border-none transition-all duration-100
-                ${
-                  mode === 'time-to-ts'
-                    ? 'bg-[var(--accent)] text-white'
-                    : 'text-[var(--text-secondary)] bg-[var(--bg-warm)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]'
-                }`}
-            >
-              {t('timestampModeTimeToTs')}
-            </button>
-            <button
-              onClick={() => setMode('ts-to-time')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border-none transition-all duration-100
-                ${
-                  mode === 'ts-to-time'
-                    ? 'bg-[var(--accent)] text-white'
-                    : 'text-[var(--text-secondary)] bg-[var(--bg-warm)] border border-[var(--border-subtle)] hover:bg-[var(--border-subtle)]'
-                }`}
-            >
-              {t('timestampModeTsToTime')}
-            </button>
+          <div className="mb-3">
+            <Segmented
+              size="md"
+              options={[
+                { value: 'time-to-ts', label: t('timestampModeTimeToTs') },
+                { value: 'ts-to-time', label: t('timestampModeTsToTime') }
+              ]}
+              value={mode}
+              onChange={(v) => setMode(v)}
+              className="w-fit"
+            />
           </div>
 
           {/* ── Time → Timestamp Panel ── */}
           {mode === 'time-to-ts' && (
-            <div className="rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4">
+            <Panel>
               <div className="grid grid-cols-[1fr_240px] gap-3 mb-4">
                 <div>
                   <div className={PANEL_HEADER_CLS + ' mb-1'}>{t('timestampDateTime')}</div>
@@ -317,17 +308,13 @@ function TimestampConverter(): React.JSX.Element {
                       placeholder={t('timestampPlaceholder')}
                       spellCheck={false}
                       className="flex-1 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)]
-                        bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]
+                        bg-[var(--surface)] text-[var(--text-primary)]
                         text-sm outline-none focus:border-[var(--accent)] transition-colors duration-150"
                     />
                     <Tooltip title={t('timestampNow')}>
-                      <button
-                        onClick={handleTsNow}
-                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer border-none
-                          bg-[var(--accent)] text-white hover:brightness-110 active:brightness-90 transition-all duration-150"
-                      >
+                      <Btn variant="primary" size="sm" onClick={handleTsNow} className="!px-2.5">
                         {t('timestampNow')}
-                      </button>
+                      </Btn>
                     </Tooltip>
                   </div>
                 </div>
@@ -359,14 +346,10 @@ function TimestampConverter(): React.JSX.Element {
                     <code className="flex-1 px-3 py-1.5 rounded-md bg-[var(--bg-warm)] text-sm font-mono text-[var(--text-primary)] break-all">
                       {timestampResult.s.toLocaleString()}
                     </code>
-                    <button
-                      onClick={() => handleCopy(String(timestampResult.s))}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium
-                        text-[var(--text-secondary)] hover:text-[var(--text-primary)]
-                        hover:bg-[var(--border-subtle)] transition-all duration-150 cursor-pointer border-none bg-transparent"
-                    >
-                      <SnippetsOutlined style={{ fontSize: 11 }} />
-                    </button>
+                    <CopyButton
+                      copied={copiedKey === 's'}
+                      onCopy={() => handleCopy('s', String(timestampResult.s))}
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-[var(--text-secondary)] w-14">
@@ -375,14 +358,10 @@ function TimestampConverter(): React.JSX.Element {
                     <code className="flex-1 px-3 py-1.5 rounded-md bg-[var(--bg-warm)] text-sm font-mono text-[var(--text-primary)] break-all">
                       {timestampResult.ms.toLocaleString()}
                     </code>
-                    <button
-                      onClick={() => handleCopy(String(timestampResult.ms))}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium
-                        text-[var(--text-secondary)] hover:text-[var(--text-primary)]
-                        hover:bg-[var(--border-subtle)] transition-all duration-150 cursor-pointer border-none bg-transparent"
-                    >
-                      <SnippetsOutlined style={{ fontSize: 11 }} />
-                    </button>
+                    <CopyButton
+                      copied={copiedKey === 'ms'}
+                      onCopy={() => handleCopy('ms', String(timestampResult.ms))}
+                    />
                   </div>
                 </div>
               ) : (
@@ -390,12 +369,12 @@ function TimestampConverter(): React.JSX.Element {
                   {t('timestampNoResult')}
                 </div>
               )}
-            </div>
+            </Panel>
           )}
 
           {/* ── Timestamp → Time Panel ── */}
           {mode === 'ts-to-time' && (
-            <div className="rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4">
+            <Panel>
               <div className="grid grid-cols-[1fr_120px_240px] gap-3 mb-4">
                 <div>
                   <div className={PANEL_HEADER_CLS + ' mb-1'}>{t('timestampUnixTimestamp')}</div>
@@ -407,46 +386,32 @@ function TimestampConverter(): React.JSX.Element {
                       placeholder="1722345678"
                       spellCheck={false}
                       className="flex-1 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)]
-                        bg-white dark:bg-[var(--surface)] text-[var(--text-primary)]
+                        bg-[var(--surface)] text-[var(--text-primary)]
                         font-mono text-sm outline-none focus:border-[var(--accent)] transition-colors duration-150"
                     />
                     <Tooltip title={t('timestampNow')}>
-                      <button
+                      <Btn
+                        variant="primary"
+                        size="sm"
                         onClick={handleTsTimestampNow}
-                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer border-none
-                          bg-[var(--accent)] text-white hover:brightness-110 active:brightness-90 transition-all duration-150"
+                        className="!px-2.5"
                       >
                         {t('timestampNow')}
-                      </button>
+                      </Btn>
                     </Tooltip>
                   </div>
                 </div>
                 <div>
                   <div className={PANEL_HEADER_CLS + ' mb-1'}>{t('timestampUnit')}</div>
-                  <div className="flex rounded-lg border border-[var(--border-subtle)] overflow-hidden">
-                    <button
-                      onClick={() => setTsUnit('s')}
-                      className={`flex-1 px-2 py-1.5 text-xs font-medium cursor-pointer border-none transition-all duration-100
-                        ${
-                          tsUnit === 's'
-                            ? 'bg-[var(--accent)] text-white'
-                            : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                        }`}
-                    >
-                      {t('timestampSeconds')}
-                    </button>
-                    <button
-                      onClick={() => setTsUnit('ms')}
-                      className={`flex-1 px-2 py-1.5 text-xs font-medium cursor-pointer border-none transition-all duration-100
-                        ${
-                          tsUnit === 'ms'
-                            ? 'bg-[var(--accent)] text-white'
-                            : 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                        }`}
-                    >
-                      ms
-                    </button>
-                  </div>
+                  <Segmented
+                    options={[
+                      { value: 's', label: t('timestampSeconds') },
+                      { value: 'ms', label: 'ms' }
+                    ]}
+                    value={tsUnit}
+                    onChange={(v) => setTsUnit(v)}
+                    stretch
+                  />
                 </div>
                 <div>
                   <div className={PANEL_HEADER_CLS + ' mb-1'}>{t('timestampTimezone')}</div>
@@ -472,21 +437,17 @@ function TimestampConverter(): React.JSX.Element {
                   <code className="flex-1 px-3 py-2 rounded-md bg-[var(--bg-warm)] text-sm font-mono text-[var(--text-primary)]">
                     {timeResult}
                   </code>
-                  <button
-                    onClick={() => handleCopy(timeResult)}
-                    className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium
-                      text-[var(--text-secondary)] hover:text-[var(--text-primary)]
-                      hover:bg-[var(--border-subtle)] transition-all duration-150 cursor-pointer border-none bg-transparent"
-                  >
-                    <SnippetsOutlined style={{ fontSize: 11 }} />
-                  </button>
+                  <CopyButton
+                    copied={copiedKey === 'time'}
+                    onCopy={() => handleCopy('time', timeResult)}
+                  />
                 </div>
               ) : (
                 <div className="text-xs text-[var(--text-secondary)] italic">
                   {t('timestampNoResult')}
                 </div>
               )}
-            </div>
+            </Panel>
           )}
         </section>
       </div>

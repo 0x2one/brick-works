@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { App, ColorPicker } from 'antd'
-import { SnippetsOutlined, CheckOutlined, DeleteOutlined, HistoryOutlined } from '@ant-design/icons'
+import { DeleteOutlined, HistoryOutlined } from '@ant-design/icons'
 import type { Color } from 'antd/es/color-picker'
 import { useTheme } from '../../theme/ThemeProvider'
-
-const PANEL_HEADER_CLS = 'text-[11px] font-semibold tracking-widest text-[var(--text-secondary)]'
+import { CopyButton, Panel } from '../../components/ui'
 
 const HISTORY_KEY = 'color-converter-history'
 const HISTORY_MAX = 10
@@ -354,16 +353,11 @@ function ColorConverter(): React.JSX.Element {
     { key: 'cmyk', labelKey: 'colorCmyk' }
   ]
 
-  const copyBtnCls =
-    'shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-[var(--text-secondary)] ' +
-    'hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)] transition-all duration-150 cursor-pointer border-none bg-transparent'
-
   return (
     <div className="flex flex-col p-6 flex-1 min-h-0">
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
         {/* Picker + preview */}
-        <section className="rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4">
-          <div className={PANEL_HEADER_CLS + ' mb-3'}>{t('colorPicker')}</div>
+        <Panel title={t('colorPicker')}>
           <div className="flex items-center gap-4 flex-wrap">
             <ColorPicker
               value={rgbToHex(rgb)}
@@ -381,46 +375,43 @@ function ColorConverter(): React.JSX.Element {
               <span className="font-mono text-sm select-all">{rgbToHex(rgb)}</span>
             </div>
           </div>
-        </section>
+        </Panel>
 
         {/* Format rows */}
-        <section className="rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4 space-y-3">
-          <div className={PANEL_HEADER_CLS + ' mb-1'}>{t('colorFormats')}</div>
-          {formatRows.map((row) => (
-            <div key={row.key} className="flex items-center gap-2">
-              <span className="w-16 shrink-0 text-xs font-medium text-[var(--text-secondary)]">
-                {t(row.labelKey)}
-              </span>
-              <input
-                value={inputs[row.key]}
-                onChange={(e) => handleFormatInput(row.key, e.target.value)}
-                spellCheck={false}
-                className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-[var(--border-subtle)]
-                  bg-[var(--bg-warm)] text-[var(--text-primary)] font-mono text-sm
-                  outline-none focus:border-[var(--accent)] transition-colors duration-150"
-              />
-              <button
-                onClick={() => handleCopy(row.key, inputs[row.key])}
-                className={copyBtnCls}
-                title={t('copy')}
-              >
-                {copiedKey === row.key ? (
-                  <CheckOutlined style={{ color: 'var(--accent)', fontSize: 13 }} />
-                ) : (
-                  <SnippetsOutlined style={{ fontSize: 13 }} />
-                )}
-              </button>
-            </div>
-          ))}
-        </section>
+        <Panel title={t('colorFormats')}>
+          <div className="space-y-3">
+            {formatRows.map((row) => (
+              <div key={row.key} className="flex items-center gap-2">
+                <span className="w-16 shrink-0 text-xs font-medium text-[var(--text-secondary)]">
+                  {t(row.labelKey)}
+                </span>
+                <input
+                  value={inputs[row.key]}
+                  onChange={(e) => handleFormatInput(row.key, e.target.value)}
+                  spellCheck={false}
+                  className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-[var(--border-subtle)]
+                    bg-[var(--bg-warm)] text-[var(--text-primary)] font-mono text-sm
+                    outline-none focus:border-[var(--accent)] transition-colors duration-150"
+                />
+                <CopyButton
+                  copied={copiedKey === row.key}
+                  onCopy={() => handleCopy(row.key, inputs[row.key])}
+                  title={t('copy')}
+                />
+              </div>
+            ))}
+          </div>
+        </Panel>
 
         {/* History */}
-        <section className="rounded-lg border border-[var(--border-subtle)] bg-white dark:bg-[var(--surface)] p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-1.5">
+        <Panel
+          title={
+            <span className="flex items-center gap-1.5">
               <HistoryOutlined style={{ fontSize: 13 }} />
-              <span className={PANEL_HEADER_CLS}>{t('colorHistory')}</span>
-            </div>
+              {t('colorHistory')}
+            </span>
+          }
+          actions={
             <button
               onClick={handleClearHistory}
               disabled={history.length === 0}
@@ -431,7 +422,8 @@ function ColorConverter(): React.JSX.Element {
               <DeleteOutlined style={{ fontSize: 11 }} />
               {t('colorClearHistory')}
             </button>
-          </div>
+          }
+        >
           {history.length === 0 ? (
             <div className="h-9 border-2 border-dashed border-[var(--border-subtle)] rounded-lg flex items-center justify-center">
               <p className="text-xs text-[var(--text-secondary)] opacity-60 italic">
@@ -456,7 +448,7 @@ function ColorConverter(): React.JSX.Element {
               })}
             </div>
           )}
-        </section>
+        </Panel>
       </div>
     </div>
   )

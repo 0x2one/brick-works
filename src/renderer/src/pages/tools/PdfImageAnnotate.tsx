@@ -28,6 +28,7 @@ import {
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
+import { LABEL_CLS } from '../../components/ui'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -135,9 +136,6 @@ const COLOR_PRESET_COLORS = [
 ]
 
 const SHAPE_ORDER: ShapeType[] = ['rect', 'ellipse', 'polygon', 'line', 'point']
-
-const LABEL_CLS =
-  'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
 
 const ICON_BTN_CLS =
   'w-8 h-8 rounded-lg text-sm flex items-center justify-center transition-all duration-150 cursor-pointer border-none ' +
@@ -1575,13 +1573,13 @@ function PdfImageAnnotate(): React.JSX.Element {
                         >
                           <button
                             onClick={() => openEdit(a)}
-                            className="flex h-5 w-5 items-center justify-center rounded text-[10px] bg-white dark:bg-[var(--surface)] border border-[var(--border-subtle)] shadow-sm text-[var(--text-primary)] hover:text-[var(--accent)] cursor-pointer"
+                            className="flex h-5 w-5 items-center justify-center rounded text-[10px] bg-[var(--surface)] border border-[var(--border-subtle)] shadow-sm text-[var(--text-primary)] hover:text-[var(--accent)] cursor-pointer"
                           >
                             <EditOutlined />
                           </button>
                           <button
                             onClick={() => removeAnnotation(a.id)}
-                            className="flex h-5 w-5 items-center justify-center rounded text-[10px] bg-white dark:bg-[var(--surface)] border border-[var(--border-subtle)] shadow-sm text-[var(--text-primary)] hover:text-red-500 cursor-pointer"
+                            className="flex h-5 w-5 items-center justify-center rounded text-[10px] bg-[var(--surface)] border border-[var(--border-subtle)] shadow-sm text-[var(--text-primary)] hover:text-[var(--danger)] cursor-pointer"
                           >
                             <DeleteOutlined />
                           </button>
@@ -1744,7 +1742,7 @@ function PdfImageAnnotate(): React.JSX.Element {
                       >
                         <button
                           onClick={(e) => e.stopPropagation()}
-                          className="shrink-0 flex h-5 w-5 items-center justify-center rounded text-[10px] text-[var(--text-secondary)] hover:text-red-500 hover:bg-[var(--border-subtle)] cursor-pointer"
+                          className="shrink-0 flex h-5 w-5 items-center justify-center rounded text-[10px] text-[var(--text-secondary)] hover:text-[var(--danger)] hover:bg-[var(--border-subtle)] cursor-pointer"
                           title={t('annoDelete')}
                         >
                           <DeleteOutlined />
@@ -2021,7 +2019,7 @@ function PdfImageAnnotate(): React.JSX.Element {
                               )
                             }
                             title={t('annoRemoveVertex')}
-                            className="shrink-0 flex h-6 w-6 items-center justify-center rounded text-[10px] text-[var(--text-secondary)] hover:text-red-500 hover:bg-[var(--border-subtle)] cursor-pointer"
+                            className="shrink-0 flex h-6 w-6 items-center justify-center rounded text-[10px] text-[var(--text-secondary)] hover:text-[var(--danger)] hover:bg-[var(--border-subtle)] cursor-pointer"
                           >
                             <CloseOutlined />
                           </button>

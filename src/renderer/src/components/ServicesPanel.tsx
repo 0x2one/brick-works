@@ -13,9 +13,9 @@ import type { ColumnsType } from 'antd/es/table'
 function statusColor(active: string): string {
   switch (active) {
     case 'active':
-      return 'text-green-600'
+      return 'text-[var(--success)]'
     case 'failed':
-      return 'text-red-500'
+      return 'text-[var(--danger)]'
     case 'inactive':
       return 'text-[var(--text-secondary)]'
     default:

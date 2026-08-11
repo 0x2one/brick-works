@@ -1,7 +1,9 @@
 import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { InputNumber, App } from 'antd'
-import { SnippetsOutlined, ReloadOutlined, CheckOutlined } from '@ant-design/icons'
+import { ReloadOutlined } from '@ant-design/icons'
+import { Btn, EmptyState, ResultList, ResultsHeader } from '../../components/ui'
+import { INPUT_LABEL_CLS, LABEL_CLS } from '../../components/ui'
 
 const DIGITS = '0123456789'
 const LOWER = 'abcdefghijklmnopqrstuvwxyz'
@@ -34,10 +36,6 @@ function generateBatch(length: number, count: number, sets: CharSet[]): string[]
   }
   return results
 }
-
-const LABEL_CLS =
-  'block text-[11px] font-semibold tracking-widest text-[var(--text-secondary)] mb-1.5'
-const INPUT_LABEL_CLS = 'block text-xs font-medium text-[var(--text-secondary)] mb-1.5'
 
 function RandomPassword(): React.JSX.Element {
   const { t } = useTranslation()
@@ -73,7 +71,7 @@ function RandomPassword(): React.JSX.Element {
         message.error(t('copyFailed'))
       }
     },
-    [t]
+    [t, message]
   )
 
   const handleCopyAll = useCallback(async () => {
@@ -84,7 +82,7 @@ function RandomPassword(): React.JSX.Element {
     } catch {
       message.error(t('copyFailed'))
     }
-  }, [passwords, t])
+  }, [passwords, t, message])
 
   const allDisabled = !sets.some((s) => s.active)
 
@@ -139,84 +137,35 @@ function RandomPassword(): React.JSX.Element {
         </div>
 
         {/* Generate */}
-        <button
+        <Btn
+          variant="primary"
+          size="md"
+          block
+          icon={<ReloadOutlined />}
           onClick={handleGenerate}
           disabled={allDisabled}
-          className="
-            w-full py-2.5 px-6 rounded-lg text-sm font-semibold
-            flex items-center justify-center gap-2
-            transition-all duration-150 cursor-pointer border-none
-            bg-[var(--accent)] text-white
-            hover:brightness-110 active:brightness-90
-            disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100
-          "
         >
-          <ReloadOutlined />
           {t('generate')}
-        </button>
+        </Btn>
 
         {/* Results header (pinned below generate, above rows) */}
         {passwords.length > 0 && (
-          <div className="mt-6 flex items-center justify-between border-b border-[var(--border-subtle)] pb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-secondary)]">
-              {t('count')} · {passwords.length}
-            </span>
-            <button
-              onClick={handleCopyAll}
-              className="text-[11px] font-semibold uppercase tracking-widest
-                text-[var(--accent)] hover:brightness-110
-                transition-all duration-150 cursor-pointer border-none bg-transparent"
-            >
-              {t('copyAll')}
-            </button>
-          </div>
+          <ResultsHeader count={passwords.length} onCopyAll={handleCopyAll} />
         )}
       </div>
 
       {/* Results rows (scroll under sticky zone) */}
       {passwords.length > 0 && (
-        <div className="border border-[var(--border-subtle)] rounded-lg overflow-hidden bg-[var(--surface)] -mt-[1px]">
-          {passwords.map((pw, idx) => (
-            <div
-              key={idx}
-              onClick={() => handleCopy(pw, idx)}
-              className={`
-                flex items-center gap-3 px-4 py-2.5 group cursor-pointer
-                transition-colors duration-100
-                ${idx % 2 === 1 ? 'bg-black/[0.02]' : ''}
-                hover:bg-black/[0.04]
-              `}
-            >
-              <span className="font-mono text-xs text-[var(--text-secondary)] tabular-nums w-5 shrink-0 text-right leading-none opacity-50">
-                {idx + 1}
-              </span>
-              <span className="flex-1 font-mono text-[15px] leading-snug text-[var(--text-primary)] break-all min-w-0 select-all pointer-events-none">
-                {pw}
-              </span>
-              <span
-                className="shrink-0 flex items-center justify-center w-7 h-7 rounded
-                text-[var(--text-secondary)] opacity-30 group-hover:opacity-100
-                transition-all duration-150"
-              >
-                {copiedIdx === idx ? (
-                  <CheckOutlined style={{ color: 'var(--accent)', fontSize: 13 }} />
-                ) : (
-                  <SnippetsOutlined style={{ fontSize: 13 }} />
-                )}
-              </span>
-            </div>
-          ))}
-        </div>
+        <ResultList
+          items={passwords}
+          copiedIdx={copiedIdx}
+          onCopy={handleCopy}
+          className="-mt-[1px]"
+        />
       )}
 
       {/* Empty state */}
-      {passwords.length === 0 && (
-        <div className="mt-8 border-2 border-dashed border-[var(--border-subtle)] rounded-lg py-12 text-center">
-          <p className="text-sm text-[var(--text-secondary)] opacity-50 italic">
-            {t('clickGenerate')}
-          </p>
-        </div>
-      )}
+      {passwords.length === 0 && <EmptyState className="mt-8" hint={t('clickGenerate')} />}
     </div>
   )
 }
