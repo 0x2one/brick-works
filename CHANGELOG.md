@@ -1,5 +1,17 @@
 # Changelog
 
+## BrickWorks v1.0.4
+
+### ✨ Features
+- DevTools tag filtering — filter tools by their tags
+- New shared UI components (EmptyState, CopyButton, Panel, ResultList, Segmented, etc.) for consistent layout and interaction
+- Updated tool pages (QR Code, JSON Beautify, SVG to Image, UUID Generator, etc.) to use the new UI components and styles
+
+### 🐛 Fixes
+- Refined favorites and search result UX across DevTools and other pages
+
+---
+
 ## BrickWorks v1.0.3
 
 ### ✨ Features
