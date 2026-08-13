@@ -14,7 +14,8 @@ import {
   DiffOutlined,
   BgColorsOutlined,
   FunctionOutlined,
-  FileSearchOutlined
+  FileSearchOutlined,
+  SafetyCertificateOutlined
 } from '@ant-design/icons'
 
 export interface DevToolItem {
@@ -61,6 +62,15 @@ export const devTools: DevToolItem[] = [
     route: '/dev-tools/codec-converter',
     fill: true,
     icon: <SwapOutlined />
+  },
+  {
+    id: 'jwt-decoder',
+    nameKey: 'devToolJwt',
+    descKey: 'devToolJwtDesc',
+    tags: ['devTagTool', 'devTagSecurity'],
+    route: '/dev-tools/jwt-decoder',
+    fill: true,
+    icon: <SafetyCertificateOutlined />
   },
   {
     id: 'timestamp-converter',

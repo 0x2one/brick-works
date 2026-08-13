@@ -7,6 +7,7 @@ import RandomPassword from './tools/RandomPassword'
 import ImageToBase64 from './tools/ImageToBase64'
 import JsonBeautify from './tools/JsonBeautify'
 import CodecConverter from './tools/CodecConverter'
+import JwtDecoder from './tools/JwtDecoder'
 import TimestampConverter from './tools/TimestampConverter'
 import UuidGenerator from './tools/UuidGenerator'
 import QrCodeTool from './tools/QrCodeTool'
@@ -24,6 +25,7 @@ const toolComponents: Record<string, React.ComponentType> = {
   'image-to-base64': ImageToBase64,
   'json-beautify': JsonBeautify,
   'codec-converter': CodecConverter,
+  'jwt-decoder': JwtDecoder,
   'timestamp-converter': TimestampConverter,
   'uuid-generator': UuidGenerator,
   'qr-code': QrCodeTool,
