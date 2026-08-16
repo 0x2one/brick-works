@@ -1,27 +1,8 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
+import { useEffect, useState, useCallback, type ReactNode } from 'react'
 import { ConfigProvider, theme, App } from 'antd'
 import type { Locale } from 'antd/es/locale'
 import { ACCENT_PALETTES, ACCENT_KEYS, type AccentKey } from './accent'
-
-export type ThemeMode = 'system' | 'light' | 'dark'
-
-interface ThemeContextValue {
-  mode: ThemeMode
-  resolved: 'light' | 'dark'
-  setMode: (mode: ThemeMode) => void
-  accent: AccentKey
-  setAccent: (accent: AccentKey) => void
-}
-
-const ThemeContext = createContext<ThemeContextValue>({
-  mode: 'system',
-  resolved: 'light',
-  setMode: () => {},
-  accent: 'terracotta',
-  setAccent: () => {}
-})
-
-export const useTheme = (): ThemeContextValue => useContext(ThemeContext)
+import { ThemeContext, type ThemeMode } from './useTheme'
 
 const accentPaletteByKey = new Map(ACCENT_PALETTES.map((p) => [p.key, p]))
 

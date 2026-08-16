@@ -13,7 +13,7 @@ import type { MenuProps } from 'antd'
 import { DiffEditor } from '@monaco-editor/react'
 import type * as Monaco from 'monaco-editor'
 import { diffLines, diffWordsWithSpace, diffChars } from 'diff'
-import { useTheme } from '../../theme/ThemeProvider'
+import { useTheme } from '../../theme/useTheme'
 import '../../components/MonacoSetup'
 import { PANEL_HEADER_CLS } from '../../components/ui'
 

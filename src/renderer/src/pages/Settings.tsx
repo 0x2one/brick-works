@@ -16,7 +16,7 @@ import {
   CheckOutlined
 } from '@ant-design/icons'
 import i18n from '../i18n'
-import { useTheme, type ThemeMode } from '../theme/ThemeProvider'
+import { useTheme, type ThemeMode } from '../theme/useTheme'
 import { ACCENT_PALETTES } from '../theme/accent'
 import logoUrl from '../assets/logo.svg'
 

@@ -6,7 +6,9 @@
 
 /* ── Focus ── */
 
-:focus-visible:not(input):not(textarea):not(.ant-select-selector):not(.ant-btn):not(.ant-switch):not(.ant-color-picker-trigger) {
+:focus-visible:not(input):not(textarea):not(.ant-select-selector):not(.ant-btn):not(
+    .ant-switch
+  ):not(.ant-color-picker-trigger) {
   outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
   outline-offset: 2px;
 }

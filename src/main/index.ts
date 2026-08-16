@@ -761,7 +761,8 @@ function parseSshConfig(content: string): SshConfigCandidate[] {
     const port = parseInt(cfg.port || '22', 10)
     if (!Number.isInteger(port) || port < 1 || port > 65535) return
     const identityRaw = cfg.identityFile || ''
-    const identity = identityRaw && !identityRaw.includes('%') ? expandHomePath(identityRaw) : undefined
+    const identity =
+      identityRaw && !identityRaw.includes('%') ? expandHomePath(identityRaw) : undefined
     candidates.push({
       name: pattern,
       host,
@@ -776,7 +777,8 @@ function parseSshConfig(content: string): SshConfigCandidate[] {
     const line = raw.trim()
     if (!line || line.startsWith('#')) continue
     const eq = line.indexOf('=')
-    const parts = eq >= 0 ? [line.slice(0, eq).trim(), line.slice(eq + 1).trim()] : line.split(/\s+/, 2)
+    const parts =
+      eq >= 0 ? [line.slice(0, eq).trim(), line.slice(eq + 1).trim()] : line.split(/\s+/, 2)
     const key = (parts[0] ?? '').toLowerCase()
     const value = parts[1] ?? ''
     if (key === 'host') {
@@ -1133,7 +1135,9 @@ ipcMain.handle(
       throw new Error('INVALID')
     }
     const res = await sshClientManager.sftpUploadFiles(nodeId, remoteDir || '/', localPaths)
-    return res.ok ? { ok: true, count: res.count } : { ok: false, error: res.error, count: res.count }
+    return res.ok
+      ? { ok: true, count: res.count }
+      : { ok: false, error: res.error, count: res.count }
   }
 )
 

@@ -4,19 +4,19 @@ Electron + React 19 + TypeScript + antd 6 + Tailwind CSS v4.
 
 ## Commands
 
-| Command | Action |
-|---|---|
-| `pnpm dev` | Start dev server (electron-vite) |
-| `pnpm build` | **Run typecheck first** → `electron-vite build` |
-| `pnpm lint` | ESLint with cache |
-| `pnpm format` | Prettier (writes) |
-| `pnpm typecheck:node` | `tsc --noEmit -p tsconfig.node.json --composite false` |
-| `pnpm typecheck:web` | `tsc --noEmit -p tsconfig.web.json --composite false` |
-| `pnpm typecheck` | Runs node → web (sequential) |
-| `pnpm build:win` | `build` (incl. typecheck) → electron-builder --win |
+| Command                          | Action                                                   |
+| -------------------------------- | -------------------------------------------------------- |
+| `pnpm dev`                       | Start dev server (electron-vite)                         |
+| `pnpm build`                     | **Run typecheck first** → `electron-vite build`          |
+| `pnpm lint`                      | ESLint with cache                                        |
+| `pnpm format`                    | Prettier (writes)                                        |
+| `pnpm typecheck:node`            | `tsc --noEmit -p tsconfig.node.json --composite false`   |
+| `pnpm typecheck:web`             | `tsc --noEmit -p tsconfig.web.json --composite false`    |
+| `pnpm typecheck`                 | Runs node → web (sequential)                             |
+| `pnpm build:win`                 | `build` (incl. typecheck) → electron-builder --win       |
 | `pnpm build:mac` / `build:linux` | **Skip typecheck** — run `pnpm typecheck` manually first |
-| `pnpm build:unpack` | `build` (incl. typecheck) → `electron-builder --dir` |
-| `pnpm start` | `electron-vite preview` |
+| `pnpm build:unpack`              | `build` (incl. typecheck) → `electron-builder --dir`     |
+| `pnpm start`                     | `electron-vite preview`                                  |
 
 No test framework is configured.
 

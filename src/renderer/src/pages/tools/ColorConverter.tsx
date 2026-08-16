@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { App, ColorPicker } from 'antd'
 import { DeleteOutlined, HistoryOutlined } from '@ant-design/icons'
 import type { Color } from 'antd/es/color-picker'
-import { useTheme } from '../../theme/ThemeProvider'
+import { useTheme } from '../../theme/useTheme'
 import { CopyButton, Panel } from '../../components/ui'
 
 const HISTORY_KEY = 'color-converter-history'

@@ -143,9 +143,7 @@ export function parseSsOutput(raw: string): SshPortInfo[] {
     if (!line.trim()) continue
     if (/^Netid\s/.test(line) || /^State\s/.test(line) || /^Proto\s/.test(line)) continue
     // ss -tulnp columns: Netid State Recv-Q Send-Q Local Address:Port Peer Address:Port Process
-    const match = line.match(
-      /^\s*(\S+)\s+(\S+)\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(.*)$/
-    )
+    const match = line.match(/^\s*(\S+)\s+(\S+)\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(.*)$/)
     if (!match) continue
     const [, protocol, state, local, rest] = match
     const port = parsePortFromAddr(local)
@@ -415,7 +413,11 @@ echo "$dfout" | {
 
 const SYSINFO_TIMEOUT_MS = 20000
 
-function execShScript(client: Client, script: string, timeoutMs = SYSINFO_TIMEOUT_MS): Promise<string> {
+function execShScript(
+  client: Client,
+  script: string,
+  timeoutMs = SYSINFO_TIMEOUT_MS
+): Promise<string> {
   return new Promise((resolve, reject) => {
     let channel: ClientChannel | null = null
     const chunks: Buffer[] = []
@@ -1234,16 +1236,19 @@ export function createSshClientManager(options: SshClientManagerOptions): {
           throw new Error('INVALID_ACTION')
         }
         const session = await ensureExecSession(nodeId)
-        const res = await execRemote(
-          session.client,
-          `systemctl ${action} ${unit} 2>&1 </dev/null`
-        )
+        const res = await execRemote(session.client, `systemctl ${action} ${unit} 2>&1 </dev/null`)
         if (res.code !== 0 && !res.stdout.trim()) {
           throw new Error(res.stderr.trim() || 'SERVICE_ACTION_FAILED')
         }
         return { ok: true, output: (res.stdout + res.stderr).trim() }
       } catch (err) {
-        console.error('[ssh:serviceAction]', nodeId, unit, action, err instanceof Error ? err.message : err)
+        console.error(
+          '[ssh:serviceAction]',
+          nodeId,
+          unit,
+          action,
+          err instanceof Error ? err.message : err
+        )
         throw err
       }
     },

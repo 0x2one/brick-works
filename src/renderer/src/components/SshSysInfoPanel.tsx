@@ -1,11 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Button, Empty, Progress, Spin, Tooltip } from 'antd'
-import {
-  DatabaseOutlined,
-  DesktopOutlined,
-  HddOutlined,
-  RiseOutlined
-} from '@ant-design/icons'
+import { DatabaseOutlined, DesktopOutlined, HddOutlined, RiseOutlined } from '@ant-design/icons'
 
 function formatSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '-'
@@ -28,9 +23,7 @@ function formatUptime(sec: number): string {
 }
 
 function getAccent(): string {
-  const value = getComputedStyle(document.documentElement)
-    .getPropertyValue('--accent')
-    .trim()
+  const value = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
   return value || '#1677ff'
 }
 
@@ -207,7 +200,12 @@ function SshSysInfoPanel({
                     {d.usePercent}% · {formatSize(d.used)} / {formatSize(d.size)}
                   </span>
                 </div>
-                <Progress percent={d.usePercent} strokeColor={accent} showInfo={false} size="small" />
+                <Progress
+                  percent={d.usePercent}
+                  strokeColor={accent}
+                  showInfo={false}
+                  size="small"
+                />
               </div>
             ))
           )}

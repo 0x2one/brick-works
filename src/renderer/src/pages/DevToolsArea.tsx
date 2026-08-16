@@ -90,11 +90,11 @@ function DevToolsArea({ active = true }: { active?: boolean }): React.JSX.Elemen
     return () => window.removeEventListener('dev-tools-tab-position-change', onChange)
   }, [])
 
-  useEffect(() => {
-    if (activeToolId && toolById.has(activeToolId)) {
-      setOpenToolIds((prev) => (prev.includes(activeToolId) ? prev : [...prev, activeToolId]))
-    }
-  }, [activeToolId])
+  // Open a tab when its route is visited directly (render-time state
+  // adjustment — converges once the id is in the list).
+  if (activeToolId && toolById.has(activeToolId) && !openToolIds.includes(activeToolId)) {
+    setOpenToolIds((prev) => (prev.includes(activeToolId) ? prev : [...prev, activeToolId]))
+  }
 
   const closeTab = (id: string): void => {
     const idx = openToolIds.indexOf(id)

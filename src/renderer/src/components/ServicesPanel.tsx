@@ -100,7 +100,9 @@ function ServicesPanel({
         const res = await window.api.ssh.serviceAction(nodeId, unit, action)
         if (res.ok) message.success(`${action} ${unit}`)
       } catch (err) {
-        message.error(t('sshSvcActionFail', { msg: err instanceof Error ? err.message : String(err) }))
+        message.error(
+          t('sshSvcActionFail', { msg: err instanceof Error ? err.message : String(err) })
+        )
       } finally {
         setActing(null)
         void load()
@@ -149,9 +151,7 @@ function ServicesPanel({
       dataIndex: 'active',
       width: 88,
       render: (v: string, row: SshServiceInfo) => (
-        <span className={`text-xs font-medium ${statusColor(v)}`}>
-          {row.sub || v}
-        </span>
+        <span className={`text-xs font-medium ${statusColor(v)}`}>{row.sub || v}</span>
       )
     },
     {

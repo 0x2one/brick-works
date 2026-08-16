@@ -407,7 +407,10 @@ export function createSshStore(): SshStore {
     },
     list(): SshNodeView[] {
       return [...nodes.values()]
-        .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+        .sort(
+          (a, b) =>
+            a.sortOrder - b.sortOrder || a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+        )
         .map(toView)
     },
     get(id: string): SshNode | null {
@@ -491,7 +494,8 @@ export function createSshStore(): SshStore {
       if (existed) {
         // Compact sortOrder so gaps don't grow forever
         const ordered = [...nodes.values()].sort(
-          (a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+          (a, b) =>
+            a.sortOrder - b.sortOrder || a.createdAt - b.createdAt || a.id.localeCompare(b.id)
         )
         ordered.forEach((n, i) => {
           if (n.sortOrder !== i) nodes.set(n.id, { ...n, sortOrder: i })
@@ -511,7 +515,10 @@ export function createSshStore(): SshStore {
       const seen = new Set(uniqueIds)
       const rest = [...nodes.values()]
         .filter((n) => !seen.has(n.id))
-        .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+        .sort(
+          (a, b) =>
+            a.sortOrder - b.sortOrder || a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+        )
       rest.forEach((node, i) => {
         const sortOrder = uniqueIds.length + i
         if (node.sortOrder !== sortOrder) nodes.set(node.id, { ...node, sortOrder })

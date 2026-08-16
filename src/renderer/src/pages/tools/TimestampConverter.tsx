@@ -194,7 +194,7 @@ function TimestampConverter(): React.JSX.Element {
     if (isNaN(num)) return ''
     const ms = tsUnit === 's' ? num * 1000 : num
     return formatTimestamp(ms, timeTz)
-  }, [tsInput, tsUnit, timeTz, locale])
+  }, [tsInput, tsUnit, timeTz])
 
   const handleTsTimestampNow = useCallback(() => {
     const now = tsUnit === 'ms' ? Date.now() : Math.floor(Date.now() / 1000)

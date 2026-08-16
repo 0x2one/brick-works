@@ -184,7 +184,10 @@ function forwardOut(client: Client, host: string, port: number): Promise<ClientC
 }
 
 /** End target then jump clients (innermost jump first). Safe to call multiple times. */
-export function endClientChain(client: Client | null | undefined, jumpClients: Client[] = []): void {
+export function endClientChain(
+  client: Client | null | undefined,
+  jumpClients: Client[] = []
+): void {
   if (client) {
     try {
       client.end()

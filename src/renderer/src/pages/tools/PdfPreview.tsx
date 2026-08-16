@@ -26,6 +26,22 @@ const NOTE_ICON_SIZE = 22
 
 const TEXT_MARKUP_TYPES = ['Highlight', 'Underline', 'Squiggly', 'StrikeOut']
 
+const TYPE_KEYS: Record<string, string> = {
+  Highlight: 'pdfPreviewTypeHighlight',
+  Underline: 'pdfPreviewTypeUnderline',
+  Squiggly: 'pdfPreviewTypeSquiggly',
+  StrikeOut: 'pdfPreviewTypeStrikeOut',
+  Text: 'pdfPreviewTypeText',
+  FreeText: 'pdfPreviewTypeFreeText',
+  Ink: 'pdfPreviewTypeInk',
+  Square: 'pdfPreviewTypeSquare',
+  Circle: 'pdfPreviewTypeCircle',
+  Line: 'pdfPreviewTypeLine',
+  Polygon: 'pdfPreviewTypePolygon',
+  PolyLine: 'pdfPreviewTypePolyLine',
+  Link: 'pdfPreviewTypeLink'
+}
+
 interface NativeAnno {
   id: string
   subtype: string
@@ -520,22 +536,6 @@ function PdfPreview(): React.JSX.Element {
     if (!showAnnotations) return 0
     return annotations.length
   }, [annotations, showAnnotations])
-
-  const TYPE_KEYS: Record<string, string> = {
-    Highlight: 'pdfPreviewTypeHighlight',
-    Underline: 'pdfPreviewTypeUnderline',
-    Squiggly: 'pdfPreviewTypeSquiggly',
-    StrikeOut: 'pdfPreviewTypeStrikeOut',
-    Text: 'pdfPreviewTypeText',
-    FreeText: 'pdfPreviewTypeFreeText',
-    Ink: 'pdfPreviewTypeInk',
-    Square: 'pdfPreviewTypeSquare',
-    Circle: 'pdfPreviewTypeCircle',
-    Line: 'pdfPreviewTypeLine',
-    Polygon: 'pdfPreviewTypePolygon',
-    PolyLine: 'pdfPreviewTypePolyLine',
-    Link: 'pdfPreviewTypeLink'
-  }
 
   const annoList = useMemo(() => {
     return annotations.map((a) => ({

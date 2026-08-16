@@ -74,7 +74,7 @@ function TagSidebar({
   onAddTag: () => void
   onEditTag: (tag: Tag) => void
   onDeleteTag: (tag: Tag) => void
-}) {
+}): React.JSX.Element {
   const { t } = useTranslation()
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
@@ -152,7 +152,7 @@ function NoteCard({
   batchSelected: boolean
   onClick: () => void
   onToggleBatch: () => void
-}) {
+}): React.JSX.Element {
   const { t } = useTranslation()
 
   const handleCopyPara = useCallback(
@@ -181,9 +181,7 @@ function NoteCard({
                   <div
                     key={i}
                     className={`w-fit cursor-pointer rounded text-[12px] leading-[1.6] ${
-                      isCurl
-                        ? 'whitespace-nowrap'
-                        : 'whitespace-pre-wrap break-words'
+                      isCurl ? 'whitespace-nowrap' : 'whitespace-pre-wrap break-words'
                     } hover:bg-[var(--hover-bg)] first:mt-3 last:mb-3`}
                     style={{ color: 'var(--sticky-text)' }}
                     onClick={(e) => handleCopyPara(e, para)}
@@ -263,7 +261,6 @@ function MemoSticky(): React.JSX.Element {
     void window.api.sticky.save({ tags, notes })
   }, [tags, notes, hydrated])
 
-  
   const filteredNotes =
     selectedTagId === null ? notes : notes.filter((n) => n.tagId === selectedTagId)
 
@@ -306,12 +303,15 @@ function MemoSticky(): React.JSX.Element {
     [selectedTagId]
   )
 
-  const openNoteModal = useCallback((note?: Note) => {
-    setEditingNote(note ?? null)
-    setNoteTagIdInput(note?.tagId ?? selectedTagId)
-    setNoteContentInput(note?.content ?? '')
-    setNoteModalOpen(true)
-  }, [selectedTagId])
+  const openNoteModal = useCallback(
+    (note?: Note) => {
+      setEditingNote(note ?? null)
+      setNoteTagIdInput(note?.tagId ?? selectedTagId)
+      setNoteContentInput(note?.content ?? '')
+      setNoteModalOpen(true)
+    },
+    [selectedTagId]
+  )
 
   const closeNoteModal = useCallback(() => {
     setNoteModalOpen(false)
@@ -427,75 +427,75 @@ function MemoSticky(): React.JSX.Element {
                 </div>
               )}
             </div>
-              <div className="sticky top-0 flex h-fit flex-col items-center gap-1 px-2 py-3 shrink-0">
-                <Tooltip title={t('memoStickyCopySuccess')} placement="left">
-                  <button
-                    className="sticky-toolbar-btn"
-                    disabled={!selectedNote}
-                    onClick={() => selectedNote && copyNote(selectedNote)}
-                  >
-                    <CopyOutlined />
-                  </button>
-                </Tooltip>
-                <Tooltip title={t('memoStickyNewNote')} placement="left">
-                  <button className="sticky-toolbar-btn" onClick={() => openNoteModal()}>
-                    <PlusOutlined />
-                  </button>
-                </Tooltip>
-                <Tooltip title={t('memoStickyEditNote')} placement="left">
-                  <button
-                    className="sticky-toolbar-btn"
-                    disabled={!selectedNote}
-                    onClick={() => selectedNote && openNoteModal(selectedNote)}
-                  >
-                    <EditOutlined />
-                  </button>
-                </Tooltip>
+            <div className="sticky top-0 flex h-fit flex-col items-center gap-1 px-2 py-3 shrink-0">
+              <Tooltip title={t('memoStickyCopySuccess')} placement="left">
+                <button
+                  className="sticky-toolbar-btn"
+                  disabled={!selectedNote}
+                  onClick={() => selectedNote && copyNote(selectedNote)}
+                >
+                  <CopyOutlined />
+                </button>
+              </Tooltip>
+              <Tooltip title={t('memoStickyNewNote')} placement="left">
+                <button className="sticky-toolbar-btn" onClick={() => openNoteModal()}>
+                  <PlusOutlined />
+                </button>
+              </Tooltip>
+              <Tooltip title={t('memoStickyEditNote')} placement="left">
+                <button
+                  className="sticky-toolbar-btn"
+                  disabled={!selectedNote}
+                  onClick={() => selectedNote && openNoteModal(selectedNote)}
+                >
+                  <EditOutlined />
+                </button>
+              </Tooltip>
+              <Tooltip title={t('memoStickyDeleteNote')} placement="left">
+                <button
+                  className="sticky-toolbar-btn"
+                  disabled={!selectedNote}
+                  onClick={() => {
+                    if (!selectedNote) return
+                    Modal.confirm({
+                      title: t('memoStickyDeleteNote'),
+                      content: t('memoStickyDeleteNoteConfirm'),
+                      okButtonProps: { danger: true },
+                      onOk: () => deleteNote(selectedNote)
+                    })
+                  }}
+                >
+                  <DeleteOutlined />
+                </button>
+              </Tooltip>
+              <div className="my-1 w-5 border-t border-[var(--border-subtle)]" />
+              <Tooltip
+                title={batchMode ? t('memoStickyBatchDone') : t('memoStickyBatchMode')}
+                placement="left"
+              >
+                <button
+                  className={`sticky-toolbar-btn ${batchMode ? 'active' : ''}`}
+                  onClick={() => {
+                    if (batchMode) {
+                      setBatchMode(false)
+                      setBatchSelected(new Set())
+                    } else {
+                      setBatchMode(true)
+                      setBatchSelected(new Set())
+                    }
+                  }}
+                >
+                  {batchMode ? <CheckOutlined /> : <FormOutlined />}
+                </button>
+              </Tooltip>
+              {batchMode && batchSelected.size > 0 && (
                 <Tooltip title={t('memoStickyDeleteNote')} placement="left">
-                  <button
-                    className="sticky-toolbar-btn"
-                    disabled={!selectedNote}
-                    onClick={() => {
-                      if (!selectedNote) return
-                      Modal.confirm({
-                        title: t('memoStickyDeleteNote'),
-                        content: t('memoStickyDeleteNoteConfirm'),
-                        okButtonProps: { danger: true },
-                        onOk: () => deleteNote(selectedNote)
-                      })
-                    }}
-                  >
+                  <button className="sticky-toolbar-btn" onClick={deleteBatch}>
                     <DeleteOutlined />
                   </button>
                 </Tooltip>
-                <div className="my-1 w-5 border-t border-[var(--border-subtle)]" />
-                <Tooltip
-                  title={batchMode ? t('memoStickyBatchDone') : t('memoStickyBatchMode')}
-                  placement="left"
-                >
-                  <button
-                    className={`sticky-toolbar-btn ${batchMode ? 'active' : ''}`}
-                    onClick={() => {
-                      if (batchMode) {
-                        setBatchMode(false)
-                        setBatchSelected(new Set())
-                      } else {
-                        setBatchMode(true)
-                        setBatchSelected(new Set())
-                      }
-                    }}
-                  >
-                    {batchMode ? <CheckOutlined /> : <FormOutlined />}
-                  </button>
-                </Tooltip>
-                {batchMode && batchSelected.size > 0 && (
-                  <Tooltip title={t('memoStickyDeleteNote')} placement="left">
-                    <button className="sticky-toolbar-btn" onClick={deleteBatch}>
-                      <DeleteOutlined />
-                    </button>
-                  </Tooltip>
-                )}
-              </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -70,7 +70,7 @@ import ProcessPanel from '../components/ProcessPanel'
 import ServicesPanel from '../components/ServicesPanel'
 import LogTailPanel from '../components/LogTailPanel'
 import PortsPanel from '../components/PortsPanel'
-import { useTheme } from '../theme/ThemeProvider'
+import { useTheme } from '../theme/useTheme'
 import { SortableList } from '../components/SortableList'
 
 const BTN_ICON =
@@ -424,11 +424,7 @@ function NodeEditor({
           </Form.Item>
         </div>
         <div className="grid grid-cols-2 gap-x-3">
-          <Form.Item
-            name="jumpHostId"
-            label={t('sshJumpHost')}
-            tooltip={t('sshJumpHostHint')}
-          >
+          <Form.Item name="jumpHostId" label={t('sshJumpHost')} tooltip={t('sshJumpHostHint')}>
             <Select
               allowClear
               placeholder={t('sshJumpHostNone')}
@@ -1244,9 +1240,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     if (!activeTab) return
     setTabs((prev) =>
       prev.map((tab) =>
-        tab.id === activeTab.id
-          ? { ...tab, filesOpen: true, infoOpen: false, toolOpen: null }
-          : tab
+        tab.id === activeTab.id ? { ...tab, filesOpen: true, infoOpen: false, toolOpen: null } : tab
       )
     )
     setMaximized((m) => (m === 'console' ? null : m))
@@ -1378,16 +1372,13 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     []
   )
 
-  const updateEditorContent = useCallback(
-    (tabId: string, path: string, content: string): void => {
-      setEditorsByTab((prev) => {
-        const list = prev[tabId]
-        if (!list) return prev
-        return { ...prev, [tabId]: list.map((e) => (e.path === path ? { ...e, content } : e)) }
-      })
-    },
-    []
-  )
+  const updateEditorContent = useCallback((tabId: string, path: string, content: string): void => {
+    setEditorsByTab((prev) => {
+      const list = prev[tabId]
+      if (!list) return prev
+      return { ...prev, [tabId]: list.map((e) => (e.path === path ? { ...e, content } : e)) }
+    })
+  }, [])
 
   const focusEditor = useCallback((tabId: string, path: string): void => {
     setActiveEditorPathByTab((prev) => ({ ...prev, [tabId]: path }))
@@ -1446,7 +1437,8 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         if (!existing.loading) focusEditor(tabId, entry.path)
         return
       }
-      if (maximized === 'files' || maximized === 'info' || maximized === 'tool') setMaximized('console')
+      if (maximized === 'files' || maximized === 'info' || maximized === 'tool')
+        setMaximized('console')
       const init: SshFileEditorState = {
         tabId,
         nodeId,
@@ -1858,8 +1850,10 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const showSidebar = maximized === null || maximized === 'editor'
   const showConsole = maximized !== 'files' && maximized !== 'info' && maximized !== 'tool'
   const showConsoleTitle = showConsole && maximized !== 'editor'
-  const showFiles = filesOpen && maximized !== 'console' && maximized !== 'info' && maximized !== 'tool'
-  const showInfo = infoOpen && maximized !== 'console' && maximized !== 'files' && maximized !== 'tool'
+  const showFiles =
+    filesOpen && maximized !== 'console' && maximized !== 'info' && maximized !== 'tool'
+  const showInfo =
+    infoOpen && maximized !== 'console' && maximized !== 'files' && maximized !== 'tool'
   const isCommands = activeTool === 'commands'
   const showCommands =
     isCommands && maximized !== 'console' && maximized !== 'files' && maximized !== 'info'
@@ -1889,8 +1883,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
 
   const renderToolPanel = useCallback(
     (tab: SessionTab): React.JSX.Element | null => {
-      const toggleFullscreen = (): void =>
-        setMaximized((m) => (m === 'tool' ? null : 'tool'))
+      const toggleFullscreen = (): void => setMaximized((m) => (m === 'tool' ? null : 'tool'))
       switch (activeTool) {
         case 'commands':
           return <CommandPanel shellSessionId={tab.shellSessionId} />
@@ -1944,9 +1937,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       tabEditors[0] ??
       null)
     : null
-  const activeEditorDirty = activeEditor
-    ? activeEditor.content !== activeEditor.original
-    : false
+  const activeEditorDirty = activeEditor ? activeEditor.content !== activeEditor.original : false
   const hasActiveEditor = tabEditors.length > 0
 
   const editorHeader =
@@ -2018,9 +2009,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         <button
           type="button"
           className={BTN_ICON}
-          title={
-            maximized === 'editor' ? t('sshClientExitFullscreen') : t('sshClientFullscreen')
-          }
+          title={maximized === 'editor' ? t('sshClientExitFullscreen') : t('sshClientFullscreen')}
           onClick={() => setMaximized((m) => (m === 'editor' ? null : 'editor'))}
         >
           {maximized === 'editor' ? <CompressOutlined /> : <ExpandOutlined />}
@@ -2186,11 +2175,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                   const testing = testingId === node.id
                   if (sidebarCollapsed) {
                     return (
-                      <div
-                        ref={api.setNodeRef}
-                        style={api.style}
-                        className="mx-auto w-8 h-8"
-                      >
+                      <div ref={api.setNodeRef} style={api.style} className="mx-auto w-8 h-8">
                         <Tooltip title={node.name} placement="right">
                           <button
                             type="button"
@@ -2400,79 +2385,87 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                 ) : null
               ) : (
                 showConsoleTitle && (
-                <div
-                  className={`${TITLE_BAR_CLS} ${
-                    showFiles || showInfo || showCommands
-                      ? 'flex-1 min-w-0 border-r border-[var(--border-subtle)]'
-                      : 'flex-1 min-w-0'
-                  }`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-[var(--text-primary)] truncate">
-                      {activeTab.title}
+                  <div
+                    className={`${TITLE_BAR_CLS} ${
+                      showFiles || showInfo || showCommands
+                        ? 'flex-1 min-w-0 border-r border-[var(--border-subtle)]'
+                        : 'flex-1 min-w-0'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+                        {activeTab.title}
+                      </div>
+                      <div className="text-[10px] font-mono text-[var(--text-secondary)] truncate">
+                        {activeTab.subtitle}
+                      </div>
                     </div>
-                    <div className="text-[10px] font-mono text-[var(--text-secondary)] truncate">
-                      {activeTab.subtitle}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={filesOpen ? BTN_ICON_ACTIVE : BTN_ICON}
-                    onClick={() => (filesOpen ? void closeFiles() : openFiles())}
-                    title={t('sshClientFiles')}
-                  >
-                    <FolderOpenOutlined />
-                  </button>
-                  <button
-                    type="button"
-                    className={infoOpen ? BTN_ICON_ACTIVE : BTN_ICON}
-                    onClick={() => (infoOpen ? void closeInfo() : void openInfo())}
-                    title={t('sshClientInfo')}
-                  >
-                    <DashboardOutlined />
-                  </button>
-                  <Dropdown
-                    trigger={['click']}
-                    menu={{
-                      items: [
-                        { key: 'commands', icon: <SnippetsOutlined />, label: t('sshToolCommands') },
-                        { key: 'process', icon: <ApiOutlined />, label: t('sshToolProcess') },
-                        { key: 'services', icon: <CloudServerOutlined />, label: t('sshToolServices') },
-                        { key: 'logs', icon: <FileTextOutlined />, label: t('sshToolLogs') },
-                        { key: 'ports', icon: <NodeIndexOutlined />, label: t('sshToolPorts') }
-                      ],
-                      onClick: ({ key }) => openTool(key as ToolPanelKey)
-                    }}
-                  >
                     <button
                       type="button"
-                      className={activeTool ? BTN_ICON_ACTIVE : BTN_ICON}
-                      title={t('sshTools')}
+                      className={filesOpen ? BTN_ICON_ACTIVE : BTN_ICON}
+                      onClick={() => (filesOpen ? void closeFiles() : openFiles())}
+                      title={t('sshClientFiles')}
                     >
-                      <ToolOutlined />
+                      <FolderOpenOutlined />
                     </button>
-                  </Dropdown>
-                  <button
-                    type="button"
-                    className={BTN_ICON}
-                    title={
-                      maximized === 'console'
-                        ? t('sshClientExitFullscreen')
-                        : t('sshClientFullscreen')
-                    }
-                    onClick={() => setMaximized((m) => (m === 'console' ? null : 'console'))}
-                  >
-                    {maximized === 'console' ? <CompressOutlined /> : <ExpandOutlined />}
-                  </button>
-                  <button
-                    type="button"
-                    className={BTN_ICON}
-                    title={t('sshClientClose')}
-                    onClick={() => requestCloseTab(activeTab.id)}
-                  >
-                    <CloseOutlined />
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      className={infoOpen ? BTN_ICON_ACTIVE : BTN_ICON}
+                      onClick={() => (infoOpen ? void closeInfo() : void openInfo())}
+                      title={t('sshClientInfo')}
+                    >
+                      <DashboardOutlined />
+                    </button>
+                    <Dropdown
+                      trigger={['click']}
+                      menu={{
+                        items: [
+                          {
+                            key: 'commands',
+                            icon: <SnippetsOutlined />,
+                            label: t('sshToolCommands')
+                          },
+                          { key: 'process', icon: <ApiOutlined />, label: t('sshToolProcess') },
+                          {
+                            key: 'services',
+                            icon: <CloudServerOutlined />,
+                            label: t('sshToolServices')
+                          },
+                          { key: 'logs', icon: <FileTextOutlined />, label: t('sshToolLogs') },
+                          { key: 'ports', icon: <NodeIndexOutlined />, label: t('sshToolPorts') }
+                        ],
+                        onClick: ({ key }) => openTool(key as ToolPanelKey)
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className={activeTool ? BTN_ICON_ACTIVE : BTN_ICON}
+                        title={t('sshTools')}
+                      >
+                        <ToolOutlined />
+                      </button>
+                    </Dropdown>
+                    <button
+                      type="button"
+                      className={BTN_ICON}
+                      title={
+                        maximized === 'console'
+                          ? t('sshClientExitFullscreen')
+                          : t('sshClientFullscreen')
+                      }
+                      onClick={() => setMaximized((m) => (m === 'console' ? null : 'console'))}
+                    >
+                      {maximized === 'console' ? <CompressOutlined /> : <ExpandOutlined />}
+                    </button>
+                    <button
+                      type="button"
+                      className={BTN_ICON}
+                      title={t('sshClientClose')}
+                      onClick={() => requestCloseTab(activeTab.id)}
+                    >
+                      <CloseOutlined />
+                    </button>
+                  </div>
                 )
               )}
               {showFiles && (
@@ -2559,9 +2552,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                     type="button"
                     className={BTN_ICON}
                     title={
-                      maximized === 'info'
-                        ? t('sshClientExitFullscreen')
-                        : t('sshClientFullscreen')
+                      maximized === 'info' ? t('sshClientExitFullscreen') : t('sshClientFullscreen')
                     }
                     onClick={() => setMaximized((m) => (m === 'info' ? null : 'info'))}
                   >
@@ -2593,9 +2584,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                     type="button"
                     className={BTN_ICON}
                     title={
-                      maximized === 'tool'
-                        ? t('sshClientExitFullscreen')
-                        : t('sshClientFullscreen')
+                      maximized === 'tool' ? t('sshClientExitFullscreen') : t('sshClientFullscreen')
                     }
                     onClick={() => setMaximized((m) => (m === 'tool' ? null : 'tool'))}
                   >
@@ -2755,7 +2744,11 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                             ? 'flex-1 border-t border-[var(--border-subtle)]'
                             : 'shrink-0 border-t border-[var(--border-subtle)]'
                       }`}
-                      style={maximized === 'tool' || toolHeight === null ? undefined : { height: toolHeight }}
+                      style={
+                        maximized === 'tool' || toolHeight === null
+                          ? undefined
+                          : { height: toolHeight }
+                      }
                     >
                       <div className="flex-1 min-h-0">{renderToolPanel(activeTab)}</div>
                     </div>
@@ -3024,7 +3017,10 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
         width={640}
       >
         {importError ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('sshImportConfigFail', { msg: importError })} />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={t('sshImportConfigFail', { msg: importError })}
+          />
         ) : (
           <Table
             size="small"

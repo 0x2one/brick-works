@@ -78,8 +78,7 @@ interface SshConfigCandidate {
 }
 
 type SshImportConfigResult =
-  | { ok: true; path: string; candidates: SshConfigCandidate[] }
-  | { ok: false; error: string }
+  { ok: true; path: string; candidates: SshConfigCandidate[] } | { ok: false; error: string }
 
 interface SshTunnelSpec {
   id?: string

@@ -67,8 +67,11 @@ function LogTailPanel({
   }, [])
 
   useEffect(() => {
-    aliveRef.current = true
     sessionIdRef.current = sessionId
+  }, [sessionId])
+
+  useEffect(() => {
+    aliveRef.current = true
     const offData = window.api.ssh.onLogData((payload) => {
       if (payload.sessionId !== sessionIdRef.current) return
       appendData(decodeBase64(payload.data))

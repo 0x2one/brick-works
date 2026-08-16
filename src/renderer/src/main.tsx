@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components -- renderer bootstrap entry
+   point: it mounts the root component and intentionally exports nothing, so fast
+   refresh cannot apply to it regardless (the rule's "file has no exports" check). */
 import './assets/main.css'
 import './i18n'
 

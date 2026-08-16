@@ -1,0 +1,4 @@
+# Normalize all text files to LF in the repo AND on checkout, regardless of
+# platform (Windows core.autocrlf otherwise checks out CRLF, which makes
+# `pnpm lint` fail on every file with prettier CRLF warnings).
+* text=auto eol=lf

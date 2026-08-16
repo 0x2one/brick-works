@@ -37,7 +37,7 @@ import {
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { useTheme } from '../theme/ThemeProvider'
+import { useTheme } from '../theme/useTheme'
 
 const LS_K8S_NAME_QUERY = 'brickworks:k8sNameQuery'
 const LS_K8S_NAMESPACE = 'brickworks:k8sNamespace'
@@ -140,9 +140,7 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
   const logSessionIdRef = useRef<string | null>(null)
   const LOG_TEXT_MAX = 512 * 1024
   const logPreRef = useRef<HTMLPreElement>(null)
-  const logAutoScrollRef = useRef(logAutoScroll)
   const ignoreLogScrollRef = useRef(false)
-  logAutoScrollRef.current = logAutoScroll
 
   const scrollLogsToBottom = (): void => {
     const el = logPreRef.current
@@ -155,7 +153,7 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
   }
 
   const onLogScroll = (): void => {
-    if (ignoreLogScrollRef.current || !logAutoScrollRef.current) return
+    if (ignoreLogScrollRef.current || !logAutoScroll) return
     const el = logPreRef.current
     if (!el) return
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight
@@ -183,6 +181,12 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
   const terminalRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const execSessionRef = useRef<string | null>(null)
+
+  const destroyTerminal = (): void => {
+    terminalRef.current?.dispose()
+    terminalRef.current = null
+    fitRef.current = null
+  }
 
   const [pfOpen, setPfOpen] = useState(false)
   const [pfPod, setPfPod] = useState<K8sPodRow | null>(null)
@@ -370,7 +374,7 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
       })
     })
     return off
-  }, [logOpen, logSessionId])
+  }, [logOpen, logSessionId, LOG_TEXT_MAX])
 
   useEffect(() => {
     return () => {
@@ -606,12 +610,6 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
     if (result.canceled) return
     if (result.ok) message.success(t('k8sLogDownloaded'))
     else message.error(result.error || t('k8sLogFail'))
-  }
-
-  const destroyTerminal = (): void => {
-    terminalRef.current?.dispose()
-    terminalRef.current = null
-    fitRef.current = null
   }
 
   const closeExec = async (): Promise<void> => {

@@ -136,31 +136,6 @@ function AppLayout(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [navShortcut, location.pathname, navigate])
 
-  useEffect(() => {
-    if (location.pathname === '/ssh-client') setSshClientMounted(true)
-    if (location.pathname === '/k8s') setK8sMounted(true)
-    if (location.pathname.startsWith('/dev-tools')) setDevToolsMounted(true)
-  }, [location.pathname])
-
-  useEffect(() => {
-    if (location.pathname === displayLocation.pathname || fadeStage === 'exit') return
-    // Skip animation for the initial `/` → default route redirect
-    if (displayLocation.pathname === '/') {
-      setDisplayLocation(location)
-      return
-    }
-    // Skip animation for navigation within the dev-tools section (tab switching)
-    const internalDevTools =
-      location.pathname.startsWith('/dev-tools') &&
-      displayLocation.pathname.startsWith('/dev-tools')
-    if (internalDevTools || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setDisplayLocation(location)
-      setFadeStage('idle')
-      return
-    }
-    setFadeStage('exit')
-  }, [location, displayLocation.pathname, fadeStage])
-
   // Watchdog: if the exit animation's `animationend` is ever missed (e.g. the
   // animation is cancelled mid-flight), force the transition instead of leaving
   // the page stuck at opacity 0 (blank). 250ms > the 120ms exit duration.
@@ -177,6 +152,40 @@ function AppLayout(): React.JSX.Element {
     const timer = window.setTimeout(() => setFadeStage('idle'), 250)
     return () => window.clearTimeout(timer)
   }, [fadeStage])
+
+  // ── Render-time state adjustments (React-documented "adjust state during
+  // render" pattern) — these replace the former setState-in-effect flows:
+  // mark heavy pages as mounted once their route has been visited, so they
+  // stay alive across navigation (they are toggled via `active`, not routes).
+  if (!sshClientMounted && location.pathname === '/ssh-client') {
+    setSshClientMounted(true)
+  }
+  if (!k8sMounted && location.pathname === '/k8s') {
+    setK8sMounted(true)
+  }
+  if (!devToolsMounted && location.pathname.startsWith('/dev-tools')) {
+    setDevToolsMounted(true)
+  }
+
+  // Page-fade state machine — only the *initiation* is computed here; the
+  // exit/enter completion stays event-driven (`animationend` + watchdogs).
+  if (fadeStage !== 'exit' && location.pathname !== displayLocation.pathname) {
+    // Skip animation for the initial `/` → default route redirect
+    if (displayLocation.pathname === '/') {
+      setDisplayLocation(location)
+    } else {
+      // Skip animation for navigation within the dev-tools section (tab switching)
+      const internalDevTools =
+        location.pathname.startsWith('/dev-tools') &&
+        displayLocation.pathname.startsWith('/dev-tools')
+      if (internalDevTools || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        setDisplayLocation(location)
+        setFadeStage('idle')
+      } else {
+        setFadeStage('exit')
+      }
+    }
+  }
 
   const menuItems = [
     {

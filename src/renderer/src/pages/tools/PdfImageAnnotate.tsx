@@ -952,13 +952,18 @@ function PdfImageAnnotate(): React.JSX.Element {
 
   /* ── zoom / page ── */
   const zoomRef = useRef(zoom)
-  zoomRef.current = zoom
   const zoomAnchorRef = useRef<{
     naturalX: number
     naturalY: number
     clientX: number
     clientY: number
   } | null>(null)
+
+  // Keep "latest value" refs in sync after commit (read only by event
+  // handlers, never during render — so layout-effect sync is equivalent).
+  useLayoutEffect(() => {
+    zoomRef.current = zoom
+  }, [zoom])
 
   const captureZoomAnchor = (clientX: number, clientY: number): void => {
     const stage = stageRef.current
@@ -1020,8 +1025,10 @@ function PdfImageAnnotate(): React.JSX.Element {
   const currentPageRef = useRef(currentPage)
   const numPagesRef = useRef(numPages)
   const wheelFlipLockRef = useRef(false)
-  currentPageRef.current = currentPage
-  numPagesRef.current = numPages
+  useLayoutEffect(() => {
+    currentPageRef.current = currentPage
+    numPagesRef.current = numPages
+  }, [currentPage, numPages])
 
   /* Ctrl / Cmd + wheel zooms the preview toward cursor */
   useEffect(() => {

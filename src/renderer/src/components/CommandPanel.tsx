@@ -103,9 +103,7 @@ function CommandPanel({ shellSessionId }: CommandPanelProps): React.JSX.Element 
     (snip: SshSnippet | null): void => {
       setEditing(snip)
       setEditorOpen(true)
-      form.setFieldsValue(
-        snip ?? { category: '', name: '', command: '' }
-      )
+      form.setFieldsValue(snip ?? { category: '', name: '', command: '' })
     },
     [form]
   )
@@ -122,21 +120,23 @@ function CommandPanel({ shellSessionId }: CommandPanelProps): React.JSX.Element 
     if (editing) {
       setSnippets((prev) =>
         prev.map((s) =>
-          s.id === editing.id ? { ...s, category: categoryVal, name: nameVal, command: commandVal } : s
+          s.id === editing.id
+            ? { ...s, category: categoryVal, name: nameVal, command: commandVal }
+            : s
         )
       )
     } else {
-      setSnippets((prev) => [...prev, { id: newId(), category: categoryVal, name: nameVal, command: commandVal }])
+      setSnippets((prev) => [
+        ...prev,
+        { id: newId(), category: categoryVal, name: nameVal, command: commandVal }
+      ])
     }
     setEditorOpen(false)
   }, [editing, form, message, t])
 
-  const remove = useCallback(
-    (snip: SshSnippet): void => {
-      setSnippets((prev) => prev.filter((s) => s.id !== snip.id))
-    },
-    []
-  )
+  const remove = useCallback((snip: SshSnippet): void => {
+    setSnippets((prev) => prev.filter((s) => s.id !== snip.id))
+  }, [])
 
   return (
     <div className="flex h-full flex-col">

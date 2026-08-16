@@ -135,7 +135,8 @@ function PortsPanel({
       dataIndex: 'pid',
       width: 64,
       sorter: (a, b) => (a.pid ?? 0) - (b.pid ?? 0),
-      render: (v: number | null) => (v == null ? '-' : <span className="font-mono text-xs">{v}</span>)
+      render: (v: number | null) =>
+        v == null ? '-' : <span className="font-mono text-xs">{v}</span>
     },
     {
       title: t('sshPortProc'),

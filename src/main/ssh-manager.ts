@@ -677,7 +677,9 @@ export function createSshManager(options: SshManagerOptions = {}): SshManager {
       session.retryCount = 0
       clearRetry(session)
       const via =
-        jumpClients.length > 0 ? ` (via ${jumpClients.length} jump${jumpClients.length > 1 ? 's' : ''})` : ''
+        jumpClients.length > 0
+          ? ` (via ${jumpClients.length} jump${jumpClients.length > 1 ? 's' : ''})`
+          : ''
       emitLog(
         session.node.id,
         session.node.name,
