@@ -4,6 +4,7 @@ import {
   App,
   Button,
   Drawer,
+  Dropdown,
   Form,
   Input,
   InputNumber,
@@ -18,6 +19,7 @@ import {
   Pagination
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import type { MenuProps, InputRef } from 'antd'
 import {
   CloudServerOutlined,
   LinkOutlined,
@@ -31,17 +33,35 @@ import {
   ApiOutlined,
   StopOutlined,
   ArrowDownOutlined,
+  ArrowUpOutlined,
   SearchOutlined,
-  PlayCircleOutlined
+  PlayCircleOutlined,
+  CopyOutlined,
+  ClearOutlined,
+  ZoomInOutlined,
+  ZoomOutOutlined,
+  SnippetsOutlined,
+  CloseOutlined
 } from '@ant-design/icons'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { useTheme } from '../theme/ThemeProvider'
 
 const LS_K8S_NAME_QUERY = 'brickworks:k8sNameQuery'
 const LS_K8S_NAMESPACE = 'brickworks:k8sNamespace'
 const LS_K8S_EXEC_SHELL = 'brickworks:k8sExecShell'
+const LS_K8S_EXEC_FONT_SIZE = 'brickworks:k8sExecFontSize'
+
+const FONT_MIN = 10
+const FONT_MAX = 26
+const DEFAULT_FONT = 13
+
+const BTN_ICON =
+  'h-7 w-7 inline-flex items-center justify-center rounded-md border-none cursor-pointer ' +
+  'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--border-subtle)] hover:text-[var(--text-primary)] ' +
+  'disabled:opacity-40 disabled:cursor-not-allowed'
 
 function readCssVar(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -58,6 +78,11 @@ function applyTermTheme(term: Terminal): void {
 function loadExecShell(): 'bash' | 'sh' {
   const raw = localStorage.getItem(LS_K8S_EXEC_SHELL)
   return raw === 'sh' || raw === 'bash' ? raw : 'bash'
+}
+
+function loadExecFontSize(): number {
+  const stored = parseInt(localStorage.getItem(LS_K8S_EXEC_FONT_SIZE) || '', 10)
+  return Number.isFinite(stored) ? Math.min(FONT_MAX, Math.max(FONT_MIN, stored)) : DEFAULT_FONT
 }
 
 function formatAge(ms: number): string {
@@ -179,9 +204,16 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
   const [execContainer, setExecContainer] = useState<string>()
   const [execShell, setExecShell] = useState<'bash' | 'sh'>(loadExecShell)
   const [execSessionId, setExecSessionId] = useState<string | null>(null)
+  const [execFontSize, setExecFontSize] = useState(loadExecFontSize)
+  const [copyEnabled, setCopyEnabled] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
+  const [searchMatch, setSearchMatch] = useState<{ index: number; count: number } | null>(null)
   const termRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
+  const searchRef = useRef<SearchAddon | null>(null)
+  const searchInputRef = useRef<InputRef>(null)
   const execSessionRef = useRef<string | null>(null)
   const activeRef = useRef(active)
   const execOpenRef = useRef(execOpen)
@@ -626,18 +658,22 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
     terminalRef.current?.dispose()
     terminalRef.current = null
     fitRef.current = null
+    searchRef.current = null
     execFocusedRef.current = false
     syncExecFocus()
   }
 
-  const closeExec = async (): Promise<void> => {
+  const closeExec = useCallback(async (): Promise<void> => {
     if (execSessionId) await window.api.k8s.stopExec(execSessionId)
     setExecSessionId(null)
     destroyTerminal()
     setExecReady(false)
     setExecOpen(false)
     setExecPod(null)
-  }
+    setSearchOpen(false)
+    setSearchText('')
+    setSearchMatch(null)
+  }, [execSessionId])
 
   const openExecPicker = (pod: K8sPodRow): void => {
     setExecPod(pod)
@@ -662,12 +698,122 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
     terminalRef.current?.focus()
   }, [])
 
+  const copyExecSelection = useCallback(async (): Promise<void> => {
+    const term = terminalRef.current
+    if (!term) return
+    const text = term.getSelection()
+    if (!text) return
+    await window.api.clipboard.writeText(text)
+    message.success(t('copied'))
+  }, [message, t])
+
+  const clearExecTerminal = useCallback((): void => {
+    terminalRef.current?.clear()
+  }, [])
+
+  const selectAllExecTerminal = useCallback((): void => {
+    terminalRef.current?.selectAll()
+  }, [])
+
+  const runExecSearch = useCallback(
+    (dir: 'next' | 'prev'): void => {
+      const search = searchRef.current
+      if (!search || !searchText) return
+      const opts = {
+        caseSensitive: false,
+        wholeWord: false,
+        // Decorations must be enabled for onDidChangeResults (match count) to fire.
+        // Use transparent overview ruler colors so the visuals stay unchanged.
+        decorations: {
+          matchOverviewRuler: '#00000000',
+          activeMatchColorOverviewRuler: '#00000000'
+        } as const
+      }
+      if (dir === 'next') search.findNext(searchText, opts)
+      else search.findPrevious(searchText, opts)
+    },
+    [searchText]
+  )
+
+  const buildTermMenu = useCallback(
+    (): MenuProps => ({
+      items: [
+        {
+          key: 'copy',
+          icon: <CopyOutlined />,
+          label: t('k8sTermCopy'),
+          disabled: !copyEnabled
+        },
+        { key: 'paste', icon: <SnippetsOutlined />, label: t('k8sTermPaste') },
+        { key: 'clear', icon: <ClearOutlined />, label: t('k8sTermClear') },
+        { key: 'selectall', icon: <FileTextOutlined />, label: t('k8sTermSelectAll') },
+        { type: 'divider' },
+        { key: 'font-inc', icon: <ZoomInOutlined />, label: t('k8sTermFontInc') },
+        { key: 'font-dec', icon: <ZoomOutOutlined />, label: t('k8sTermFontDec') },
+        { key: 'font-reset', icon: <ReloadOutlined />, label: t('k8sTermFontReset') },
+        { type: 'divider' },
+        { key: 'search', icon: <SearchOutlined />, label: t('k8sTermSearch') }
+      ],
+      onClick: ({ key }) => {
+        switch (key) {
+          case 'copy':
+            void copyExecSelection()
+            break
+          case 'paste':
+            void pasteExecClipboard()
+            break
+          case 'clear':
+            clearExecTerminal()
+            break
+          case 'selectall':
+            selectAllExecTerminal()
+            break
+          case 'font-inc':
+            setExecFontSize((v) => Math.min(FONT_MAX, v + 1))
+            break
+          case 'font-dec':
+            setExecFontSize((v) => Math.max(FONT_MIN, v - 1))
+            break
+          case 'font-reset':
+            setExecFontSize(DEFAULT_FONT)
+            break
+          case 'search':
+            setSearchOpen(true)
+            break
+        }
+      }
+    }),
+    [
+      clearExecTerminal,
+      copyEnabled,
+      copyExecSelection,
+      pasteExecClipboard,
+      selectAllExecTerminal,
+      t
+    ]
+  )
+
   useEffect(() => {
     const off = window.api.shortcuts.onShortcut((key) => {
       if (!active) return
       if (key === 'v') {
         void pasteExecClipboard()
         return
+      }
+      if (key === 'f') {
+        setSearchOpen((v) => !v)
+        return
+      }
+      const inFormField = Boolean(
+        document.activeElement?.closest('.ant-input, .ant-select, .ant-input-number')
+      )
+      if (inFormField) return
+      if (key === '=' || key === '+') {
+        setExecFontSize((v) => Math.min(FONT_MAX, v + 1))
+      } else if (key === '-' || key === '_') {
+        setExecFontSize((v) => Math.max(FONT_MIN, v - 1))
+      } else if (key === '0') {
+        setExecFontSize(DEFAULT_FONT)
       }
     })
     return off
@@ -681,15 +827,23 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
     destroyTerminal()
     const term = new Terminal({
       cursorBlink: true,
-      fontSize: 13,
-      fontFamily: 'Consolas, "Courier New", monospace'
+      fontSize: loadExecFontSize(),
+      fontFamily: 'Consolas, "Courier New", monospace',
+      // Search decorations (used to report the match count) require the proposed API.
+      allowProposedApi: true
     })
     applyTermTheme(term)
     const fit = new FitAddon()
+    const search = new SearchAddon()
     term.loadAddon(fit)
+    term.loadAddon(search)
+    search.onDidChangeResults(({ resultIndex, resultCount }) => {
+      setSearchMatch({ index: resultIndex, count: resultCount })
+    })
     term.open(host)
     terminalRef.current = term
     fitRef.current = fit
+    searchRef.current = search
     fit.fit()
     term.focus()
 
@@ -756,6 +910,40 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
       destroyTerminal()
     }
   }, [execReady, execOpen, execPod, execContainer, execShell, syncExecFocus, t])
+
+  useEffect(() => {
+    if (!active) return
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      if (searchOpen) {
+        setSearchOpen(false)
+      } else if (execOpen) {
+        void closeExec()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [active, searchOpen, execOpen, closeExec])
+
+  useEffect(() => {
+    localStorage.setItem(LS_K8S_EXEC_FONT_SIZE, String(execFontSize))
+    const term = terminalRef.current
+    if (!term) return
+    term.options.fontSize = execFontSize
+    // fit() fires onResize (-> resizeExec) when the new font changes cols/rows,
+    // so no explicit resize is needed here.
+    fitRef.current?.fit()
+  }, [execFontSize])
+
+  useEffect(() => {
+    if (searchOpen) {
+      searchInputRef.current?.focus()
+      return
+    }
+    searchRef.current?.clearDecorations()
+    const id = window.setTimeout(() => setSearchMatch(null), 0)
+    return () => window.clearTimeout(id)
+  }, [searchOpen])
 
   useEffect(() => {
     if (!execOpen) return
@@ -1526,6 +1714,7 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
         destroyOnHidden
         getContainer={overlayContainer}
         focusable={{ trap: false }}
+        keyboard={false}
         rootClassName="k8s-drawer-no-mask"
         styles={{
           root: { pointerEvents: 'none' },
@@ -1548,12 +1737,79 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
           ) : null
         }
       >
-        <div
-          ref={termRef}
-          className="rounded-lg overflow-hidden flex-1 min-h-0 w-full"
-          style={{ padding: 8, background: 'var(--bg-warm)', minHeight: 200 }}
-          onMouseDown={() => terminalRef.current?.focus()}
-        />
+        <div className="relative flex-1 min-h-0 w-full">
+          <Dropdown
+            trigger={['contextMenu']}
+            menu={buildTermMenu()}
+            onOpenChange={(open) => {
+              if (!open) return
+              setCopyEnabled(Boolean(terminalRef.current?.getSelection()))
+            }}
+          >
+            <div
+              ref={termRef}
+              className="rounded-lg overflow-hidden h-full min-h-0 w-full"
+              style={{ padding: 8, background: 'var(--bg-warm)', minHeight: 200 }}
+              onMouseDown={() => terminalRef.current?.focus()}
+            />
+          </Dropdown>
+          {searchOpen && (
+            <div className="absolute top-3 right-3 z-20 flex items-center gap-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] p-1 shadow-sm">
+              <Input
+                ref={searchInputRef}
+                size="small"
+                allowClear
+                placeholder={t('k8sTermSearchPlaceholder')}
+                value={searchText}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setSearchText(value)
+                  setSearchMatch(null)
+                  if (!value) searchRef.current?.clearDecorations()
+                }}
+                onPressEnter={() => runExecSearch('next')}
+                className="w-44"
+              />
+              {searchMatch && (
+                <span
+                  className={`shrink-0 text-[10px] ${
+                    searchMatch.count > 0
+                      ? 'text-[var(--text-secondary)]'
+                      : 'text-[var(--danger)]'
+                  }`}
+                >
+                  {searchMatch.count > 0
+                    ? `${searchMatch.index + 1}/${searchMatch.count}`
+                    : '0/0'}
+                </span>
+              )}
+              <button
+                type="button"
+                className={BTN_ICON}
+                title={t('k8sTermSearchPrev')}
+                onClick={() => runExecSearch('prev')}
+              >
+                <ArrowUpOutlined />
+              </button>
+              <button
+                type="button"
+                className={BTN_ICON}
+                title={t('k8sTermSearchNext')}
+                onClick={() => runExecSearch('next')}
+              >
+                <ArrowDownOutlined />
+              </button>
+              <button
+                type="button"
+                className={BTN_ICON}
+                title={t('k8sTermSearchClose')}
+                onClick={() => setSearchOpen(false)}
+              >
+                <CloseOutlined />
+              </button>
+            </div>
+          )}
+        </div>
       </Drawer>
 
       <Modal

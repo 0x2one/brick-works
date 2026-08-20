@@ -2696,8 +2696,15 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
                           placeholder={t('sshTermSearchPlaceholder')}
                           value={searchText}
                           onChange={(e) => {
-                            setSearchText(e.target.value)
+                            const value = e.target.value
+                            setSearchText(value)
                             setSearchMatch(null)
+                            if (!value) {
+                              const rt = activeTabId
+                                ? termsRef.current.get(activeTabId)
+                                : undefined
+                              rt?.search.clearDecorations()
+                            }
                           }}
                           onPressEnter={() => runTermSearch('next')}
                           className="w-44"
