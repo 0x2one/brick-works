@@ -183,6 +183,20 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
   const terminalRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const execSessionRef = useRef<string | null>(null)
+  const activeRef = useRef(active)
+  const execOpenRef = useRef(execOpen)
+  const execFocusedRef = useRef(false)
+  const syncExecFocus = useCallback((): void => {
+    window.api.app.setTermPasteFocus(
+      Boolean(activeRef.current && execOpenRef.current && execFocusedRef.current)
+    )
+  }, [])
+
+  useEffect(() => {
+    activeRef.current = active
+    execOpenRef.current = execOpen
+    syncExecFocus()
+  }, [active, execOpen, syncExecFocus])
 
   const [pfOpen, setPfOpen] = useState(false)
   const [pfPod, setPfPod] = useState<K8sPodRow | null>(null)
@@ -612,6 +626,8 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
     terminalRef.current?.dispose()
     terminalRef.current = null
     fitRef.current = null
+    execFocusedRef.current = false
+    syncExecFocus()
   }
 
   const closeExec = async (): Promise<void> => {
@@ -635,6 +651,28 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
     setExecOpen(true)
   }
 
+  const pasteExecClipboard = useCallback(async (): Promise<void> => {
+    const sessionId = execSessionRef.current
+    if (!sessionId) return
+    const text = await window.api.clipboard.readText()
+    // Route through the terminal so pasted text is normalized (CRLF -> CR) and
+    // wrapped in bracketed-paste sequences when the remote enables that mode;
+    // the existing onData handler then writes it to the exec channel.
+    if (text) terminalRef.current?.paste(text)
+    terminalRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    const off = window.api.shortcuts.onShortcut((key) => {
+      if (!active) return
+      if (key === 'v') {
+        void pasteExecClipboard()
+        return
+      }
+    })
+    return off
+  }, [active, pasteExecClipboard])
+
   useEffect(() => {
     if (!execReady || !execOpen || !execPod) return
     const host = termRef.current
@@ -654,6 +692,18 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
     fitRef.current = fit
     fit.fit()
     term.focus()
+
+    const textarea = term.textarea
+    if (textarea) {
+      textarea.addEventListener('focus', () => {
+        execFocusedRef.current = true
+        syncExecFocus()
+      })
+      textarea.addEventListener('blur', () => {
+        execFocusedRef.current = false
+        syncExecFocus()
+      })
+    }
 
     let disposed = false
     let activeSession: string | null = null
@@ -705,7 +755,7 @@ function K8sManage({ active = true }: { active?: boolean }): React.JSX.Element {
       if (activeSession) void window.api.k8s.stopExec(activeSession)
       destroyTerminal()
     }
-  }, [execReady, execOpen, execPod, execContainer, execShell, t])
+  }, [execReady, execOpen, execPod, execContainer, execShell, syncExecFocus, t])
 
   useEffect(() => {
     if (!execOpen) return

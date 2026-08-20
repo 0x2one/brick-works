@@ -12,7 +12,8 @@ const api = {
     }
   },
   app: {
-    info: () => ipcRenderer.invoke('app:info')
+    info: () => ipcRenderer.invoke('app:info'),
+    setTermPasteFocus: (focused: boolean) => ipcRenderer.send('app:setTermPasteFocus', focused)
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

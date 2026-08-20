@@ -137,6 +137,7 @@ interface K8sApi {
 
 interface AppApi {
   info: () => Promise<AppInfo>
+  setTermPasteFocus: (focused: boolean) => void
 }
 
 interface AppSettings {

@@ -42,6 +42,7 @@ const gotTheLock = app.requestSingleInstanceLock()
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
+let terminalPasteActive = false
 const appSettingsStore = createAppSettingsStore()
 const updater = createUpdater(sendToRenderer, () => appSettingsStore.get().autoDownload)
 
@@ -373,14 +374,23 @@ function createWindow(): void {
   }
   mainWindow = new BrowserWindow(winOptions)
 
-  // Guarantee terminal shortcuts (Ctrl/Cmd+F, Ctrl/Cmd+/-/0) reach the renderer:
-  // the default app menu's find/zoom roles and page-level handlers can swallow them.
+  // Guarantee terminal shortcuts (Ctrl/Cmd+F, Ctrl/Cmd+/-/0, and Ctrl/Cmd+V while a
+  // terminal is focused) reach the renderer: the default app menu's find/zoom/paste
+  // roles and page-level handlers can swallow them.
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
     const mod = input.control || input.meta
     if (!mod || input.alt) return
     const key = input.key.toLowerCase()
-    if (key === 'f' || key === '=' || key === '+' || key === '-' || key === '_' || key === '0') {
+    if (
+      key === 'f' ||
+      key === '=' ||
+      key === '+' ||
+      key === '-' ||
+      key === '_' ||
+      key === '0' ||
+      (key === 'v' && terminalPasteActive)
+    ) {
       event.preventDefault()
       mainWindow?.webContents.send('app:shortcut', key)
     }
@@ -529,6 +539,13 @@ ipcMain.handle('app:info', () => ({
   platform: process.platform,
   arch: process.arch
 }))
+
+// Terminal pages (SSH client / K8s exec) report focus so Ctrl/Cmd+V can be routed
+// to the terminal instead of the menu's paste role (which does not reliably reach
+// xterm). When no terminal is focused the shortcut is left alone for normal inputs.
+ipcMain.on('app:setTermPasteFocus', (_event, focused: boolean) => {
+  terminalPasteActive = focused === true
+})
 
 /* ── Auto updater ── */
 

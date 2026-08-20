@@ -596,6 +596,16 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
   const loadDirSeqRef = useRef<Map<string, number>>(new Map())
   const restoredRef = useRef(false)
   const skipAutoCopyRef = useRef(false)
+  const activeRef = useRef(active)
+  const termFocusedRef = useRef(false)
+  const syncTermFocus = useCallback((): void => {
+    window.api.app.setTermPasteFocus(Boolean(activeRef.current && termFocusedRef.current))
+  }, [])
+
+  useEffect(() => {
+    activeRef.current = active
+    syncTermFocus()
+  }, [active, syncTermFocus])
 
   useEffect(() => {
     notifyCopiedRef.current = () => {
@@ -717,7 +727,9 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     }
     termsRef.current.delete(tabId)
     connectingTabsRef.current.delete(tabId)
-  }, [])
+    termFocusedRef.current = false
+    syncTermFocus()
+  }, [syncTermFocus])
 
   const stopTabShell = useCallback(
     async (tab: SessionTab): Promise<void> => {
@@ -877,6 +889,8 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     const terms = termsRef.current
     const tabsSnapshot = tabsRef
     return () => {
+      termFocusedRef.current = false
+      syncTermFocus()
       for (const [tabId, rt] of terms) {
         if (rt.shellSessionId) void window.api.ssh.stopShell(rt.shellSessionId)
         try {
@@ -930,6 +944,18 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       const rt: TermRuntime = { term, fit, search, shellSessionId: null }
       termsRef.current.set(tab.id, rt)
 
+      const textarea = term.textarea
+      if (textarea) {
+        textarea.addEventListener('focus', () => {
+          termFocusedRef.current = true
+          syncTermFocus()
+        })
+        textarea.addEventListener('blur', () => {
+          termFocusedRef.current = false
+          syncTermFocus()
+        })
+      }
+
       term.onSelectionChange(() => {
         if (skipAutoCopyRef.current) return
         const text = term.getSelection()
@@ -963,7 +989,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
 
       if (!tab.noAutoConnect) await connectShellRef.current(tab.id, false)
     },
-    [fontSize, themeResolved]
+    [fontSize, syncTermFocus, themeResolved]
   )
 
   useEffect(() => {
@@ -1026,9 +1052,25 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [active])
 
+  const pasteClipboard = useCallback(async (): Promise<void> => {
+    if (!activeTabId) return
+    const rt = termsRef.current.get(activeTabId)
+    if (!rt?.shellSessionId) return
+    const text = await window.api.clipboard.readText()
+    // Route through the terminal so pasted text is normalized (CRLF -> CR) and
+    // wrapped in bracketed-paste sequences when the remote enables that mode;
+    // the existing onData handler then writes it to the shell.
+    if (text) rt.term.paste(text)
+    rt.term.focus()
+  }, [activeTabId])
+
   useEffect(() => {
     const off = window.api.shortcuts.onShortcut((key) => {
       if (!active) return
+      if (key === 'v') {
+        void pasteClipboard()
+        return
+      }
       if (key === 'f') {
         setSearchOpen((v) => !v)
         return
@@ -1046,7 +1088,7 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
       }
     })
     return off
-  }, [active])
+  }, [active, pasteClipboard])
 
   useEffect(() => {
     if (searchOpen) {
@@ -1093,15 +1135,6 @@ function SshClient({ active = true }: { active?: boolean }): React.JSX.Element {
     if (!text) return
     await window.api.clipboard.writeText(text)
     notifyCopiedRef.current()
-  }, [activeTabId])
-
-  const pasteClipboard = useCallback(async (): Promise<void> => {
-    if (!activeTabId) return
-    const rt = termsRef.current.get(activeTabId)
-    if (!rt?.shellSessionId) return
-    const text = await window.api.clipboard.readText()
-    if (text) void window.api.ssh.writeShell(rt.shellSessionId, toBase64(text))
-    rt.term.focus()
   }, [activeTabId])
 
   const clearTerminal = useCallback((): void => {
