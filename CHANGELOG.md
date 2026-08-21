@@ -1,5 +1,14 @@
 # Changelog
 
+## BrickWorks v1.0.5
+
+### ✨ Features
+- SSH client & K8s console: Ctrl/Cmd+V now pastes into the focused terminal, routed through xterm's `Terminal.paste` (CRLF normalization + bracketed-paste support)
+- K8s console: right-click context menu (copy, paste, clear screen, select all), adjustable font size (persisted), and Ctrl+F search
+- New JWT Decoder tool in DevTools
+
+---
+
 ## BrickWorks v1.0.4
 
 ### ✨ Features
