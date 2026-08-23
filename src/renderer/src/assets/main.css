@@ -701,34 +701,21 @@
   height: 100%;
 }
 
+/* Hover: lift + accent edge. The bottom-right inset line follows the card's
+   own rounded corner (no hard clip-path triangle). */
 .tool-card:hover {
-  box-shadow: var(--shadow-md);
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
   border-left-color: var(--accent);
   transform: translateY(-2px);
-}
-
-/* Brick-cut corner signature on the tool cards */
-.tool-card::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 16px;
-  height: 16px;
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
-  clip-path: polygon(100% 0, 100% 100%, 0 100%);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.tool-card:hover::after {
-  opacity: 1;
+  box-shadow:
+    var(--shadow-md),
+    inset 0 -2px 0 0 color-mix(in srgb, var(--accent) 55%, transparent),
+    inset 2px 0 0 0 color-mix(in srgb, var(--accent) 18%, transparent),
+    inset -2px 0 0 0 color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tool-card,
-  .tool-card::after {
+  .tool-card {
     transition: none !important;
   }
 }
