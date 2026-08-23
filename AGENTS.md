@@ -49,5 +49,6 @@ No test framework is configured.
 - **Native deps**: `ssh2`, `@kubernetes/client-node` run in main; `electron-builder.yml` sets `npmRebuild: false`
 - Electron downloads mirrored via `npmmirror.com` (`.npmrc` + `electron-builder.yml`)
 - **CI**: `.github/workflows/build.yml` runs `pnpm run build` then `electron-builder --win/--mac/--linux --publish always` on `v*` tags (or `workflow_dispatch`); releases come from tags
-- antd MCP configured in `.opencode/opencode.json` and `.cursor/mcp.json`; project skills in `.agents/skills/` and `.claude/skills/` (antd, frontend-design)
+- antd MCP configured in `.opencode/opencode.json` and `.cursor/mcp.json`; project skills in `.agents/skills/` and `.claude/skills/` (antd, frontend-design); `skills-lock.json` pins the installed skill sources/hashes — when adding a skill, update it via the skill manager, not by hand
+- **Monaco**: `components/MonacoSetup.ts` wires the editor worker (`monaco-editor/editor/editor.worker?worker`) and `loader.config({ monaco })` — it must be imported (side-effect) before any Monaco editor renders. Actual consumers: `MonacoFileEditor.tsx` (wrapped by `SshFileEditor.tsx` for SFTP editing) and `TextDiff.tsx`. JsonBeautify etc. do **not** use Monaco — don't assume a code tool does
 - **VS Code**: `.vscode/launch.json` has a "Debug All" compound — main process via electron-vite + renderer attach on port 9222; ESLint is the only recommended extension, Prettier as formatter

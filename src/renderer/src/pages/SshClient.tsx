@@ -208,9 +208,9 @@ function readCssVar(name: string, fallback: string): string {
 function applyTermTheme(term: Terminal, resolved?: 'light' | 'dark'): void {
   const dark = resolved === 'dark'
   term.options.theme = {
-    background: readCssVar('--bg-warm', dark ? '#1a1a1a' : '#f3f0eb'),
-    foreground: readCssVar('--text-primary', dark ? '#e0e0e0' : '#2a2520'),
-    cursor: readCssVar('--text-primary', dark ? '#e0e0e0' : '#2a2520'),
+    background: readCssVar('--bg-warm', dark ? '#191918' : '#f1efe9'),
+    foreground: readCssVar('--text-primary', dark ? '#e2e0de' : '#26211d'),
+    cursor: readCssVar('--text-primary', dark ? '#e2e0de' : '#26211d'),
     selectionBackground: dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)'
   }
   term.refresh(0, Math.max(0, term.rows - 1))

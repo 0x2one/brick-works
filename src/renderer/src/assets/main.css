@@ -40,11 +40,11 @@
 }
 
 :root {
-  --bg-warm: #f3f0eb;
-  --surface: #faf8f5;
-  --border-subtle: #e5ddd4;
-  --text-primary: #2a2520;
-  --text-secondary: #8a7e72;
+  --bg-warm: #f1efe9;
+  --surface: #fbfaf6;
+  --border-subtle: #e3ddd3;
+  --text-primary: #26211d;
+  --text-secondary: #877b6f;
   --accent: #c8674b;
   --title-bar-bg: #fff;
   --title-bar-color: #595959;
@@ -77,8 +77,8 @@
 
   /* Semantic status / syntax colors */
   --danger: #dc2626;
-  --danger-soft: rgba(220, 38, 38, 0.08);
-  --danger-border: rgba(220, 38, 38, 0.32);
+  --danger-soft: color-mix(in srgb, var(--danger) 8%, transparent);
+  --danger-border: color-mix(in srgb, var(--danger) 32%, transparent);
   --success: #16a34a;
   --warning: #d97706;
   --info: #3b82f6;
@@ -88,19 +88,19 @@
 }
 
 [data-theme='dark'] {
-  --bg-warm: #1a1a1a;
-  --surface: #242424;
-  --border-subtle: #333;
-  --text-primary: #e0e0e0;
-  --text-secondary: #888;
+  --bg-warm: #191918;
+  --surface: #232222;
+  --border-subtle: #333230;
+  --text-primary: #e2e0de;
+  --text-secondary: #8a8782;
   --accent: #d97f66;
-  --title-bar-bg: #1f1f1f;
-  --title-bar-color: #999;
+  --title-bar-bg: #1e1d1c;
+  --title-bar-color: #9a978f;
   --title-bar-hover-bg: rgba(255, 255, 255, 0.08);
   --title-bar-hover-color: #fff;
-  --sidebar-bg: #1a1a1a;
-  --sidebar-text: #ccc;
-  --content-bg: #1a1a1a;
+  --sidebar-bg: #191918;
+  --sidebar-text: #cfccc6;
+  --content-bg: #191918;
 
   --sticky-card-bg: #2a2824;
   --sticky-card-border: rgba(60, 55, 48, 0.6);
@@ -113,8 +113,8 @@
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
 
   --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.12);
-  --danger-border: rgba(248, 113, 113, 0.35);
+  --danger-soft: color-mix(in srgb, var(--danger) 12%, transparent);
+  --danger-border: color-mix(in srgb, var(--danger) 35%, transparent);
   --success: #4ade80;
   --warning: #fbbf24;
   --info: #60a5fa;
@@ -337,6 +337,48 @@
 
 .layout-right {
   background: var(--content-bg);
+}
+
+/* ── Brick / building-block grid (signature) ──
+   Faint mortar lines that follow the theme's border token (like brick joints
+   in light mode, an engineering grid in dark mode). Pure CSS, no perf cost. */
+.brick-grid {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 4px,
+      color-mix(in srgb, var(--border-subtle) 55%, transparent) 4px,
+      color-mix(in srgb, var(--border-subtle) 55%, transparent) 5px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 23px,
+      color-mix(in srgb, var(--border-subtle) 55%, transparent) 23px,
+      color-mix(in srgb, var(--border-subtle) 55%, transparent) 24px
+    );
+  background-size: 24px 5px;
+}
+
+/* Fainter variant for empty states so the dashed border stays readable */
+.brick-grid--faint {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 4px,
+      color-mix(in srgb, var(--border-subtle) 30%, transparent) 4px,
+      color-mix(in srgb, var(--border-subtle) 30%, transparent) 5px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 23px,
+      color-mix(in srgb, var(--border-subtle) 30%, transparent) 23px,
+      color-mix(in srgb, var(--border-subtle) 30%, transparent) 24px
+    );
+  background-size: 24px 5px;
 }
 
 /* ── Settings Modal ── */
@@ -642,6 +684,7 @@
 /* ── DevTools Cards ── */
 
 .tool-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: 16px;
@@ -663,6 +706,31 @@
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
   border-left-color: var(--accent);
   transform: translateY(-2px);
+}
+
+/* Brick-cut corner signature on the tool cards */
+.tool-card::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.tool-card:hover::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-card,
+  .tool-card::after {
+    transition: none !important;
+  }
 }
 
 /* Staggered entrance for the tool grid */
@@ -893,7 +961,7 @@ button.tag-chip:hover {
 
 .sticky-toolbar-btn.active {
   color: var(--accent);
-  background: rgba(200, 103, 75, 0.1);
+  background: var(--accent-soft);
 }
 
 .sticky-color-swatch {
