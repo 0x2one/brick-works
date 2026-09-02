@@ -330,12 +330,195 @@
         gap: 10px;
         flex-wrap: wrap;
       }
+      .view-tabs {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 16px;
+        background: var(--surface);
+      }
+      .tab-btn {
+        border: none;
+        background: transparent;
+        color: var(--text-2);
+        padding: 8px 18px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .tab-btn + .tab-btn {
+        border-left: 1px solid var(--border);
+      }
+      .tab-btn.active {
+        background: var(--accent);
+        color: #fff;
+      }
+      #clipsView[hidden],
+      #filesView[hidden] {
+        display: none !important;
+      }
+      .clips-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+      .clip-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .clip-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+      }
+      .clip-card.open .clip-head {
+        border-bottom: 1px solid var(--border);
+      }
+      .clip-toggle {
+        width: 22px;
+        height: 22px;
+        border: none;
+        background: transparent;
+        color: var(--text-2);
+        cursor: pointer;
+        font-size: 11px;
+        padding: 0;
+        flex-shrink: 0;
+      }
+      .clip-toggle:hover {
+        color: var(--text);
+      }
+      .clip-preview {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: transparent;
+        color: var(--text-2);
+        font-size: 12px;
+        font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+        padding: 8px 16px 12px;
+        cursor: pointer;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .clip-preview:hover {
+        color: var(--text);
+      }
+      .clip-card.open .clip-preview {
+        display: none;
+      }
+      .clip-card:not(.open) .clip-body {
+        display: none;
+      }
+      .clip-num {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .clip-label {
+        flex: 1;
+        min-width: 0;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--text);
+        font-size: 13px;
+        padding: 4px 6px;
+        border-radius: 6px;
+        outline: none;
+      }
+      .clip-label:focus {
+        border-color: var(--accent);
+        background: #fff;
+      }
+      .clip-acts {
+        display: flex;
+        gap: 2px;
+        flex-shrink: 0;
+      }
+      .clip-acts button {
+        border: none;
+        background: none;
+        color: var(--text-2);
+        cursor: pointer;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .clip-acts button:hover {
+        color: var(--accent);
+        background: var(--accent-weak);
+        text-decoration: none;
+      }
+      .clip-acts button.danger:hover {
+        color: #c43c3c;
+        background: #fdecec;
+      }
+      .clip-acts svg {
+        width: 16px;
+        height: 16px;
+      }
+      .clip-body {
+        padding: 10px 12px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .clip-text {
+        width: 100%;
+        min-height: 280px;
+        height: 360px;
+        resize: vertical;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+        font-size: 13px;
+        line-height: 1.55;
+        font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+        color: var(--text);
+        outline: none;
+        background: #fff;
+      }
+      .clip-text:focus {
+        border-color: var(--accent);
+      }
+      .clip-meta {
+        color: var(--text-2);
+        font-size: 12px;
+      }
+      .clip-hint {
+        color: var(--text-2);
+        font-size: 12px;
+        margin: 0 0 14px;
+      }
       @media (max-width: 640px) {
         .toolbar .btn {
           flex: 1 1 130px;
           min-height: 42px;
           justify-content: center;
           font-size: 14px;
+        }
+        .clips-grid {
+          grid-template-columns: 1fr;
         }
         .list-head,
         .list-row {
@@ -402,10 +585,20 @@
           <button id="langEn" class="lang-btn" onclick="setLang('en')">EN</button>
         </div>
         <button class="btn" onclick="copyUrl()" data-i18n="copyLink">复制链接</button>
-        <button class="btn" onclick="load()" data-i18n="refresh">刷新</button>
+        <button class="btn" onclick="refreshCurrent()" data-i18n="refresh">刷新</button>
       </header>
 
       <main>
+        <div class="view-tabs">
+          <button id="tabFiles" class="tab-btn active" onclick="setView('files')" data-i18n="tabFiles">
+            文件
+          </button>
+          <button id="tabClips" class="tab-btn" onclick="setView('clips')" data-i18n="tabClips">
+            快粘
+          </button>
+        </div>
+
+        <div id="filesView">
         <div class="crumbs" id="crumbs"></div>
 
         <div class="toolbar">
@@ -440,6 +633,19 @@
           </div>
           <div id="tbody"></div>
           <div class="empty" id="empty" style="display: none" data-i18n="empty">此文件夹为空</div>
+        </div>
+        </div>
+
+        <div id="clipsView" hidden>
+          <div class="toolbar">
+            <button class="btn" onclick="pasteFromSystem()" data-i18n="clipFromSystemNew">
+              从剪贴板新建
+            </button>
+            <button class="btn primary" onclick="createClip()" data-i18n="clipNew">新建粘贴板</button>
+          </div>
+          <p class="clip-hint" data-i18n="clipHint">每个粘贴板是一张卡片，像文档一样编辑文本，多设备实时同步。</p>
+          <div class="empty" id="clipsEmpty" style="display: none" data-i18n="clipEmpty">暂无粘贴板</div>
+          <div class="clips-grid" id="clipsGrid"></div>
         </div>
       </main>
     </div>
@@ -476,7 +682,34 @@
           en: 'Enter the one-time token shown in the BrickWorks app.'
         },
         authSubmit: { zh: '进入', en: 'Enter' },
-        authInvalid: { zh: '口令无效', en: 'Invalid token' }
+        authInvalid: { zh: '口令无效', en: 'Invalid token' },
+        tabFiles: { zh: '文件', en: 'Files' },
+        tabClips: { zh: '快粘', en: 'Quick Paste' },
+        clipNew: { zh: '新建粘贴板', en: 'New Slot' },
+        clipFromSystem: { zh: '从剪贴板填入', en: 'Paste from clipboard' },
+        clipFromSystemNew: { zh: '从剪贴板新建', en: 'New from clipboard' },
+        clipFilled: { zh: '已从剪贴板填入', en: 'Filled from clipboard' },
+        clipPasteHint: {
+          zh: '无法读取系统剪贴板，请按 Ctrl+V 粘贴',
+          en: 'Cannot read the clipboard. Press Ctrl+V to paste.'
+        },
+        clipHint: {
+          zh: '每个粘贴板是一张卡片，像文档一样编辑文本，多设备实时同步。',
+          en: 'Each pasteboard is a named card with a large text editor. Devices sync in real time.'
+        },
+        clipEmpty: { zh: '暂无粘贴板，点击上方按钮新建。', en: 'No paste slots yet. Create one above.' },
+        clipCopy: { zh: '复制', en: 'Copy' },
+        clipDelete: { zh: '删除', en: 'Delete' },
+        clipSaved: { zh: '已保存', en: 'Saved' },
+        clipLabel: { zh: '名称', en: 'Name' },
+        clipTextPlaceholder: { zh: '在此编辑文本，输入过程中自动保存', en: 'Edit text here. Changes save automatically.' },
+        clipTooLarge: { zh: '内容过大', en: 'Content too large' },
+        clipLimit: { zh: '粘贴板数量已达上限', en: 'Slot limit reached' },
+        clipCopied: { zh: '已复制', en: 'Copied' },
+        clipChars: { zh: '字', en: 'chars' },
+        clipExpand: { zh: '展开编辑', en: 'Expand' },
+        clipCollapse: { zh: '收起', en: 'Collapse' },
+        clipPreviewEmpty: { zh: '点击展开编辑', en: 'Click to expand and edit' }
       }
 
       var CHUNK = 1024 * 1024
@@ -488,6 +721,14 @@
       var infoCache = null
       var lang = localStorage.getItem('lan-web-lang') === 'en' ? 'en' : 'zh'
       var accessToken = sessionStorage.getItem(TOKEN_KEY) || ''
+      var currentView = 'files'
+      var clips = []
+      var clipRevision = -1
+      var clipEs = null
+      var clipRetryMs = 1000
+      var clipTargetId = ''
+      var clipSaveTimers = {}
+      var clipExpanded = {}
 
       function t(key) {
         return (I18N[key] && I18N[key][lang]) || key
@@ -497,6 +738,32 @@
         return String(s).replace(/[&<>"']/g, function (c) {
           return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
         })
+      }
+
+      function clipFallbackName(text) {
+        var compact = String(text || '').replace(/\s+/g, ' ').trim()
+        if (!compact) return ''
+        return compact.length > 30 ? compact.slice(0, 30) + '…' : compact
+      }
+
+      function clipSvg(kind) {
+        if (kind === 'import') {
+          return (
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 21h16"/></svg>'
+          )
+        }
+        if (kind === 'copy') {
+          return (
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<rect x="9" y="9" width="13" height="13" rx="2"/>' +
+            '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+          )
+        }
+        return (
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>'
+        )
       }
 
       function fmtSize(n) {
@@ -598,6 +865,7 @@
       function showAuthGate(show) {
         document.getElementById('authGate').classList.toggle('show', show)
         document.getElementById('appRoot').classList.toggle('hidden', show)
+        if (show) stopClipSse()
       }
 
       function setAccessToken(token) {
@@ -646,6 +914,7 @@
         document.getElementById('langZh').classList.toggle('active', lang === 'zh')
         document.getElementById('langEn').classList.toggle('active', lang === 'en')
         document.getElementById('addr').textContent = location.origin + '/'
+        document.getElementById('drop').textContent = t('drop')
         if (infoCache) {
           document.getElementById('rootInfo').textContent =
             infoCache.root + ' · ' + t('free') + ' ' + fmtSize(infoCache.free)
@@ -953,10 +1222,340 @@
         uploadFiles(files)
       }
 
+      function setView(view) {
+        currentView = view === 'clips' ? 'clips' : 'files'
+        document.getElementById('filesView').hidden = currentView !== 'files'
+        document.getElementById('clipsView').hidden = currentView !== 'clips'
+        document.getElementById('tabFiles').classList.toggle('active', currentView === 'files')
+        document.getElementById('tabClips').classList.toggle('active', currentView === 'clips')
+        document.getElementById('drop').textContent = t('drop')
+        if (currentView === 'clips') renderClips()
+      }
+
+      function refreshCurrent() {
+        if (currentView === 'clips') loadClips()
+        else load()
+      }
+
+      function applyClips(data) {
+        if (!data || typeof data.revision !== 'number') return
+        if (data.revision === clipRevision) return
+        clipRevision = data.revision
+        clips = data.slots || []
+        renderClips()
+      }
+
+      function renderClips() {
+        var empty = document.getElementById('clipsEmpty')
+        var grid = document.getElementById('clipsGrid')
+        var active = document.activeElement
+        var keepId = ''
+        var keepKind = ''
+        var keepVal = ''
+        var keepStart = 0
+        var keepEnd = 0
+        if (active && active.closest) {
+          var card = active.closest('.clip-card')
+          if (
+            card &&
+            (active.classList.contains('clip-text') || active.classList.contains('clip-label'))
+          ) {
+            keepId = card.getAttribute('data-id') || ''
+            keepKind = active.classList.contains('clip-text') ? 'clip-text' : 'clip-label'
+            keepVal = active.value
+            keepStart = active.selectionStart || 0
+            keepEnd = active.selectionEnd || 0
+          }
+        }
+        if (!clips.length) {
+          empty.style.display = 'block'
+          grid.innerHTML = ''
+          return
+        }
+        empty.style.display = 'none'
+        grid.innerHTML = clips
+          .map(function (slot, i) {
+            var label = esc(slot.label || '')
+            var text = slot.text || ''
+            var open = !!clipExpanded[slot.id]
+            var previewLine = ''
+            var lines = text.split(/\r?\n/)
+            for (var li = 0; li < lines.length; li++) {
+              if (lines[li].trim()) {
+                previewLine = lines[li]
+                break
+              }
+            }
+            return (
+              '<div class="clip-card' +
+              (open ? ' open' : '') +
+              '" data-id="' +
+              slot.id +
+              '"><div class="clip-head">' +
+              '<button class="clip-toggle" title="' +
+              esc(open ? t('clipCollapse') : t('clipExpand')) +
+              '" onclick="toggleClip(\'' +
+              slot.id +
+              '\')">' +
+              (open ? '▼' : '▶') +
+              '</button>' +
+              '<span class="clip-num">' +
+              (i + 1) +
+              '</span>' +
+              '<input class="clip-label" value="' +
+              label +
+              '" placeholder="' +
+              esc(clipFallbackName(text) || t('clipLabel')) +
+              '" onfocus="clipTargetId=\'' +
+              slot.id +
+              '\'" onblur="saveClipLabel(\'' +
+              slot.id +
+              '\', this.value)" />' +
+              '<div class="clip-acts">' +
+              '<button type="button" title="' +
+              esc(t('clipFromSystem')) +
+              '" onclick="pasteFromSystem(\'' +
+              slot.id +
+              '\')">' +
+              clipSvg('import') +
+              '</button>' +
+              '<button type="button" title="' +
+              esc(t('clipCopy')) +
+              '" onclick="copyClip(\'' +
+              slot.id +
+              '\')">' +
+              clipSvg('copy') +
+              '</button>' +
+              '<button type="button" class="danger" title="' +
+              esc(t('clipDelete')) +
+              '" onclick="deleteClip(\'' +
+              slot.id +
+              '\')">' +
+              clipSvg('delete') +
+              '</button></div></div>' +
+              '<button class="clip-preview" onclick="toggleClip(\'' +
+              slot.id +
+              '\')">' +
+              esc(previewLine || t('clipPreviewEmpty')) +
+              '</button>' +
+              '<div class="clip-body">' +
+              '<textarea class="clip-text" spellcheck="false" placeholder="' +
+              esc(t('clipTextPlaceholder')) +
+              '" onfocus="clipTargetId=\'' +
+              slot.id +
+              '\'" oninput="scheduleClipText(\'' +
+              slot.id +
+              '\', this.value)" onblur="saveClipText(\'' +
+              slot.id +
+              '\', this.value)">' +
+              esc(text) +
+              '</textarea>' +
+              '<div class="clip-meta">' +
+              text.length +
+              ' ' +
+              esc(t('clipChars')) +
+              '</div></div></div>'
+            )
+          })
+          .join('')
+        if (keepId) {
+          var restored = document.querySelector('.clip-card[data-id="' + keepId + '"] .' + keepKind)
+          if (restored) {
+            restored.value = keepVal
+            restored.focus()
+            try {
+              restored.setSelectionRange(keepStart, keepEnd)
+            } catch (e) {}
+          }
+        }
+      }
+
+      async function loadClips() {
+        try {
+          var data = await apiJson('/api/clips')
+          clipRevision = -1
+          applyClips(data)
+        } catch (e) {
+          toast(e.message)
+        }
+      }
+
+      function clipErr(e) {
+        var code = (e && e.message) || ''
+        if (/CLIP_LIMIT/.test(code) || /上限/.test(code)) return t('clipLimit')
+        if (/TOO_LARGE/.test(code) || /过大/.test(code)) return t('clipTooLarge')
+        return e.message || t('requestFailed')
+      }
+
+      async function createClip() {
+        try {
+          var created = await apiJson('/api/clips', { method: 'POST' })
+          if (created && created.id) clipExpanded[created.id] = true
+        } catch (e) {
+          toast(clipErr(e))
+        }
+      }
+
+      function toggleClip(id) {
+        clipExpanded[id] = !clipExpanded[id]
+        renderClips()
+      }
+
+      async function saveClipLabel(id, label) {
+        var slot = clips.filter(function (s) {
+          return s.id === id
+        })[0]
+        if (slot && slot.label === label) return
+        try {
+          await apiJson('/api/clips/' + encodeURIComponent(id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label: label })
+          })
+        } catch (e) {
+          toast(clipErr(e))
+        }
+      }
+
+      function scheduleClipText(id, text) {
+        clearTimeout(clipSaveTimers[id])
+        clipSaveTimers[id] = setTimeout(function () {
+          saveClipText(id, text)
+        }, 500)
+      }
+
+      async function saveClipText(id, text) {
+        clearTimeout(clipSaveTimers[id])
+        clipTargetId = ''
+        var slot = clips.filter(function (s) {
+          return s.id === id
+        })[0]
+        if (slot && (slot.text || '') === text) return
+        try {
+          await apiJson('/api/clips/' + encodeURIComponent(id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text })
+          })
+        } catch (e) {
+          toast(clipErr(e))
+        }
+      }
+
+      async function deleteClip(id) {
+        try {
+          await apiJson('/api/clips/' + encodeURIComponent(id), { method: 'DELETE' })
+        } catch (e) {
+          toast(clipErr(e))
+        }
+      }
+
+      async function copyClip(id) {
+        var slot = clips.filter(function (s) {
+          return s.id === id
+        })[0]
+        if (!slot) return
+        copyText(slot.text || '')
+      }
+
+      async function readSystemText() {
+        try {
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            return (await navigator.clipboard.readText()) || ''
+          }
+        } catch (e) {}
+        return ''
+      }
+
+      async function pasteFromSystem(slotId) {
+        var text = await readSystemText()
+        if (!text) {
+          toast(t('clipPasteHint'))
+          return
+        }
+        try {
+          var id = slotId
+          if (!id) {
+            var created = await apiJson('/api/clips', { method: 'POST' })
+            id = created.id
+          }
+          clipExpanded[id] = true
+          await apiJson('/api/clips/' + encodeURIComponent(id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text })
+          })
+          toast(t('clipFilled'))
+        } catch (e) {
+          toast(clipErr(e))
+        }
+      }
+
+      async function ingestClipText(text) {
+        if (!text) return
+        try {
+          var id = clipTargetId
+          var el = document.activeElement
+          if (el && el.classList && el.classList.contains('clip-text')) return
+          if (id) {
+            await apiJson('/api/clips/' + encodeURIComponent(id), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: text })
+            })
+          } else {
+            var created = await apiJson('/api/clips', { method: 'POST' })
+            clipExpanded[created.id] = true
+            await apiJson('/api/clips/' + encodeURIComponent(created.id), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: text })
+            })
+          }
+          toast(t('clipSaved'))
+        } catch (e) {
+          toast(clipErr(e))
+        }
+      }
+
+      function stopClipSse() {
+        if (clipEs) {
+          clipEs.close()
+          clipEs = null
+        }
+      }
+
+      function startClipSse() {
+        stopClipSse()
+        if (!accessToken) return
+        var url =
+          '/api/clips/events?token=' +
+          encodeURIComponent(accessToken) +
+          '&lang=' +
+          encodeURIComponent(lang)
+        clipEs = new EventSource(url)
+        clipEs.onmessage = function (ev) {
+          clipRetryMs = 1000
+          try {
+            applyClips(JSON.parse(ev.data))
+          } catch (e) {}
+        }
+        clipEs.onerror = function () {
+          stopClipSse()
+          setTimeout(function () {
+            if (accessToken && !document.getElementById('authGate').classList.contains('show')) {
+              startClipSse()
+            }
+          }, clipRetryMs)
+          clipRetryMs = Math.min(15000, clipRetryMs * 2)
+        }
+      }
+
       var dragDepth = 0
       var drop = document.getElementById('drop')
       window.addEventListener('dragenter', function (e) {
         e.preventDefault()
+        if (currentView === 'clips') return
         dragDepth++
         drop.style.display = 'flex'
       })
@@ -975,14 +1574,31 @@
         e.preventDefault()
         dragDepth = 0
         drop.style.display = 'none'
+        if (currentView === 'clips') return
         if (e.dataTransfer && e.dataTransfer.files.length) {
           uploadFiles(e.dataTransfer.files)
+        }
+      })
+
+      window.addEventListener('paste', function (e) {
+        if (currentView !== 'clips') return
+        if (document.getElementById('authGate').classList.contains('show')) return
+        var el = document.activeElement
+        if (el && (el.classList.contains('clip-text') || el.classList.contains('clip-label'))) {
+          return
+        }
+        var text = e.clipboardData ? e.clipboardData.getData('text/plain') : ''
+        if (text) {
+          e.preventDefault()
+          ingestClipText(text)
         }
       })
 
       async function bootApp() {
         await loadInfo()
         await load()
+        await loadClips()
+        startClipSse()
       }
 
       var sp = new URLSearchParams(location.search)

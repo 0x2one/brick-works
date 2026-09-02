@@ -7,3 +7,20 @@ interface LanStatus {
   token: string | null
   ips: string[]
 }
+
+interface LanClipSlot {
+  id: string
+  label: string
+  text: string
+  updatedAt: number
+}
+
+interface LanClipsState {
+  revision: number
+  slots: LanClipSlot[]
+}
+
+interface LanClipImagePayload {
+  mime: string
+  dataBase64: string
+}

@@ -65,7 +65,9 @@ const api = {
   },
   clipboard: {
     readText: () => ipcRenderer.invoke('clipboard:readText'),
-    writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text)
+    writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
+    readImage: () => ipcRenderer.invoke('clipboard:readImage'),
+    writeImage: (dataBase64: string) => ipcRenderer.invoke('clipboard:writeImage', dataBase64)
   },
   lan: {
     getStatus: () => ipcRenderer.invoke('lan:status'),
@@ -82,6 +84,21 @@ const api = {
       ipcRenderer.on('lan:status-change', handler)
       return () => {
         ipcRenderer.removeListener('lan:status-change', handler)
+      }
+    },
+    listClips: () => ipcRenderer.invoke('lan:clips:list'),
+    createClip: () => ipcRenderer.invoke('lan:clips:create'),
+    updateClip: (id: string, patch: { label?: string; text?: string }) =>
+      ipcRenderer.invoke('lan:clips:update', id, patch),
+    deleteClip: (id: string) => ipcRenderer.invoke('lan:clips:delete', id),
+    clipFromSystem: (slotId?: string) => ipcRenderer.invoke('lan:clips:fromSystem', slotId),
+    clipToSystem: (id: string) => ipcRenderer.invoke('lan:clips:toSystem', id),
+    onClipsChange: (callback: (state: LanClipsState) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, state: LanClipsState): void =>
+        callback(state)
+      ipcRenderer.on('lan:clips-change', handler)
+      return () => {
+        ipcRenderer.removeListener('lan:clips-change', handler)
       }
     }
   },

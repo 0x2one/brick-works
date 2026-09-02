@@ -26,6 +26,13 @@ interface LanApi {
   setLang: (lang: string) => Promise<void>
   setIp: (ip: string | null) => Promise<LanStatus>
   onStatusChange: (callback: (status: LanStatus) => void) => () => void
+  listClips: () => Promise<LanClipsState>
+  createClip: () => Promise<LanClipSlot>
+  updateClip: (id: string, patch: { label?: string; text?: string }) => Promise<LanClipSlot>
+  deleteClip: (id: string) => Promise<boolean>
+  clipFromSystem: (slotId?: string) => Promise<LanClipSlot>
+  clipToSystem: (id: string) => Promise<{ ok: boolean }>
+  onClipsChange: (callback: (state: LanClipsState) => void) => () => void
 }
 
 interface SshApi {
@@ -86,7 +93,11 @@ interface SshApi {
   killProcess: (nodeId: string, pid: number, signal?: string) => Promise<{ ok: boolean }>
   listServices: (nodeId: string) => Promise<SshServiceInfo[]>
   listPorts: (nodeId: string) => Promise<SshPortInfo[]>
-  serviceAction: (nodeId: string, unit: string, action: SshServiceAction) => Promise<{ ok: boolean; output: string }>
+  serviceAction: (
+    nodeId: string,
+    unit: string,
+    action: SshServiceAction
+  ) => Promise<{ ok: boolean; output: string }>
   startLogTail: (nodeId: string, path: string) => Promise<{ sessionId: string }>
   stopLogTail: (sessionId: string) => Promise<boolean>
   onLogData: (callback: (payload: SshExecData) => void) => () => void
@@ -175,6 +186,8 @@ interface UpdaterApi {
 interface ClipboardApi {
   readText: () => Promise<string>
   writeText: (text: string) => Promise<void>
+  readImage: () => Promise<LanClipImagePayload | null>
+  writeImage: (dataBase64: string) => Promise<boolean>
 }
 
 interface ShortcutsApi {

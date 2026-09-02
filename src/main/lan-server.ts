@@ -6,6 +6,13 @@ import { createReadStream, createWriteStream, promises as fsp } from 'fs'
 import { Transform } from 'stream'
 import { pipeline } from 'stream/promises'
 import lanWebHtml from './lan-web/index.html?raw'
+import {
+  CLIP_ID_RE,
+  LanClipError,
+  MAX_CLIP_TEXT_BYTES,
+  type LanClipboardStore,
+  type LanClipsState
+} from './lan-clipboard-store'
 
 const TMP_DIR = '.brickworks-tmp'
 const MAX_UPLOAD_BYTES = 512 * 1024 * 1024
@@ -74,9 +81,11 @@ const ERR_MSGS: Record<string, { zh: string; en: string }> = {
   INVALID_NAME: { zh: '文件名无效', en: 'Invalid file name' },
   INVALID_SESSION: { zh: '上传会话无效', en: 'Invalid upload session' },
   AUTH_REQUIRED: { zh: '需要访问口令', en: 'Access token required' },
-  TOO_LARGE: { zh: '文件过大', en: 'File too large' },
+  TOO_LARGE: { zh: '内容过大', en: 'Content too large' },
   NOT_FOUND: { zh: '接口不存在', en: 'Endpoint not found' },
   NOT_FILE: { zh: '不是文件', en: 'Not a file' },
+  CLIP_LIMIT: { zh: '粘贴板数量已达上限', en: 'Clipboard slot limit reached' },
+  CLIP_UNAVAILABLE: { zh: '快粘不可用', en: 'Quick paste is unavailable' },
   INTERNAL: { zh: '服务器内部错误', en: 'Internal server error' }
 }
 
@@ -104,7 +113,44 @@ function extractToken(req: IncomingMessage): string {
   const header = req.headers['x-lan-token']
   if (typeof header === 'string' && header.trim()) return header.trim()
   if (Array.isArray(header) && header[0]?.trim()) return header[0].trim()
+  const url = req.url ?? ''
+  const query = new URLSearchParams(url.includes('?') ? url.slice(url.indexOf('?') + 1) : '')
+  const q = query.get('token')
+  if (q?.trim()) return q.trim()
   return ''
+}
+
+function readBody(req: IncomingMessage, maxBytes: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    const onData = (chunk: Buffer): void => {
+      size += chunk.length
+      if (size > maxBytes) {
+        req.off('data', onData)
+        req.destroy()
+        reject(new HttpError('TOO_LARGE', 413))
+        return
+      }
+      chunks.push(chunk)
+    }
+    req.on('data', onData)
+    req.on('end', () => resolve(Buffer.concat(chunks)))
+    req.on('error', reject)
+  })
+}
+
+function wrapClip<T>(fn: () => T): T {
+  try {
+    return fn()
+  } catch (err) {
+    if (err instanceof LanClipError) throw new HttpError(err.code, err.status)
+    throw err
+  }
+}
+
+function sendSse(res: ServerResponse, state: LanClipsState): void {
+  res.write(`data: ${JSON.stringify(state)}\n\n`)
 }
 
 function isInsideRoot(rootDir: string, target: string): boolean {
@@ -120,13 +166,35 @@ export interface LanServer {
   setIp: (ip: string | null) => void
 }
 
-export function createLanServer(rootDir: string, initialLang = 'zh', token: string): LanServer {
+export function createLanServer(
+  rootDir: string,
+  initialLang = 'zh',
+  token: string,
+  clipStore?: LanClipboardStore
+): LanServer {
   let server: Server | null = null
   let port = 0
   let lang: string = initialLang === 'en' ? 'en' : 'zh'
   let selectedIp: string | null = null
   const tmpRoot = join(rootDir, TMP_DIR)
   const uploadSessions = new Map<string, UploadSession>()
+  const sseClients = new Set<ServerResponse>()
+  let unsubClips: (() => void) | null = null
+
+  function assertClipStore(): LanClipboardStore {
+    if (!clipStore) throw new HttpError('CLIP_UNAVAILABLE', 503)
+    return clipStore
+  }
+
+  function broadcastClips(state: LanClipsState): void {
+    for (const client of sseClients) {
+      try {
+        sendSse(client, state)
+      } catch {
+        sseClients.delete(client)
+      }
+    }
+  }
 
   async function assertPathInRoot(target: string): Promise<void> {
     if (!isInsideRoot(rootDir, target)) throw new HttpError('OUT_OF_RANGE')
@@ -347,6 +415,83 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
         return
       }
 
+      if (pathname === '/api/clips') {
+        const store = assertClipStore()
+        if (req.method === 'GET') {
+          sendJson(res, 200, store.list())
+          return
+        }
+        if (req.method === 'POST') {
+          sendJson(
+            res,
+            200,
+            wrapClip(() => store.create())
+          )
+          return
+        }
+        throw new HttpError('NOT_FOUND', 404)
+      }
+
+      if (pathname === '/api/clips/events') {
+        if (req.method && req.method !== 'GET') throw new HttpError('NOT_FOUND', 404)
+        const store = assertClipStore()
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive'
+        })
+        res.write(':\n\n')
+        sendSse(res, store.list())
+        sseClients.add(res)
+        req.socket.setTimeout(0)
+        const ping = setInterval(() => {
+          try {
+            res.write(':\n\n')
+          } catch {
+            clearInterval(ping)
+            sseClients.delete(res)
+          }
+        }, 15000)
+        const cleanup = (): void => {
+          clearInterval(ping)
+          sseClients.delete(res)
+        }
+        req.on('close', cleanup)
+        res.on('close', cleanup)
+        return
+      }
+
+      const clipMatch = pathname.match(/^\/api\/clips\/([a-f0-9]{16})$/)
+      if (clipMatch) {
+        const store = assertClipStore()
+        const clipId = clipMatch[1]
+        if (!CLIP_ID_RE.test(clipId)) throw new HttpError('NOT_FOUND', 404)
+
+        if (req.method === 'PUT') {
+          const raw = await readBody(req, MAX_CLIP_TEXT_BYTES + 4096)
+          let body: { label?: string; text?: string } = {}
+          try {
+            body = JSON.parse(raw.toString('utf8')) as { label?: string; text?: string }
+          } catch {
+            throw new HttpError('INVALID_NAME')
+          }
+          sendJson(
+            res,
+            200,
+            wrapClip(() => store.update(clipId, body))
+          )
+          return
+        }
+
+        if (req.method === 'DELETE') {
+          wrapClip(() => store.delete(clipId))
+          sendJson(res, 200, { ok: true })
+          return
+        }
+
+        throw new HttpError('NOT_FOUND', 404)
+      }
+
       throw new HttpError('NOT_FOUND', 404)
     } catch (err) {
       if (res.headersSent) {
@@ -369,6 +514,9 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
       await fsp.mkdir(rootDir, { recursive: true })
       await fsp.rm(tmpRoot, { recursive: true, force: true })
       uploadSessions.clear()
+      sseClients.clear()
+      unsubClips?.()
+      unsubClips = clipStore ? clipStore.onChange(broadcastClips) : null
       await new Promise<void>((resolveStart, rejectStart) => {
         const srv = createServer((req, res) => {
           handle(req, res).catch(() => {
@@ -392,6 +540,16 @@ export function createLanServer(rootDir: string, initialLang = 'zh', token: stri
       return getInfo()
     },
     async stop(): Promise<void> {
+      unsubClips?.()
+      unsubClips = null
+      for (const client of sseClients) {
+        try {
+          client.end()
+        } catch {
+          // already closed
+        }
+      }
+      sseClients.clear()
       const srv = server
       server = null
       if (srv) {

@@ -14,6 +14,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react'
 import { Btn } from '../components/ui'
 import { LABEL_CLS, CARD_CLS } from '../components/ui'
+import LanClips from './LanClips'
 
 function LanTransfer(): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -236,6 +237,8 @@ function LanTransfer(): React.JSX.Element {
             </div>
           </section>
         )}
+
+        <LanClips />
       </div>
 
       {/* QR code modal */}

@@ -18,6 +18,7 @@ import { isIP } from 'net'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import iconPng from '../../resources/icon.png?asset'
 import { createLanServer, generateLanToken, type LanStatus } from './lan-server'
+import { createLanClipboardStore, LanClipError, type LanClipsState } from './lan-clipboard-store'
 import { createSshStore, type SshNodeInput, validateJumpHostId } from './ssh-store'
 import {
   createSshManager,
@@ -530,6 +531,20 @@ ipcMain.handle('clipboard:writeText', (_event, text: string) => {
   clipboard.writeText(typeof text === 'string' ? text : '')
 })
 
+ipcMain.handle('clipboard:readImage', () => {
+  const img = clipboard.readImage()
+  if (img.isEmpty()) return null
+  return { mime: 'image/png', dataBase64: img.toPNG().toString('base64') }
+})
+
+ipcMain.handle('clipboard:writeImage', (_event, dataBase64: string) => {
+  if (typeof dataBase64 !== 'string' || !dataBase64) return false
+  const img = nativeImage.createFromBuffer(Buffer.from(dataBase64, 'base64'))
+  if (img.isEmpty()) return false
+  clipboard.writeImage(img)
+  return true
+})
+
 ipcMain.handle('app:info', () => ({
   version: app.getVersion(),
   electron: process.versions.electron,
@@ -571,6 +586,16 @@ ipcMain.handle('updater:getStatus', (): UpdaterStatus => updater.getStatus())
 let lanDir: string | null = null
 let lanLang: string = 'zh'
 let lanServer: ReturnType<typeof createLanServer> | null = null
+const lanClipStore = createLanClipboardStore()
+
+function clipIpc<T>(fn: () => T): T {
+  try {
+    return fn()
+  } catch (err) {
+    if (err instanceof LanClipError) throw new Error(err.code)
+    throw err
+  }
+}
 
 function lanStatus(): LanStatus {
   if (!lanServer || !lanServer.isRunning()) {
@@ -599,7 +624,7 @@ ipcMain.handle('lan:start', async (_event, _dir?: string, lang?: string) => {
   if (lang === 'en' || lang === 'zh') lanLang = lang
   if (!lanDir) lanDir = app.getPath('downloads')
   if (lanServer?.isRunning()) return lanStatus()
-  lanServer = createLanServer(lanDir, lanLang, generateLanToken())
+  lanServer = createLanServer(lanDir, lanLang, generateLanToken(), lanClipStore)
   try {
     await lanServer.start()
     broadcastLanStatus()
@@ -652,6 +677,47 @@ ipcMain.handle('lan:setIp', (_event, ip?: string) => {
   lanServer?.setIp(ip && typeof ip === 'string' ? ip : null)
   broadcastLanStatus()
   return lanStatus()
+})
+
+ipcMain.handle('lan:clips:list', (): LanClipsState => lanClipStore.list())
+
+ipcMain.handle('lan:clips:create', () => clipIpc(() => lanClipStore.create()))
+
+ipcMain.handle('lan:clips:update', (_event, id: string, patch: { label?: string; text?: string }) =>
+  clipIpc(() => lanClipStore.update(typeof id === 'string' ? id : '', patch ?? {}))
+)
+
+ipcMain.handle('lan:clips:delete', (_event, id: string) =>
+  clipIpc(() => lanClipStore.delete(typeof id === 'string' ? id : ''))
+)
+
+ipcMain.handle('lan:clips:fromSystem', async (_event, slotId?: string) => {
+  try {
+    const text = clipboard.readText()
+    if (!text) throw new LanClipError('EMPTY_CLIPBOARD')
+    const targetId = typeof slotId === 'string' && slotId ? slotId : lanClipStore.create().id
+    return lanClipStore.update(targetId, { text })
+  } catch (err) {
+    if (err instanceof LanClipError) throw new Error(err.code)
+    throw err
+  }
+})
+
+ipcMain.handle('lan:clips:toSystem', async (_event, id: string) => {
+  try {
+    const state = lanClipStore.list()
+    const slot = state.slots.find((s) => s.id === id)
+    if (!slot) throw new LanClipError('NOT_FOUND', 404)
+    clipboard.writeText(slot.text ?? '')
+    return { ok: true }
+  } catch (err) {
+    if (err instanceof LanClipError) throw new Error(err.code)
+    throw err
+  }
+})
+
+lanClipStore.onChange((state) => {
+  sendToRenderer('lan:clips-change', state)
 })
 
 /* ── Path allowlist (dialog-selected + already-persisted paths) ── */
@@ -778,7 +844,8 @@ function parseSshConfig(content: string): SshConfigCandidate[] {
     const port = parseInt(cfg.port || '22', 10)
     if (!Number.isInteger(port) || port < 1 || port > 65535) return
     const identityRaw = cfg.identityFile || ''
-    const identity = identityRaw && !identityRaw.includes('%') ? expandHomePath(identityRaw) : undefined
+    const identity =
+      identityRaw && !identityRaw.includes('%') ? expandHomePath(identityRaw) : undefined
     candidates.push({
       name: pattern,
       host,
@@ -793,7 +860,8 @@ function parseSshConfig(content: string): SshConfigCandidate[] {
     const line = raw.trim()
     if (!line || line.startsWith('#')) continue
     const eq = line.indexOf('=')
-    const parts = eq >= 0 ? [line.slice(0, eq).trim(), line.slice(eq + 1).trim()] : line.split(/\s+/, 2)
+    const parts =
+      eq >= 0 ? [line.slice(0, eq).trim(), line.slice(eq + 1).trim()] : line.split(/\s+/, 2)
     const key = (parts[0] ?? '').toLowerCase()
     const value = parts[1] ?? ''
     if (key === 'host') {
@@ -1150,7 +1218,9 @@ ipcMain.handle(
       throw new Error('INVALID')
     }
     const res = await sshClientManager.sftpUploadFiles(nodeId, remoteDir || '/', localPaths)
-    return res.ok ? { ok: true, count: res.count } : { ok: false, error: res.error, count: res.count }
+    return res.ok
+      ? { ok: true, count: res.count }
+      : { ok: false, error: res.error, count: res.count }
   }
 )
 
@@ -1443,6 +1513,7 @@ if (!gotTheLock) {
       sshStore.init().catch(() => {}),
       k8sStore.init().catch(() => {}),
       stickyStore.init().catch(() => {}),
+      lanClipStore.init().catch(() => {}),
       appSettingsStore.init().catch(() => {})
     ])
     seedAllowedPaths()
