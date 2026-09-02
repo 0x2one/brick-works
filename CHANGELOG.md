@@ -1,5 +1,16 @@
 # Changelog
 
+## BrickWorks v1.0.6
+
+LAN transfer now includes Quick Paste boards, and the access token can be turned off.
+
+### ✨ Features
+- LAN Quick Paste: named cards with a large text editor, synced in real time between the desktop app and the LAN web UI
+- Access token can be disabled on trusted networks; share links and QR codes omit the token when it is off
+- Refined DevTools card hover feedback and brick-grid background
+
+---
+
 ## BrickWorks v1.0.5
 
 ### ✨ Features
