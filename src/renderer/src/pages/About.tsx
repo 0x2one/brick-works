@@ -67,9 +67,11 @@ function About(): React.JSX.Element {
   return (
     <div className="p-6">
       <div className="max-w-4xl mx-auto flex flex-col gap-8">
-        <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] px-8 py-10 flex flex-col items-center text-center">
+        <section className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface)] px-8 py-10 flex flex-col items-center text-center brick-grid--faint">
           <img src={logoUrl} alt="BrickWorks" className="w-20 h-20" />
-          <h2 className="mt-5 text-2xl font-bold text-[var(--text-primary)]">{t('appName')}</h2>
+          <h2 className="mt-5 text-3xl font-bold text-[var(--text-primary)]">
+            {t('appName')}
+          </h2>
           <p className="mt-2 text-sm text-[var(--text-secondary)]">{t('aboutTagline')}</p>
           {info && (
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-xs">

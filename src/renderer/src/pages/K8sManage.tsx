@@ -70,8 +70,8 @@ function readCssVar(name: string, fallback: string): string {
 
 function applyTermTheme(term: Terminal): void {
   term.options.theme = {
-    background: readCssVar('--bg-warm', '#f3f0eb'),
-    foreground: readCssVar('--text-primary', '#2a2520')
+    background: readCssVar('--bg-warm', '#f1efe9'),
+    foreground: readCssVar('--text-primary', '#26211d')
   }
 }
 

@@ -230,7 +230,7 @@ function AppLayout(): React.JSX.Element {
             </div>
           }
         >
-          <div className="sidebar-header">
+          <div className="sidebar-header brick-grid">
             <BuildOutlined className="text-xl" style={{ color: 'var(--accent)' }} />
             {!collapsed && <span className="sidebar-title">{t('appName')}</span>}
           </div>

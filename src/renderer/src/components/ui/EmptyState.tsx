@@ -13,6 +13,7 @@ export function EmptyState({ icon, title, hint, className }: EmptyStateProps): R
       className={[
         'border-2 border-dashed border-[var(--border-subtle)] rounded-lg py-10 text-center',
         'flex flex-col items-center justify-center gap-2',
+        'brick-grid--faint',
         className ?? ''
       ].join(' ')}
     >

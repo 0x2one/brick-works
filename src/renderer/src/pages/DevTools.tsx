@@ -207,7 +207,7 @@ function DevTools(): React.JSX.Element {
                     ))}
                   </div>
 
-                  <div className="mt-auto pt-3 border-t border-[var(--border-subtle)] flex gap-3 text-xs text-[var(--text-secondary)]">
+                  <div className="mt-auto pt-3 border-t border-[var(--border-subtle)] flex gap-3 text-xs text-[var(--text-secondary)] pr-4">
                     {s?.lastUsedAt && (
                       <span>
                         {t('lastUsed')}: {new Date(s.lastUsedAt).toLocaleDateString()}
