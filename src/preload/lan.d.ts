@@ -5,6 +5,7 @@ interface LanStatus {
   url: string | null
   dir: string | null
   token: string | null
+  requireToken: boolean
   ips: string[]
 }
 

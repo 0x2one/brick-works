@@ -13,7 +13,7 @@ import {
 } from 'electron'
 import { promises as dns } from 'dns'
 import { join, basename } from 'path'
-import { promises as fsp } from 'fs'
+import { mkdirSync, promises as fsp, writeFileSync } from 'fs'
 import { isIP } from 'net'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import iconPng from '../../resources/icon.png?asset'
@@ -585,8 +585,36 @@ ipcMain.handle('updater:getStatus', (): UpdaterStatus => updater.getStatus())
 
 let lanDir: string | null = null
 let lanLang: string = 'zh'
+let lanRequireToken = true
 let lanServer: ReturnType<typeof createLanServer> | null = null
 const lanClipStore = createLanClipboardStore()
+
+function lanSettingsPath(): string {
+  return join(app.getPath('userData'), 'lan-settings.json')
+}
+
+async function loadLanSettings(): Promise<void> {
+  try {
+    const raw = await fsp.readFile(lanSettingsPath(), 'utf-8')
+    const data = JSON.parse(raw) as { requireToken?: unknown }
+    if (typeof data.requireToken === 'boolean') lanRequireToken = data.requireToken
+  } catch {
+    // defaults
+  }
+}
+
+function persistLanSettings(): void {
+  try {
+    mkdirSync(app.getPath('userData'), { recursive: true })
+    writeFileSync(
+      lanSettingsPath(),
+      JSON.stringify({ version: 1, requireToken: lanRequireToken }, null, 2),
+      'utf-8'
+    )
+  } catch {
+    // best-effort
+  }
+}
 
 function clipIpc<T>(fn: () => T): T {
   try {
@@ -599,7 +627,16 @@ function clipIpc<T>(fn: () => T): T {
 
 function lanStatus(): LanStatus {
   if (!lanServer || !lanServer.isRunning()) {
-    return { running: false, ip: null, port: null, url: null, dir: lanDir, token: null, ips: [] }
+    return {
+      running: false,
+      ip: null,
+      port: null,
+      url: null,
+      dir: lanDir,
+      token: null,
+      requireToken: lanRequireToken,
+      ips: []
+    }
   }
   const info = lanServer.getInfo()
   return {
@@ -609,6 +646,7 @@ function lanStatus(): LanStatus {
     url: info.url,
     dir: lanDir,
     token: info.token,
+    requireToken: lanRequireToken,
     ips: info.ips
   }
 }
@@ -624,7 +662,12 @@ ipcMain.handle('lan:start', async (_event, _dir?: string, lang?: string) => {
   if (lang === 'en' || lang === 'zh') lanLang = lang
   if (!lanDir) lanDir = app.getPath('downloads')
   if (lanServer?.isRunning()) return lanStatus()
-  lanServer = createLanServer(lanDir, lanLang, generateLanToken(), lanClipStore)
+  lanServer = createLanServer(
+    lanDir,
+    lanLang,
+    lanRequireToken ? generateLanToken() : null,
+    lanClipStore
+  )
   try {
     await lanServer.start()
     broadcastLanStatus()
@@ -675,6 +718,16 @@ ipcMain.handle('lan:setLang', (_event, lang?: string) => {
 
 ipcMain.handle('lan:setIp', (_event, ip?: string) => {
   lanServer?.setIp(ip && typeof ip === 'string' ? ip : null)
+  broadcastLanStatus()
+  return lanStatus()
+})
+
+ipcMain.handle('lan:setRequireToken', (_event, enabled?: boolean) => {
+  lanRequireToken = Boolean(enabled)
+  persistLanSettings()
+  if (lanServer?.isRunning()) {
+    lanServer.setToken(lanRequireToken ? generateLanToken() : null)
+  }
   broadcastLanStatus()
   return lanStatus()
 })
@@ -1514,7 +1567,8 @@ if (!gotTheLock) {
       k8sStore.init().catch(() => {}),
       stickyStore.init().catch(() => {}),
       lanClipStore.init().catch(() => {}),
-      appSettingsStore.init().catch(() => {})
+      appSettingsStore.init().catch(() => {}),
+      loadLanSettings().catch(() => {})
     ])
     seedAllowedPaths()
     broadcastSshStatus()

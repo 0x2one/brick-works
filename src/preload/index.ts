@@ -78,6 +78,7 @@ const api = {
     openDir: () => ipcRenderer.invoke('lan:openDir'),
     setLang: (lang: string) => ipcRenderer.invoke('lan:setLang', lang),
     setIp: (ip: string | null) => ipcRenderer.invoke('lan:setIp', ip),
+    setRequireToken: (enabled: boolean) => ipcRenderer.invoke('lan:setRequireToken', enabled),
     onStatusChange: (callback: (status: LanStatus) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, status: LanStatus): void =>
         callback(status)

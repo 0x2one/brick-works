@@ -836,9 +836,10 @@
       }
 
       function entryLink(path) {
-        var q = 'token=' + encodeURIComponent(accessToken)
-        if (path) q += '&path=' + encodeURIComponent(path)
-        return location.origin + '/?' + q
+        var q = []
+        if (accessToken) q.push('token=' + encodeURIComponent(accessToken))
+        if (path) q.push('path=' + encodeURIComponent(path))
+        return location.origin + '/' + (q.length ? '?' + q.join('&') : '')
       }
 
       function stripTokenFromUrl() {
@@ -1061,7 +1062,7 @@
         try {
           var resp = await fetch(
             withLang('/api/download?path=' + encodeURIComponent(joinPath(currentPath, it.name))),
-            { headers: { 'X-Lan-Token': accessToken } }
+            accessToken ? { headers: { 'X-Lan-Token': accessToken } } : {}
           )
           if (resp.status === 401) {
             showAuthGate(true)
@@ -1527,12 +1528,9 @@
 
       function startClipSse() {
         stopClipSse()
-        if (!accessToken) return
-        var url =
-          '/api/clips/events?token=' +
-          encodeURIComponent(accessToken) +
-          '&lang=' +
-          encodeURIComponent(lang)
+        if (document.getElementById('authGate').classList.contains('show')) return
+        var url = '/api/clips/events?lang=' + encodeURIComponent(lang)
+        if (accessToken) url += '&token=' + encodeURIComponent(accessToken)
         clipEs = new EventSource(url)
         clipEs.onmessage = function (ev) {
           clipRetryMs = 1000
@@ -1543,7 +1541,7 @@
         clipEs.onerror = function () {
           stopClipSse()
           setTimeout(function () {
-            if (accessToken && !document.getElementById('authGate').classList.contains('show')) {
+            if (!document.getElementById('authGate').classList.contains('show')) {
               startClipSse()
             }
           }, clipRetryMs)
@@ -1607,17 +1605,22 @@
       var urlToken = sp.get('token')
       if (urlToken) setAccessToken(urlToken)
       if (urlToken) stripTokenFromUrl()
-      if (!accessToken) {
-        showAuthGate(true)
-        renderStatic()
-      } else {
-        showAuthGate(false)
-        bootApp().catch(function () {
+
+      async function tryEnter() {
+        try {
+          await apiJson('/api/info')
+          showAuthGate(false)
+          await bootApp()
+        } catch (e) {
           showAuthGate(true)
-        })
+          renderStatic()
+        }
       }
+
+      renderStatic()
+      tryEnter()
       setInterval(function () {
-        if (accessToken && !document.getElementById('authGate').classList.contains('show')) {
+        if (!document.getElementById('authGate').classList.contains('show')) {
           pollFollow()
         }
       }, 3000)

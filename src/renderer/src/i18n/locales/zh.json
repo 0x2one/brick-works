@@ -614,6 +614,8 @@
   "lanToken": "访问口令",
   "lanCopyToken": "复制口令",
   "lanTokenHint": "一次性口令，已嵌入上方链接与二维码；对端也可手动输入。",
+  "lanRequireToken": "需要访问口令",
+  "lanRequireTokenHint": "关闭后同一局域网内无需口令即可访问，请仅在可信网络使用。",
   "lanClips": "快粘",
   "lanClipsHint": "每个粘贴板是一张独立卡片，像在线文档一样编辑文本；服务开启后局域网设备实时同步。",
   "lanClipsNew": "新建粘贴板",

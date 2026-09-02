@@ -22,7 +22,7 @@ export interface LanServerInfo {
   ip: string
   port: number
   url: string
-  token: string
+  token: string | null
   ips: string[]
 }
 
@@ -33,6 +33,7 @@ export interface LanStatus {
   url: string | null
   dir: string | null
   token: string | null
+  requireToken: boolean
   ips: string[]
 }
 
@@ -164,18 +165,20 @@ export interface LanServer {
   stop: () => Promise<void>
   setLang: (lang: string) => void
   setIp: (ip: string | null) => void
+  setToken: (next: string | null) => void
 }
 
 export function createLanServer(
   rootDir: string,
   initialLang = 'zh',
-  token: string,
+  initialToken: string | null,
   clipStore?: LanClipboardStore
 ): LanServer {
   let server: Server | null = null
   let port = 0
   let lang: string = initialLang === 'en' ? 'en' : 'zh'
   let selectedIp: string | null = null
+  let token: string | null = initialToken && initialToken.trim() ? initialToken.trim() : null
   const tmpRoot = join(rootDir, TMP_DIR)
   const uploadSessions = new Map<string, UploadSession>()
   const sseClients = new Set<ServerResponse>()
@@ -250,10 +253,14 @@ export function createLanServer(
   function getInfo(): LanServerInfo {
     const ips = getLanIps()
     const ip = selectedIp && ips.includes(selectedIp) ? selectedIp : (ips[0] ?? '127.0.0.1')
-    return { ip, port, url: `http://${ip}:${port}/?token=${encodeURIComponent(token)}`, token, ips }
+    const url = token
+      ? `http://${ip}:${port}/?token=${encodeURIComponent(token)}`
+      : `http://${ip}:${port}/`
+    return { ip, port, url, token, ips }
   }
 
   function assertAuth(req: IncomingMessage): void {
+    if (!token) return
     if (extractToken(req) !== token) {
       throw new HttpError('AUTH_REQUIRED', 401)
     }
@@ -567,6 +574,17 @@ export function createLanServer(
     },
     setIp(next: string | null): void {
       selectedIp = next && getLanIps().includes(next) ? next : null
+    },
+    setToken(next: string | null): void {
+      token = next && next.trim() ? next.trim() : null
+      for (const client of sseClients) {
+        try {
+          client.end()
+        } catch {
+          // already closed
+        }
+      }
+      sseClients.clear()
     }
   }
 }

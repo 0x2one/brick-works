@@ -614,6 +614,8 @@
   "lanToken": "Access Token",
   "lanCopyToken": "Copy Token",
   "lanTokenHint": "One-time token, already embedded in the link and QR code above. Peers can also enter it manually.",
+  "lanRequireToken": "Require access token",
+  "lanRequireTokenHint": "When off, anyone on the same LAN can open the link. Use only on trusted networks.",
   "lanClips": "Quick Paste",
   "lanClipsHint": "Each pasteboard is a named card with a large text editor. After the service starts, LAN devices sync in real time.",
   "lanClipsNew": "New Slot",

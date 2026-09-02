@@ -25,6 +25,7 @@ interface LanApi {
   openDir: () => Promise<void>
   setLang: (lang: string) => Promise<void>
   setIp: (ip: string | null) => Promise<LanStatus>
+  setRequireToken: (enabled: boolean) => Promise<LanStatus>
   onStatusChange: (callback: (status: LanStatus) => void) => () => void
   listClips: () => Promise<LanClipsState>
   createClip: () => Promise<LanClipSlot>

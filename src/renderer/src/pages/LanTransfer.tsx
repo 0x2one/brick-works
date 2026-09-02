@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { App, Modal, Select } from 'antd'
+import { App, Modal, Select, Switch } from 'antd'
 import {
   PlayCircleOutlined,
   StopOutlined,
@@ -78,6 +78,17 @@ function LanTransfer(): React.JSX.Element {
     [t, message]
   )
 
+  const handleRequireToken = useCallback(
+    async (enabled: boolean) => {
+      try {
+        setStatus(await window.api.lan.setRequireToken(enabled))
+      } catch {
+        message.error(t('lanStartFail'))
+      }
+    },
+    [t, message]
+  )
+
   const running = !!status?.running
   const baseUrl = status?.url ?? ''
   const token = status?.token ?? ''
@@ -113,20 +124,37 @@ function LanTransfer(): React.JSX.Element {
               {running ? t('lanRunning') : t('lanStopped')}
             </span>
           </div>
-          <div className="px-5 py-4 flex items-center gap-3">
-            <Btn
-              variant={running ? 'default' : 'primary'}
-              icon={running ? <StopOutlined /> : <PlayCircleOutlined />}
-              onClick={handleToggle}
-              disabled={starting}
-            >
-              {running ? t('lanStop') : t('lanStart')}
-            </Btn>
-            {running && status?.port != null && (
-              <span className="text-xs text-[var(--text-secondary)]">
-                {t('lanPort')}: <span className="font-mono">{status.port}</span>
-              </span>
-            )}
+          <div className="px-5 py-4 flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <Btn
+                variant={running ? 'default' : 'primary'}
+                icon={running ? <StopOutlined /> : <PlayCircleOutlined />}
+                onClick={handleToggle}
+                disabled={starting}
+              >
+                {running ? t('lanStop') : t('lanStart')}
+              </Btn>
+              {running && status?.port != null && (
+                <span className="text-xs text-[var(--text-secondary)]">
+                  {t('lanPort')}: <span className="font-mono">{status.port}</span>
+                </span>
+              )}
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <span className={LABEL_CLS}>{t('lanRequireToken')}</span>
+                <p className="text-[11px] text-[var(--text-secondary)]">
+                  {t('lanRequireTokenHint')}
+                </p>
+              </div>
+              <Switch
+                className="shrink-0 mt-0.5"
+                checked={status?.requireToken !== false}
+                onChange={(checked) => {
+                  void handleRequireToken(checked)
+                }}
+              />
+            </div>
           </div>
         </section>
 
@@ -200,7 +228,7 @@ function LanTransfer(): React.JSX.Element {
                 <p className="text-[11px] text-[var(--text-secondary)]">{t('lanNetworkIpHint')}</p>
               )}
 
-              {token && (
+              {running && token && (
                 <div>
                   <label className={LABEL_CLS}>{t('lanToken')}</label>
                   <div className="flex items-center gap-2">
