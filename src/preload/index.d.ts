@@ -29,9 +29,12 @@ interface LanApi {
   onStatusChange: (callback: (status: LanStatus) => void) => () => void
   listClips: () => Promise<LanClipsState>
   createClip: () => Promise<LanClipSlot>
-  updateClip: (id: string, patch: { label?: string; text?: string }) => Promise<LanClipSlot>
+  updateClip: (
+    id: string,
+    patch: { label?: string; text?: string; baseRevision?: number }
+  ) => Promise<LanClipSlot>
   deleteClip: (id: string) => Promise<boolean>
-  clipFromSystem: (slotId?: string) => Promise<LanClipSlot>
+  clipFromSystem: (slotId?: string, baseRevision?: number) => Promise<LanClipSlot>
   clipToSystem: (id: string) => Promise<{ ok: boolean }>
   onClipsChange: (callback: (state: LanClipsState) => void) => () => void
 }

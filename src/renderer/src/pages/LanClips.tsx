@@ -12,6 +12,9 @@ import {
 import { Btn } from '../components/ui'
 import { LABEL_CLS, CARD_CLS } from '../components/ui'
 
+type ClipDraft = { label: string; text: string }
+type ClipPatch = { label?: string; text?: string; baseRevision?: number }
+
 function clipFallbackName(text: string): string {
   const compact = text.replace(/\s+/g, ' ').trim()
   if (!compact) return ''
@@ -23,17 +26,103 @@ function clipErrorKey(err: unknown): string {
   if (msg.includes('CLIP_LIMIT')) return 'lanClipsLimit'
   if (msg.includes('TOO_LARGE')) return 'lanClipsTooLarge'
   if (msg.includes('EMPTY_CLIPBOARD')) return 'lanClipsEmptyClipboard'
+  if (msg.includes('CONFLICT')) return 'lanClipsConflict'
   return 'lanClipsFail'
+}
+
+function isConflict(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return msg.includes('CONFLICT')
 }
 
 function LanClips(): React.JSX.Element {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const [state, setState] = useState<LanClipsState>({ revision: 0, slots: [] })
-  const [focusId, setFocusId] = useState<string | null>(null)
-  const [drafts, setDrafts] = useState<Record<string, { label: string; text: string }>>({})
+  const [drafts, setDrafts] = useState<Record<string, ClipDraft>>({})
+  const [dirty, setDirty] = useState<Record<string, boolean>>({})
+  const [stale, setStale] = useState<Record<string, boolean>>({})
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const dirtyRef = useRef<Record<string, boolean>>({})
+  const staleRef = useRef<Record<string, boolean>>({})
+  const draftsRef = useRef<Record<string, ClipDraft>>({})
+  const baseRevRef = useRef<Record<string, number>>({})
+  const inFlightRef = useRef<Record<string, ClipPatch>>({})
+  const saveSlotRef = useRef<(id: string, patch: ClipPatch) => Promise<void>>(async () => {})
+
+  const syncDrafts = useCallback((next: Record<string, ClipDraft>) => {
+    draftsRef.current = next
+    setDrafts(next)
+  }, [])
+  const syncDirty = useCallback((next: Record<string, boolean>) => {
+    dirtyRef.current = next
+    setDirty(next)
+  }, [])
+  const syncStale = useCallback((next: Record<string, boolean>) => {
+    staleRef.current = next
+    setStale(next)
+  }, [])
+
+  const applyRemote = useCallback(
+    (s: LanClipsState) => {
+      const nextDrafts = { ...draftsRef.current }
+      const nextDirty = { ...dirtyRef.current }
+      const nextStale = { ...staleRef.current }
+      const nextBase = { ...baseRevRef.current }
+      const live = new Set(s.slots.map((slot) => slot.id))
+
+      for (const slot of s.slots) {
+        const draft = nextDrafts[slot.id]
+        const isDirty = !!nextDirty[slot.id]
+        const base = nextBase[slot.id] ?? slot.rev
+        const inflight = inFlightRef.current[slot.id]
+        const matchesDraft = !!draft && draft.label === slot.label && draft.text === slot.text
+        const matchesInflight =
+          !!inflight &&
+          (inflight.text === undefined || inflight.text === slot.text) &&
+          (inflight.label === undefined || inflight.label === slot.label)
+
+        if (isDirty && draft) {
+          if (matchesDraft || matchesInflight) {
+            nextBase[slot.id] = slot.rev
+            if (matchesDraft) {
+              delete nextDirty[slot.id]
+              delete nextDrafts[slot.id]
+            }
+            delete nextStale[slot.id]
+            if (matchesInflight) delete inFlightRef.current[slot.id]
+          } else if (slot.rev !== base) {
+            nextStale[slot.id] = true
+            clearTimeout(saveTimers.current[slot.id])
+          }
+        } else {
+          nextBase[slot.id] = slot.rev
+          delete nextDrafts[slot.id]
+          delete nextDirty[slot.id]
+          delete nextStale[slot.id]
+        }
+      }
+
+      for (const id of Object.keys(nextDrafts)) {
+        if (!live.has(id)) {
+          delete nextDrafts[id]
+          delete nextDirty[id]
+          delete nextStale[id]
+          delete nextBase[id]
+          delete inFlightRef.current[id]
+          clearTimeout(saveTimers.current[id])
+        }
+      }
+
+      baseRevRef.current = nextBase
+      syncDrafts(nextDrafts)
+      syncDirty(nextDirty)
+      syncStale(nextStale)
+      setState(s)
+    },
+    [syncDirty, syncDrafts, syncStale]
+  )
 
   useEffect(() => {
     let mounted = true
@@ -41,32 +130,33 @@ function LanClips(): React.JSX.Element {
     window.api.lan
       .listClips()
       .then((s) => {
-        if (mounted) setState(s)
+        if (!mounted) return
+        applyRemote(s)
       })
       .catch(() => {})
     const off = window.api.lan.onClipsChange((s) => {
-      if (mounted) setState(s)
+      if (mounted) applyRemote(s)
     })
     return () => {
       mounted = false
       off()
       for (const timer of Object.values(timers)) clearTimeout(timer)
     }
-  }, [])
+  }, [applyRemote])
 
   const slots = state.slots
   const shown = useMemo(
     () =>
       slots.map((slot) => {
         const draft = drafts[slot.id]
-        const editing = focusId === slot.id
+        const useDraft = !!dirty[slot.id] && !!draft
         return {
           slot,
-          label: editing && draft ? draft.label : slot.label,
-          text: editing && draft ? draft.text : slot.text
+          label: useDraft ? draft.label : slot.label,
+          text: useDraft ? draft.text : slot.text
         }
       }),
-    [slots, drafts, focusId]
+    [slots, drafts, dirty]
   )
 
   const report = useCallback(
@@ -76,22 +166,71 @@ function LanClips(): React.JSX.Element {
     [message, t]
   )
 
+  const markStale = useCallback(
+    (id: string) => {
+      clearTimeout(saveTimers.current[id])
+      delete inFlightRef.current[id]
+      syncStale({ ...staleRef.current, [id]: true })
+    },
+    [syncStale]
+  )
+
   const saveSlot = useCallback(
-    async (id: string, patch: { label?: string; text?: string }) => {
+    async (id: string, patch: ClipPatch) => {
+      if (staleRef.current[id]) return
+      const baseRevision = patch.baseRevision ?? baseRevRef.current[id]
+      const payload: ClipPatch = { ...patch, baseRevision }
+      inFlightRef.current[id] = payload
       try {
-        await window.api.lan.updateClip(id, patch)
+        const result = await window.api.lan.updateClip(id, payload)
+        baseRevRef.current[id] = result.rev
+        delete inFlightRef.current[id]
+        const draft = draftsRef.current[id]
+        const matchesResult = !!draft && draft.label === result.label && draft.text === result.text
+        const matchesSent =
+          !!draft &&
+          (payload.label === undefined || draft.label === payload.label) &&
+          (payload.text === undefined || draft.text === payload.text)
+        if (matchesResult || matchesSent) {
+          const nextDrafts = { ...draftsRef.current }
+          const nextDirty = { ...dirtyRef.current }
+          const nextStale = { ...staleRef.current }
+          delete nextDrafts[id]
+          delete nextDirty[id]
+          delete nextStale[id]
+          syncDrafts(nextDrafts)
+          syncDirty(nextDirty)
+          syncStale(nextStale)
+        } else if (draft && dirtyRef.current[id] && !staleRef.current[id]) {
+          const follow: ClipPatch = { baseRevision: result.rev }
+          if (draft.label !== result.label) follow.label = draft.label
+          if (draft.text !== result.text) follow.text = draft.text
+          if (follow.label !== undefined || follow.text !== undefined) {
+            void saveSlotRef.current(id, follow)
+          }
+        }
       } catch (err) {
+        delete inFlightRef.current[id]
+        if (isConflict(err)) {
+          markStale(id)
+          return
+        }
         report(err)
       }
     },
-    [report]
+    [markStale, report, syncDirty, syncDrafts, syncStale]
   )
+
+  useEffect(() => {
+    saveSlotRef.current = saveSlot
+  }, [saveSlot])
 
   const scheduleTextSave = useCallback(
     (id: string, text: string) => {
       clearTimeout(saveTimers.current[id])
       saveTimers.current[id] = setTimeout(() => {
-        void saveSlot(id, { text })
+        if (staleRef.current[id]) return
+        void saveSlot(id, { text, baseRevision: baseRevRef.current[id] })
       }, 500)
     },
     [saveSlot]
@@ -116,30 +255,108 @@ function LanClips(): React.JSX.Element {
     }
   }, [message, report, t])
 
+  const handleFromSystem = useCallback(
+    async (slot: LanClipSlot) => {
+      clearTimeout(saveTimers.current[slot.id])
+      try {
+        await window.api.lan.clipFromSystem(slot.id, slot.rev)
+        const nextDrafts = { ...draftsRef.current }
+        const nextDirty = { ...dirtyRef.current }
+        const nextStale = { ...staleRef.current }
+        delete nextDrafts[slot.id]
+        delete nextDirty[slot.id]
+        delete nextStale[slot.id]
+        syncDrafts(nextDrafts)
+        syncDirty(nextDirty)
+        syncStale(nextStale)
+        setExpanded((e) => ({ ...e, [slot.id]: true }))
+        message.success(t('lanClipsFilled'))
+      } catch (err) {
+        if (isConflict(err)) {
+          markStale(slot.id)
+          message.warning(t('lanClipsConflict'))
+          return
+        }
+        report(err)
+      }
+    },
+    [markStale, message, report, syncDirty, syncDrafts, syncStale, t]
+  )
+
   const toggleExpanded = useCallback((id: string) => {
     setExpanded((e) => ({ ...e, [id]: !e[id] }))
   }, [])
 
   const beginEdit = useCallback((slot: LanClipSlot) => {
-    setFocusId(slot.id)
-    setDrafts((d) => ({
-      ...d,
-      [slot.id]: d[slot.id] ?? { label: slot.label, text: slot.text }
-    }))
+    if (baseRevRef.current[slot.id] === undefined) {
+      baseRevRef.current[slot.id] = slot.rev
+    }
   }, [])
 
+  const patchDraft = useCallback(
+    (slot: LanClipSlot, patch: Partial<ClipDraft>) => {
+      const prev = draftsRef.current[slot.id] ?? { label: slot.label, text: slot.text }
+      const next = { ...prev, ...patch }
+      syncDrafts({ ...draftsRef.current, [slot.id]: next })
+      syncDirty({ ...dirtyRef.current, [slot.id]: true })
+    },
+    [syncDirty, syncDrafts]
+  )
+
   const flushBlur = useCallback(
-    (id: string, slot: LanClipSlot) => {
+    (id: string) => {
       clearTimeout(saveTimers.current[id])
-      const draft = drafts[id]
-      setFocusId((cur) => (cur === id ? null : cur))
-      if (!draft) return
-      const patch: { label?: string; text?: string } = {}
+      if (staleRef.current[id]) return
+      const draft = draftsRef.current[id]
+      if (!dirtyRef.current[id] || !draft) return
+      if (inFlightRef.current[id]) return
+      const slot = state.slots.find((s) => s.id === id)
+      if (!slot) return
+      const patch: ClipPatch = { baseRevision: baseRevRef.current[id] }
       if (draft.label !== slot.label) patch.label = draft.label
       if (draft.text !== slot.text) patch.text = draft.text
-      if (Object.keys(patch).length) void saveSlot(id, patch)
+      if (patch.label === undefined && patch.text === undefined) return
+      void saveSlot(id, patch)
     },
-    [drafts, saveSlot]
+    [saveSlot, state.slots]
+  )
+
+  const takeRemote = useCallback(
+    (id: string) => {
+      clearTimeout(saveTimers.current[id])
+      delete inFlightRef.current[id]
+      const slot = state.slots.find((s) => s.id === id)
+      if (slot) baseRevRef.current[id] = slot.rev
+      const nextDrafts = { ...draftsRef.current }
+      const nextDirty = { ...dirtyRef.current }
+      const nextStale = { ...staleRef.current }
+      delete nextDrafts[id]
+      delete nextDirty[id]
+      delete nextStale[id]
+      syncDrafts(nextDrafts)
+      syncDirty(nextDirty)
+      syncStale(nextStale)
+    },
+    [state.slots, syncDirty, syncDrafts, syncStale]
+  )
+
+  const keepLocal = useCallback(
+    (id: string) => {
+      const slot = state.slots.find((s) => s.id === id)
+      if (slot) baseRevRef.current[id] = slot.rev
+      const nextStale = { ...staleRef.current }
+      delete nextStale[id]
+      syncStale(nextStale)
+      const draft = draftsRef.current[id]
+      if (!draft) return
+      const patch: ClipPatch = { baseRevision: baseRevRef.current[id] }
+      if (!slot || draft.label !== slot.label) patch.label = draft.label
+      if (!slot || draft.text !== slot.text) patch.text = draft.text
+      if (patch.label !== undefined || patch.text !== undefined) {
+        void saveSlot(id, patch)
+      }
+    },
+    [saveSlot, state.slots, syncStale]
   )
 
   return (
@@ -176,7 +393,7 @@ function LanClips(): React.JSX.Element {
           return (
             <article key={slot.id} className={CARD_CLS}>
               <div
-                className={`px-4 py-3 flex items-center gap-2 ${open ? 'border-b border-[var(--border-subtle)]' : ''}`}
+                className={`px-4 py-3 flex items-center gap-2 ${open || stale[slot.id] ? 'border-b border-[var(--border-subtle)]' : ''}`}
               >
                 <button
                   type="button"
@@ -200,28 +417,16 @@ function LanClips(): React.JSX.Element {
                   className="flex-1 min-w-0 font-medium"
                   onFocus={() => beginEdit(slot)}
                   onChange={(e) => {
-                    const value = e.target.value
-                    setDrafts((d) => ({
-                      ...d,
-                      [slot.id]: { label: value, text: d[slot.id]?.text ?? slot.text }
-                    }))
+                    patchDraft(slot, { label: e.target.value })
                   }}
-                  onBlur={() => flushBlur(slot.id, slot)}
+                  onBlur={() => flushBlur(slot.id)}
                   onPressEnter={(e) => (e.target as HTMLInputElement).blur()}
                 />
                 <Btn
                   variant="ghost"
                   icon={<ImportOutlined />}
                   title={t('lanClipsFromSystem')}
-                  onClick={() => {
-                    window.api.lan
-                      .clipFromSystem(slot.id)
-                      .then(() => {
-                        setExpanded((e) => ({ ...e, [slot.id]: true }))
-                        message.success(t('lanClipsFilled'))
-                      })
-                      .catch(report)
-                  }}
+                  onClick={() => void handleFromSystem(slot)}
                 />
                 <Btn
                   variant="ghost"
@@ -246,6 +451,17 @@ function LanClips(): React.JSX.Element {
                   </span>
                 </Popconfirm>
               </div>
+              {stale[slot.id] ? (
+                <div className="px-4 py-2 flex items-center gap-2 flex-wrap bg-[var(--bg-warm)]">
+                  <span className="text-[11px] text-[var(--text-secondary)] flex-1 min-w-0">
+                    {t('lanClipsRemoteUpdated')}
+                  </span>
+                  <Btn onClick={() => takeRemote(slot.id)}>{t('lanClipsTakeRemote')}</Btn>
+                  <Btn variant="primary" onClick={() => keepLocal(slot.id)}>
+                    {t('lanClipsKeepLocal')}
+                  </Btn>
+                </div>
+              ) : null}
               {open ? (
                 <div className="px-3 py-3">
                   <Input.TextArea
@@ -264,13 +480,10 @@ function LanClips(): React.JSX.Element {
                     onFocus={() => beginEdit(slot)}
                     onChange={(e) => {
                       const value = e.target.value
-                      setDrafts((d) => ({
-                        ...d,
-                        [slot.id]: { label: d[slot.id]?.label ?? slot.label, text: value }
-                      }))
+                      patchDraft(slot, { text: value })
                       scheduleTextSave(slot.id, value)
                     }}
-                    onBlur={() => flushBlur(slot.id, slot)}
+                    onBlur={() => flushBlur(slot.id)}
                   />
                   <div className="mt-2 text-[11px] text-[var(--text-secondary)] tabular-nums">
                     {t('lanClipsChars', { n: text.length })}

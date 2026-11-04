@@ -14,6 +14,7 @@ interface LanClipSlot {
   label: string
   text: string
   updatedAt: number
+  rev: number
 }
 
 interface LanClipsState {

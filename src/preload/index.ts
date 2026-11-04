@@ -89,10 +89,11 @@ const api = {
     },
     listClips: () => ipcRenderer.invoke('lan:clips:list'),
     createClip: () => ipcRenderer.invoke('lan:clips:create'),
-    updateClip: (id: string, patch: { label?: string; text?: string }) =>
+    updateClip: (id: string, patch: { label?: string; text?: string; baseRevision?: number }) =>
       ipcRenderer.invoke('lan:clips:update', id, patch),
     deleteClip: (id: string) => ipcRenderer.invoke('lan:clips:delete', id),
-    clipFromSystem: (slotId?: string) => ipcRenderer.invoke('lan:clips:fromSystem', slotId),
+    clipFromSystem: (slotId?: string, baseRevision?: number) =>
+      ipcRenderer.invoke('lan:clips:fromSystem', slotId, baseRevision),
     clipToSystem: (id: string) => ipcRenderer.invoke('lan:clips:toSystem', id),
     onClipsChange: (callback: (state: LanClipsState) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, state: LanClipsState): void =>

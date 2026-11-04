@@ -18,7 +18,12 @@ import { isIP } from 'net'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import iconPng from '../../resources/icon.png?asset'
 import { createLanServer, generateLanToken, type LanStatus } from './lan-server'
-import { createLanClipboardStore, LanClipError, type LanClipsState } from './lan-clipboard-store'
+import {
+  createLanClipboardStore,
+  LanClipError,
+  type LanClipPatch,
+  type LanClipsState
+} from './lan-clipboard-store'
 import { createSshStore, type SshNodeInput, validateJumpHostId } from './ssh-store'
 import {
   createSshManager,
@@ -736,7 +741,7 @@ ipcMain.handle('lan:clips:list', (): LanClipsState => lanClipStore.list())
 
 ipcMain.handle('lan:clips:create', () => clipIpc(() => lanClipStore.create()))
 
-ipcMain.handle('lan:clips:update', (_event, id: string, patch: { label?: string; text?: string }) =>
+ipcMain.handle('lan:clips:update', (_event, id: string, patch: LanClipPatch) =>
   clipIpc(() => lanClipStore.update(typeof id === 'string' ? id : '', patch ?? {}))
 )
 
@@ -744,12 +749,19 @@ ipcMain.handle('lan:clips:delete', (_event, id: string) =>
   clipIpc(() => lanClipStore.delete(typeof id === 'string' ? id : ''))
 )
 
-ipcMain.handle('lan:clips:fromSystem', async (_event, slotId?: string) => {
+ipcMain.handle('lan:clips:fromSystem', async (_event, slotId?: string, baseRevision?: number) => {
   try {
     const text = clipboard.readText()
     if (!text) throw new LanClipError('EMPTY_CLIPBOARD')
-    const targetId = typeof slotId === 'string' && slotId ? slotId : lanClipStore.create().id
-    return lanClipStore.update(targetId, { text })
+    if (typeof slotId === 'string' && slotId) {
+      const patch: LanClipPatch = { text }
+      if (typeof baseRevision === 'number' && Number.isFinite(baseRevision)) {
+        patch.baseRevision = baseRevision
+      }
+      return lanClipStore.update(slotId, patch)
+    }
+    const created = lanClipStore.create()
+    return lanClipStore.update(created.id, { text, baseRevision: created.rev })
   } catch (err) {
     if (err instanceof LanClipError) throw new Error(err.code)
     throw err

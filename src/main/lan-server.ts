@@ -11,6 +11,7 @@ import {
   LanClipError,
   MAX_CLIP_TEXT_BYTES,
   type LanClipboardStore,
+  type LanClipPatch,
   type LanClipsState
 } from './lan-clipboard-store'
 
@@ -87,17 +88,20 @@ const ERR_MSGS: Record<string, { zh: string; en: string }> = {
   NOT_FILE: { zh: '不是文件', en: 'Not a file' },
   CLIP_LIMIT: { zh: '粘贴板数量已达上限', en: 'Clipboard slot limit reached' },
   CLIP_UNAVAILABLE: { zh: '快粘不可用', en: 'Quick paste is unavailable' },
+  CONFLICT: { zh: '其他设备已更新此粘贴板', en: 'This paste slot was updated on another device' },
   INTERNAL: { zh: '服务器内部错误', en: 'Internal server error' }
 }
 
 class HttpError extends Error {
   code: string
   status: number
+  extra?: Record<string, unknown>
 
-  constructor(code: string, status = 400) {
+  constructor(code: string, status = 400, extra?: Record<string, unknown>) {
     super(code)
     this.code = code
     this.status = status
+    this.extra = extra
   }
 }
 
@@ -145,7 +149,13 @@ function wrapClip<T>(fn: () => T): T {
   try {
     return fn()
   } catch (err) {
-    if (err instanceof LanClipError) throw new HttpError(err.code, err.status)
+    if (err instanceof LanClipError) {
+      throw new HttpError(
+        err.code,
+        err.status,
+        err.slot ? { slot: err.slot, revision: err.revision } : undefined
+      )
+    }
     throw err
   }
 }
@@ -476,16 +486,22 @@ export function createLanServer(
 
         if (req.method === 'PUT') {
           const raw = await readBody(req, MAX_CLIP_TEXT_BYTES + 4096)
-          let body: { label?: string; text?: string } = {}
+          let body: LanClipPatch = {}
           try {
-            body = JSON.parse(raw.toString('utf8')) as { label?: string; text?: string }
+            body = JSON.parse(raw.toString('utf8')) as LanClipPatch
           } catch {
             throw new HttpError('INVALID_NAME')
+          }
+          const patch: LanClipPatch = {}
+          if (typeof body.label === 'string') patch.label = body.label
+          if (typeof body.text === 'string') patch.text = body.text
+          if (typeof body.baseRevision === 'number' && Number.isFinite(body.baseRevision)) {
+            patch.baseRevision = body.baseRevision
           }
           sendJson(
             res,
             200,
-            wrapClip(() => store.update(clipId, body))
+            wrapClip(() => store.update(clipId, patch))
           )
           return
         }
@@ -506,7 +522,11 @@ export function createLanServer(
         return
       }
       if (err instanceof HttpError) {
-        sendJson(res, err.status, { error: errMessage(err.code, reqLang), code: err.code })
+        sendJson(res, err.status, {
+          error: errMessage(err.code, reqLang),
+          code: err.code,
+          ...(err.extra ?? {})
+        })
         return
       }
       sendJson(res, 500, { error: errMessage('INTERNAL', reqLang), code: 'INTERNAL' })

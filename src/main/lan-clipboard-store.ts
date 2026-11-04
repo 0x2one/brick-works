@@ -14,6 +14,15 @@ export interface LanClipSlot {
   label: string
   text: string
   updatedAt: number
+  /** Increments when this slot's label or text changes. Used for OCC. */
+  rev: number
+}
+
+export interface LanClipPatch {
+  label?: string
+  text?: string
+  /** Per-slot `rev` the client last applied. Mismatch → CONFLICT. */
+  baseRevision?: number
 }
 
 export interface LanClipsState {
@@ -30,11 +39,15 @@ interface StoreFile {
 export class LanClipError extends Error {
   code: string
   status: number
+  slot?: LanClipSlot
+  revision?: number
 
-  constructor(code: string, status = 400) {
+  constructor(code: string, status = 400, extra?: { slot?: LanClipSlot; revision?: number }) {
     super(code)
     this.code = code
     this.status = status
+    this.slot = extra?.slot
+    this.revision = extra?.revision
   }
 }
 
@@ -45,18 +58,19 @@ function coerceSlot(v: unknown): LanClipSlot | null {
   if (typeof s.label !== 'string') return null
   const updatedAt = typeof s.updatedAt === 'number' ? s.updatedAt : Date.now()
   const text = s.kind === 'image' ? '' : typeof s.text === 'string' ? s.text : ''
-  return { id: s.id, label: s.label, text, updatedAt }
+  const rev = typeof s.rev === 'number' && s.rev >= 0 ? s.rev : 0
+  return { id: s.id, label: s.label, text, updatedAt, rev }
 }
 
 function publicSlot(s: LanClipSlot): LanClipSlot {
-  return { id: s.id, label: s.label, text: s.text ?? '', updatedAt: s.updatedAt }
+  return { id: s.id, label: s.label, text: s.text ?? '', updatedAt: s.updatedAt, rev: s.rev }
 }
 
 export interface LanClipboardStore {
   init: () => Promise<void>
   list: () => LanClipsState
   create: (label?: string) => LanClipSlot
-  update: (id: string, patch: { label?: string; text?: string }) => LanClipSlot
+  update: (id: string, patch: LanClipPatch) => LanClipSlot
   delete: (id: string) => boolean
   onChange: (cb: (state: LanClipsState) => void) => () => void
 }
@@ -144,14 +158,15 @@ export function createLanClipboardStore(): LanClipboardStore {
         id: randomBytes(8).toString('hex'),
         label: sanitizeLabel(label),
         text: '',
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        rev: 1
       }
       slots = [...slots, slot]
       bump()
       return publicSlot(slot)
     },
 
-    update(id: string, patch: { label?: string; text?: string }): LanClipSlot {
+    update(id: string, patch: LanClipPatch): LanClipSlot {
       const i = findIndex(id)
       const prev = slots[i]
       const next: LanClipSlot = { ...prev }
@@ -173,7 +188,11 @@ export function createLanClipboardStore(): LanClipboardStore {
         }
       }
       if (!changed) return publicSlot(prev)
+      if (typeof patch.baseRevision === 'number' && patch.baseRevision !== prev.rev) {
+        throw new LanClipError('CONFLICT', 409, { slot: publicSlot(prev), revision })
+      }
       next.updatedAt = Date.now()
+      next.rev = prev.rev + 1
       slots = slots.map((s, idx) => (idx === i ? next : s))
       bump()
       return publicSlot(next)
