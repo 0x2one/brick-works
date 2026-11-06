@@ -34,6 +34,9 @@ import {
 import { createSshClientManager, type SshShellStartOpts } from './ssh-client-manager'
 import { createK8sStore, defaultKubeconfigPath, type K8sClusterInput } from './k8s-store'
 import { createK8sManager } from './k8s-manager'
+import { createDockerStore, type DockerEndpointInput } from './docker/docker-store'
+import { createDockerManager, type DockerContainerAction } from './docker/docker-manager'
+import { listWslDistros } from './docker/docker-cli'
 import { createStickyStore, type StickyData } from './sticky-store'
 import { createAppSettingsStore, DEFAULT_SHOW_SHORTCUT } from './app-settings'
 import { createUpdater, type UpdaterStatus } from './updater'
@@ -791,6 +794,7 @@ function seedAllowedPaths(): void {
   seedAllowedPathsInto([
     ...sshStore.list().map((n) => n.privateKeyPath),
     ...k8sStore.list().map((c) => c.kubeconfigPath),
+    ...dockerStore.list().flatMap((e) => [e.tls?.caPath, e.tls?.certPath, e.tls?.keyPath]),
     defaultKubeconfigPath()
   ])
 }
@@ -1527,6 +1531,146 @@ ipcMain.handle('k8s:deletePortForward', (_event, id: string) => k8sManager.delet
 
 ipcMain.handle('k8s:listPortForwards', () => k8sManager.listPortForwards())
 
+/* ── Docker management ── */
+
+const DOCKER_CONTAINER_ACTIONS: DockerContainerAction[] = [
+  'start',
+  'stop',
+  'restart',
+  'kill',
+  'pause',
+  'unpause'
+]
+
+const dockerStore = createDockerStore()
+const dockerManager = createDockerManager({
+  getSshNode: (id) => sshStore.get(id),
+  verifyHostKey: (host, port, key) => sshStore.verifyHostKey(host, port, key)
+})
+
+function broadcastDockerStatus(): void {
+  sendToRenderer('docker:status-change', dockerManager.getStatus())
+}
+
+dockerManager.onStatusChange(() => broadcastDockerStatus())
+dockerManager.onLogChunk((chunk) => {
+  sendToRenderer('docker:log-chunk', chunk)
+})
+dockerManager.onExecData((data) => {
+  sendToRenderer('docker:exec-data', data)
+})
+dockerManager.onExecExit((data) => {
+  sendToRenderer('docker:exec-exit', data)
+})
+
+ipcMain.handle('docker:listEndpoints', () => dockerStore.list())
+
+ipcMain.handle('docker:saveEndpoint', (_event, input: DockerEndpointInput) => {
+  if (!input?.name?.trim()) throw new Error('NAME_REQUIRED')
+  if (!['pipe', 'tcp', 'wsl', 'ssh'].includes(input.type)) throw new Error('TYPE_INVALID')
+  if (input.type === 'tcp' && !input.host?.trim()) throw new Error('HOST_REQUIRED')
+  if (input.type === 'ssh' && !input.sshNodeId) throw new Error('SSH_NODE_REQUIRED')
+  // TLS material is read from disk — only dialog-selected paths are allowed.
+  for (const path of [input.tls?.caPath, input.tls?.certPath, input.tls?.keyPath]) {
+    if (path?.trim()) assertAllowedLocalPath(path.trim())
+  }
+  const view = dockerStore.save(input)
+  seedAllowedPaths()
+  return view
+})
+
+ipcMain.handle('docker:deleteEndpoint', (_event, id: string) => {
+  const status = dockerManager.getStatus()
+  if (status.endpointId === id) {
+    void dockerManager.disconnect()
+  }
+  return dockerStore.remove(id)
+})
+
+ipcMain.handle('docker:listWslDistros', () => listWslDistros())
+
+ipcMain.handle('docker:status', () => dockerManager.getStatus())
+
+ipcMain.handle('docker:connect', async (_event, endpointId: string) => {
+  const endpoint = dockerStore.get(endpointId)
+  if (!endpoint) throw new Error('DOCKER_ENDPOINT_NOT_FOUND')
+  return dockerManager.connect(endpoint)
+})
+
+ipcMain.handle('docker:disconnect', () => dockerManager.disconnect())
+
+ipcMain.handle('docker:listContainers', () => dockerManager.listContainers())
+
+ipcMain.handle('docker:inspectContainer', (_event, id: string) =>
+  dockerManager.inspectContainer(id)
+)
+
+ipcMain.handle(
+  'docker:containerAction',
+  (_event, id: string, action: DockerContainerAction) => {
+    if (!DOCKER_CONTAINER_ACTIONS.includes(action)) {
+      throw new Error('DOCKER_ACTION_INVALID')
+    }
+    return dockerManager.containerAction(id, action)
+  }
+)
+
+ipcMain.handle(
+  'docker:removeContainer',
+  (_event, id: string, opts?: { force?: boolean; volumes?: boolean }) =>
+    dockerManager.removeContainer(id, opts)
+)
+
+ipcMain.handle(
+  'docker:startLogs',
+  (_event, opts: { containerId: string; tail?: number; follow?: boolean }) =>
+    dockerManager.startLogs(opts)
+)
+
+ipcMain.handle('docker:stopLogs', (_event, sessionId: string) => dockerManager.stopLogs(sessionId))
+
+ipcMain.handle(
+  'docker:startExec',
+  (_event, opts: { containerId: string; cmd?: string[]; shell?: string; tty?: boolean }) =>
+    dockerManager.startExec(opts)
+)
+
+ipcMain.handle('docker:writeExec', (_event, sessionId: string, dataBase64: string) =>
+  dockerManager.writeExec(sessionId, dataBase64)
+)
+
+ipcMain.handle('docker:resizeExec', (_event, sessionId: string, cols: number, rows: number) =>
+  dockerManager.resizeExec(sessionId, cols, rows)
+)
+
+ipcMain.handle('docker:stopExec', (_event, sessionId: string) => dockerManager.stopExec(sessionId))
+
+ipcMain.handle('docker:stats', (_event, containerId: string) => dockerManager.stats(containerId))
+
+ipcMain.handle('docker:listImages', () => dockerManager.listImages())
+
+ipcMain.handle('docker:pullImage', (_event, reference: string) =>
+  dockerManager.pullImage(reference)
+)
+
+ipcMain.handle('docker:removeImage', (_event, id: string, force?: boolean) =>
+  dockerManager.removeImage(id, force)
+)
+
+ipcMain.handle('docker:listVolumes', () => dockerManager.listVolumes())
+
+ipcMain.handle('docker:removeVolume', (_event, name: string, force?: boolean) =>
+  dockerManager.removeVolume(name, force)
+)
+
+ipcMain.handle('docker:listNetworks', () => dockerManager.listNetworks())
+
+ipcMain.handle('docker:removeNetwork', (_event, id: string) => dockerManager.removeNetwork(id))
+
+ipcMain.handle('docker:info', () => dockerManager.info())
+
+ipcMain.handle('docker:version', () => dockerManager.version())
+
 /* ── Sticky notes ── */
 
 const stickyStore = createStickyStore()
@@ -1552,7 +1696,8 @@ app.on('before-quit', (event) => {
     lanServer?.stop() ?? Promise.resolve(),
     Promise.resolve(sshManager.stop()),
     Promise.resolve(sshClientManager.stop()),
-    Promise.resolve(k8sManager.stop())
+    Promise.resolve(k8sManager.stop()),
+    Promise.resolve(dockerManager.stop())
   ]).finally(() => {
     app.exit(0)
   })
@@ -1577,6 +1722,7 @@ if (!gotTheLock) {
     await Promise.all([
       sshStore.init().catch(() => {}),
       k8sStore.init().catch(() => {}),
+      dockerStore.init().catch(() => {}),
       stickyStore.init().catch(() => {}),
       lanClipStore.init().catch(() => {}),
       appSettingsStore.init().catch(() => {}),

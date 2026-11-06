@@ -222,6 +222,73 @@ const api = {
     load: () => ipcRenderer.invoke('sticky:load'),
     save: (data: StickyData) => ipcRenderer.invoke('sticky:save', data)
   },
+  docker: {
+    listEndpoints: () => ipcRenderer.invoke('docker:listEndpoints'),
+    saveEndpoint: (input: DockerEndpointInput) => ipcRenderer.invoke('docker:saveEndpoint', input),
+    deleteEndpoint: (id: string) => ipcRenderer.invoke('docker:deleteEndpoint', id),
+    listWslDistros: () => ipcRenderer.invoke('docker:listWslDistros'),
+    connect: (endpointId: string) => ipcRenderer.invoke('docker:connect', endpointId),
+    disconnect: () => ipcRenderer.invoke('docker:disconnect'),
+    status: () => ipcRenderer.invoke('docker:status'),
+    listContainers: () => ipcRenderer.invoke('docker:listContainers'),
+    inspectContainer: (id: string) => ipcRenderer.invoke('docker:inspectContainer', id),
+    containerAction: (id: string, action: DockerContainerAction) =>
+      ipcRenderer.invoke('docker:containerAction', id, action),
+    removeContainer: (id: string, opts?: { force?: boolean; volumes?: boolean }) =>
+      ipcRenderer.invoke('docker:removeContainer', id, opts),
+    startLogs: (opts: { containerId: string; tail?: number; follow?: boolean }) =>
+      ipcRenderer.invoke('docker:startLogs', opts),
+    stopLogs: (sessionId: string) => ipcRenderer.invoke('docker:stopLogs', sessionId),
+    startExec: (opts: { containerId: string; cmd?: string[]; shell?: string; tty?: boolean }) =>
+      ipcRenderer.invoke('docker:startExec', opts),
+    writeExec: (sessionId: string, dataBase64: string) =>
+      ipcRenderer.invoke('docker:writeExec', sessionId, dataBase64),
+    resizeExec: (sessionId: string, cols: number, rows: number) =>
+      ipcRenderer.invoke('docker:resizeExec', sessionId, cols, rows),
+    stopExec: (sessionId: string) => ipcRenderer.invoke('docker:stopExec', sessionId),
+    stats: (containerId: string) => ipcRenderer.invoke('docker:stats', containerId),
+    listImages: () => ipcRenderer.invoke('docker:listImages'),
+    pullImage: (reference: string) => ipcRenderer.invoke('docker:pullImage', reference),
+    removeImage: (id: string, force?: boolean) => ipcRenderer.invoke('docker:removeImage', id, force),
+    listVolumes: () => ipcRenderer.invoke('docker:listVolumes'),
+    removeVolume: (name: string, force?: boolean) => ipcRenderer.invoke('docker:removeVolume', name, force),
+    listNetworks: () => ipcRenderer.invoke('docker:listNetworks'),
+    removeNetwork: (id: string) => ipcRenderer.invoke('docker:removeNetwork', id),
+    info: () => ipcRenderer.invoke('docker:info'),
+    version: () => ipcRenderer.invoke('docker:version'),
+    onStatusChange: (callback: (status: DockerStatus) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: DockerStatus): void =>
+        callback(status)
+      ipcRenderer.on('docker:status-change', handler)
+      return () => {
+        ipcRenderer.removeListener('docker:status-change', handler)
+      }
+    },
+    onLogChunk: (callback: (chunk: DockerLogChunk) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, chunk: DockerLogChunk): void =>
+        callback(chunk)
+      ipcRenderer.on('docker:log-chunk', handler)
+      return () => {
+        ipcRenderer.removeListener('docker:log-chunk', handler)
+      }
+    },
+    onExecData: (callback: (data: DockerExecData) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: DockerExecData): void =>
+        callback(data)
+      ipcRenderer.on('docker:exec-data', handler)
+      return () => {
+        ipcRenderer.removeListener('docker:exec-data', handler)
+      }
+    },
+    onExecExit: (callback: (data: DockerExecExit) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: DockerExecExit): void =>
+        callback(data)
+      ipcRenderer.on('docker:exec-exit', handler)
+      return () => {
+        ipcRenderer.removeListener('docker:exec-exit', handler)
+      }
+    }
+  },
   k8s: {
     listClusters: () => ipcRenderer.invoke('k8s:listClusters'),
     saveCluster: (input: K8sClusterInput) => ipcRenderer.invoke('k8s:saveCluster', input),

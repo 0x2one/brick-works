@@ -984,6 +984,32 @@ button.tag-chip:hover {
   overflow: hidden;
 }
 
+/* ── Docker Manage ── */
+
+/* Keep the page container positioned so drawers/modals render inside it —
+   they must never cover the window title bar. */
+.content-area:has(.docker-page:not(.hidden)) {
+  overflow: hidden;
+}
+
+.docker-page {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The overlay roots are `position: fixed` by default, which would cover the
+   window title bar. Anchoring them to the page container keeps them inside
+   the content area (the drawer/modal markup lives inside `.docker-page`).
+   `!important` keeps this winning over the styles antd injects at runtime. */
+.docker-page .ant-drawer,
+.docker-page .ant-modal-root,
+.docker-page .ant-modal-mask,
+.docker-page .ant-modal-wrap {
+  position: absolute !important;
+}
+
 .k8s-page-body {
   scrollbar-gutter: stable;
 }

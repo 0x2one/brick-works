@@ -4,6 +4,10 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   ssh2: true
+  # protobufjs ships a postinstall that only generates bundled descriptors.
+  # It reaches us through @grpc/grpc-js, which dockerode loads lazily for
+  # buildkit sessions only — we never use that path, so the script is skipped.
+  protobufjs: false
 
 # electron-builder 26 uses ElectronDownloadCacheMode (added in @electron/get@3.1.0),
 # but app-builder-lib still allows ^3.0.0 which can resolve to 3.0.0 and crash packaging.

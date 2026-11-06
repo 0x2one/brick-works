@@ -21,7 +21,8 @@ const pathToLabelKey: Record<string, string> = {
   '/lan-transfer': 'lanTransfer',
   '/ssh-tunnel': 'sshTunnel',
   '/ssh-client': 'sshClient',
-  '/k8s': 'k8sManage'
+  '/k8s': 'k8sManage',
+  '/docker': 'dockerManage'
 }
 
 function TitleBar(): React.JSX.Element {

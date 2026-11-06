@@ -11,7 +11,8 @@ import {
   ThunderboltOutlined,
   DeploymentUnitOutlined,
   CloudServerOutlined,
-  CodeOutlined
+  CodeOutlined,
+  ContainerOutlined
 } from '@ant-design/icons'
 import TitleBar from './components/TitleBar'
 import DevToolsArea from './pages/DevToolsArea'
@@ -20,6 +21,7 @@ import MemoSticky from './pages/MemoSticky'
 import LanTransfer from './pages/LanTransfer'
 import SshTunnel from './pages/SshTunnel'
 import K8sManage from './pages/K8sManage'
+import DockerManage from './pages/DockerManage'
 
 const SshClient = lazy(() => import('./pages/SshClient'))
 
@@ -65,6 +67,7 @@ const NAV_ROUTE_KEYS = [
   '/ssh-tunnel',
   '/ssh-client',
   '/k8s',
+  '/docker',
   '/dev-tools'
 ] as const
 
@@ -83,11 +86,13 @@ function AppLayout(): React.JSX.Element {
     () => location.pathname === '/ssh-client'
   )
   const [k8sMounted, setK8sMounted] = useState(() => location.pathname === '/k8s')
+  const [dockerMounted, setDockerMounted] = useState(() => location.pathname === '/docker')
   const [devToolsMounted, setDevToolsMounted] = useState(() =>
     location.pathname.startsWith('/dev-tools')
   )
   const showSshClient = displayLocation.pathname === '/ssh-client'
   const showK8s = displayLocation.pathname === '/k8s'
+  const showDocker = displayLocation.pathname === '/docker'
   const showDevTools = displayLocation.pathname.startsWith('/dev-tools')
 
   const latestLocationRef = useRef(location)
@@ -139,6 +144,7 @@ function AppLayout(): React.JSX.Element {
   useEffect(() => {
     if (location.pathname === '/ssh-client') setSshClientMounted(true)
     if (location.pathname === '/k8s') setK8sMounted(true)
+    if (location.pathname === '/docker') setDockerMounted(true)
     if (location.pathname.startsWith('/dev-tools')) setDevToolsMounted(true)
   }, [location.pathname])
 
@@ -203,6 +209,11 @@ function AppLayout(): React.JSX.Element {
       key: '/k8s',
       icon: <CloudServerOutlined />,
       label: t('k8sManage')
+    },
+    {
+      key: '/docker',
+      icon: <ContainerOutlined />,
+      label: t('dockerManage')
     },
     {
       key: '/dev-tools',
@@ -275,8 +286,9 @@ function AppLayout(): React.JSX.Element {
                   </Suspense>
                 )}
                 {k8sMounted && <K8sManage active={showK8s} />}
+                {dockerMounted && <DockerManage active={showDocker} />}
                 {devToolsMounted && <DevToolsArea active={showDevTools} />}
-                {!showSshClient && !showK8s && !showDevTools && (
+                {!showSshClient && !showK8s && !showDocker && !showDevTools && (
                   <Routes location={displayLocation}>
                     <Route path="/memo-sticky" element={<MemoSticky />} />
                     <Route path="/lan-transfer" element={<LanTransfer />} />

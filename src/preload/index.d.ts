@@ -150,6 +150,52 @@ interface K8sApi {
   onPortForwardStatus: (callback: (list: K8sPortForwardStatus[]) => void) => () => void
 }
 
+interface DockerApi {
+  listEndpoints: () => Promise<DockerEndpointView[]>
+  saveEndpoint: (input: DockerEndpointInput) => Promise<DockerEndpointView>
+  deleteEndpoint: (id: string) => Promise<boolean>
+  listWslDistros: () => Promise<string[]>
+  connect: (endpointId: string) => Promise<DockerStatus>
+  disconnect: () => Promise<DockerStatus>
+  status: () => Promise<DockerStatus>
+  listContainers: () => Promise<DockerContainerRow[]>
+  inspectContainer: (id: string) => Promise<DockerContainerDetail>
+  containerAction: (id: string, action: DockerContainerAction) => Promise<{ ok: boolean }>
+  removeContainer: (
+    id: string,
+    opts?: { force?: boolean; volumes?: boolean }
+  ) => Promise<{ ok: boolean }>
+  startLogs: (opts: {
+    containerId: string
+    tail?: number
+    follow?: boolean
+  }) => Promise<{ sessionId: string }>
+  stopLogs: (sessionId: string) => Promise<boolean>
+  startExec: (opts: {
+    containerId: string
+    cmd?: string[]
+    shell?: string
+    tty?: boolean
+  }) => Promise<{ sessionId: string }>
+  writeExec: (sessionId: string, dataBase64: string) => Promise<boolean>
+  resizeExec: (sessionId: string, cols: number, rows: number) => Promise<boolean>
+  stopExec: (sessionId: string) => Promise<boolean>
+  stats: (containerId: string) => Promise<DockerStatsRow>
+  listImages: () => Promise<DockerImageRow[]>
+  pullImage: (reference: string) => Promise<{ ok: boolean }>
+  removeImage: (id: string, force?: boolean) => Promise<{ ok: boolean }>
+  listVolumes: () => Promise<DockerVolumeRow[]>
+  removeVolume: (name: string, force?: boolean) => Promise<{ ok: boolean }>
+  listNetworks: () => Promise<DockerNetworkRow[]>
+  removeNetwork: (id: string) => Promise<{ ok: boolean }>
+  info: () => Promise<DockerSystemInfo>
+  version: () => Promise<DockerVersionInfo>
+  onStatusChange: (callback: (status: DockerStatus) => void) => () => void
+  onLogChunk: (callback: (chunk: DockerLogChunk) => void) => () => void
+  onExecData: (callback: (data: DockerExecData) => void) => () => void
+  onExecExit: (callback: (data: DockerExecExit) => void) => () => void
+}
+
 interface AppApi {
   info: () => Promise<AppInfo>
   setTermPasteFocus: (focused: boolean) => void
@@ -216,6 +262,7 @@ interface Api {
   ssh: SshApi
   sticky: StickyApi
   k8s: K8sApi
+  docker: DockerApi
 }
 
 declare global {
