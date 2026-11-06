@@ -1,5 +1,21 @@
 # Changelog
 
+## BrickWorks v1.0.7
+
+Docker management arrives, and LAN paste slots no longer overwrite each other.
+
+### ✨ Features
+- New Docker page: connect to a daemon over a Windows named pipe, a TCP socket (with optional TLS), WSL or SSH, and save endpoints for reuse
+- Containers: start, stop, restart and remove, with a detail drawer for overview, logs, live stats and an interactive terminal
+- Images, volumes and networks: browse, search, pull and remove, plus a system panel with daemon info and resource usage
+- Works against the Engine API, or falls back to the Docker CLI inside a WSL distribution and over an SSH node
+
+### 🐛 Fixes
+- LAN Quick Paste: concurrent edits are detected — a slot changed on another device now shows a conflict prompt instead of silently overwriting your unsaved text, and you can choose to keep local or take the remote content
+- LAN transfer: desktop app and LAN web UI clipboard edits stay in sync
+
+---
+
 ## BrickWorks v1.0.6
 
 LAN transfer now includes Quick Paste boards, and the access token can be turned off.
