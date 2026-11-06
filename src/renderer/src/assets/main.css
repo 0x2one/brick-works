@@ -999,12 +999,15 @@ button.tag-chip:hover {
   overflow: hidden;
 }
 
-/* The overlay roots are `position: fixed` by default, which would cover the
-   window title bar. Anchoring them to the page container keeps them inside
-   the content area (the drawer/modal markup lives inside `.docker-page`).
+/* The overlay layers are `position: fixed` by default, which would cover the
+   window title bar. Anchoring the drawer root and the modal's mask/wrap to the
+   page container keeps them inside the content area (the drawer/modal markup
+   lives inside `.docker-page`).
+   `.ant-modal-root` must stay in normal flow: it is an empty, zero-height
+   wrapper, so making it positioned would give the mask/wrap a zero-sized
+   containing block — the dialog would render but stay invisible and clipped.
    `!important` keeps this winning over the styles antd injects at runtime. */
 .docker-page .ant-drawer,
-.docker-page .ant-modal-root,
 .docker-page .ant-modal-mask,
 .docker-page .ant-modal-wrap {
   position: absolute !important;
