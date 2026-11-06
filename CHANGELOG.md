@@ -1,5 +1,12 @@
 # Changelog
 
+## BrickWorks v1.0.8
+
+### 🐛 Fixes
+- Docker: the Add/Edit endpoint dialog no longer opens blank — its overlay layer was clipped to a zero-sized box inside the page container
+
+---
+
 ## BrickWorks v1.0.7
 
 Docker management arrives, and LAN paste slots no longer overwrite each other.
